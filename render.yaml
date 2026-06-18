@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: agent-exchange-protocol
+    runtime: node
+    plan: free
+    buildCommand: node --check agent-registry/server.js && node --check agent-registry/src/registry.js
+    startCommand: node agent-registry/server.js
+    healthCheckPath: /health
+    autoDeployTrigger: commit

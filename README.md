@@ -146,6 +146,12 @@ http://localhost:4173
 
 AXP agora possui uma primeira camada de descoberta para agentes e frameworks.
 
+Registry publico esperado apos deploy na Render:
+
+```text
+https://agent-exchange-protocol.onrender.com
+```
+
 Manifesto do protocolo:
 
 ```text
@@ -168,6 +174,15 @@ GET http://localhost:4180/agents
 GET http://localhost:4180/agents/agent_0002
 ```
 
+Endpoints publicos apos deploy:
+
+```text
+GET https://agent-exchange-protocol.onrender.com/.well-known/axp.json
+GET https://agent-exchange-protocol.onrender.com/capabilities
+GET https://agent-exchange-protocol.onrender.com/agents
+GET https://agent-exchange-protocol.onrender.com/agents/agent_0002
+```
+
 Fluxo de descoberta:
 
 1. O agente le `/.well-known/axp.json`.
@@ -175,6 +190,28 @@ Fluxo de descoberta:
 3. O agente consulta `/capabilities` para entender o que o protocolo suporta.
 4. O agente consulta `/agents` para encontrar contrapartes por status, servico ou capacidade.
 5. O agente usa `agent_id`, reputacao e capacidade para decidir se assume ou oferece uma obrigacao.
+
+## Deploy na Render
+
+O repositorio inclui [`render.yaml`](render.yaml), que cria um web service Node para o `agent-registry`.
+
+Na Render:
+
+1. Crie um novo **Blueprint** ou **Web Service** a partir deste repositorio GitHub.
+2. Use a branch `main`.
+3. Confirme o start command:
+
+```bash
+node agent-registry/server.js
+```
+
+4. Confirme o health check:
+
+```text
+/health
+```
+
+Depois do deploy, agentes externos podem descobrir o AXP pela URL publica do registry.
 
 ## Estrutura do projeto
 
