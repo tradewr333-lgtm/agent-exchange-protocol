@@ -58,13 +58,14 @@ Carteira/contrato: publico
 
 ## Participation Vault
 
-A Participation Vault reserva 2% do supply para uma futura rodada publica de participacao contra BNB. Ela deve nascer pausada e so deve ser aberta quando o protocolo estiver operacional em testnet, com parametros claros e riscos explicados.
+A Participation Vault reserva 2% do supply para uma futura rodada publica de participacao contra BNB ou WBNB. Ela deve nascer pausada e so deve ser aberta quando o protocolo estiver operacional em testnet, com parametros claros e riscos explicados.
 
 ```text
 Participation Vault: 20.000.000 AXP
-Objetivo: permitir compra limitada de AXP contra BNB
+Objetivo: permitir compra limitada de AXP contra BNB ou WBNB
 Estado inicial: pausada
 Limite por wallet: obrigatorio
+Destino dos BNB/WBNB: proceeds wallet indicada pelo fundador/protocolo
 Sem promessa de retorno, rendimento ou valorizacao
 ```
 

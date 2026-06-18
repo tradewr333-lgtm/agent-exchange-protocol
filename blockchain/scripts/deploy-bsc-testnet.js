@@ -49,6 +49,8 @@ const participationVault = await ParticipationVault.deploy(
   await token.getAddress(),
   deployer.address,
   process.env.AXP_TREASURY_WALLET,
+  ethers.ZeroAddress,
+  true,
   ethers.parseEther('1000000'),
   ethers.parseEther('0.5'),
 );
