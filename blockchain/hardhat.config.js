@@ -1,8 +1,10 @@
 import '@nomicfoundation/hardhat-toolbox';
 import 'dotenv/config';
 
-const deployerPrivateKey = process.env.BSC_TESTNET_PRIVATE_KEY;
-const accounts = deployerPrivateKey ? [deployerPrivateKey] : [];
+const testnetPrivateKey = process.env.BSC_TESTNET_PRIVATE_KEY;
+const mainnetPrivateKey = process.env.BSC_MAINNET_PRIVATE_KEY;
+const testnetAccounts = testnetPrivateKey ? [testnetPrivateKey] : [];
+const mainnetAccounts = mainnetPrivateKey ? [mainnetPrivateKey] : [];
 
 export default {
   solidity: {
@@ -18,12 +20,12 @@ export default {
     bscTestnet: {
       url: process.env.BSC_TESTNET_RPC_URL ?? 'https://data-seed-prebsc-1-s1.bnbchain.org:8545',
       chainId: 97,
-      accounts,
+      accounts: testnetAccounts,
     },
     bscMainnet: {
       url: process.env.BSC_MAINNET_RPC_URL ?? 'https://bsc-dataseed.bnbchain.org',
       chainId: 56,
-      accounts,
+      accounts: mainnetAccounts,
     },
   },
 };

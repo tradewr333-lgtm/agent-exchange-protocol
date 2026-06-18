@@ -6,7 +6,8 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
-    "deploy:bsc-testnet": "hardhat run scripts/deploy-bsc-testnet.js --network bscTestnet"
+    "deploy:bsc-testnet": "hardhat run scripts/deploy-bsc-testnet.js --network bscTestnet",
+    "deploy:bsc-mainnet": "hardhat run scripts/deploy-bsc-testnet.js --network bscMainnet"
   },
   "dependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

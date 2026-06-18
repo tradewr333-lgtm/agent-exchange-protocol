@@ -85,6 +85,37 @@ Deploy testnet:
 npm run deploy:bsc-testnet
 ```
 
+## Deploy BSC Mainnet
+
+Mainnet usa BNB real e contratos reais. Nao use a chave de testnet por acidente.
+
+Para mainnet, preencha uma variavel separada:
+
+```text
+BSC_MAINNET_PRIVATE_KEY=
+```
+
+O script bloqueia deploy mainnet por padrao. Para liberar conscientemente:
+
+```text
+AXP_CONFIRM_MAINNET_DEPLOY=YES_I_UNDERSTAND
+```
+
+Depois:
+
+```bash
+npm run deploy:bsc-mainnet
+```
+
+Antes de mainnet, confirme:
+
+- wallet deployer e nova e separada
+- ha BNB suficiente para gas
+- wallets de alocacao estao corretas
+- vault esta pausada
+- ratio da vault ainda nao foi divulgado
+- nenhum endereco de projeto existente foi usado por engano
+
 ## Regra operacional
 
 Use wallets separadas:

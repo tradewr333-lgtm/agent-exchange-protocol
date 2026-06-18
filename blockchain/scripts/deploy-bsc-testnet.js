@@ -18,9 +18,14 @@ for (const key of requiredEnv) {
 }
 
 const [deployer] = await ethers.getSigners();
+const network = await ethers.provider.getNetwork();
 const now = Math.floor(Date.now() / 1000);
 
-console.log(`Deploying AXP contracts from ${deployer.address}`);
+if (network.chainId === 56n && process.env.AXP_CONFIRM_MAINNET_DEPLOY !== 'YES_I_UNDERSTAND') {
+  throw new Error('Mainnet deploy blocked. Set AXP_CONFIRM_MAINNET_DEPLOY=YES_I_UNDERSTAND only after final review.');
+}
+
+console.log(`Deploying AXP contracts from ${deployer.address} on chain ${network.chainId}`);
 
 const FounderVesting = await ethers.getContractFactory('AXPFounderVesting');
 const founderVesting = await FounderVesting.deploy(process.env.AXP_FOUNDER_WALLET, now);
@@ -75,7 +80,8 @@ for (const [label, recipient, amount] of transfers) {
 }
 
 console.log({
-  network: 'bscTestnet',
+  network: network.chainId === 56n ? 'bscMainnet' : 'bscTestnet',
+  chainId: network.chainId.toString(),
   deployer: deployer.address,
   token: await token.getAddress(),
   founderVesting: await founderVesting.getAddress(),
