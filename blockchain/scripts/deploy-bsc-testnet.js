@@ -1,5 +1,7 @@
-import { ethers } from 'hardhat';
+import hardhat from 'hardhat';
 import 'dotenv/config';
+
+const { ethers } = hardhat;
 
 const requiredEnv = [
   'AXP_COMMUNITY_WALLET',

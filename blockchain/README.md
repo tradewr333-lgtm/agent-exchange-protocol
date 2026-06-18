@@ -10,6 +10,26 @@ Contratos Solidity para levar o AXP para BSC Testnet antes de qualquer mainnet.
 - `AXPAgentRegistry.sol`: registro on-chain de agentes.
 - `AXPParticipationVault.sol`: vault opcional para participacao publica contra BNB.
 
+## BSC Mainnet Deployment
+
+```text
+Network: BNB Smart Chain
+Chain ID: 56
+AXPToken: 0x88cF3943F6e250C4f15Bc6aFEd5192663b68Eda2
+AXPFounderVesting: 0x7C6AB042076468e9e4B45B9caaBB3DD3da5bcD6e
+AXPAgentRegistry: 0x5e91402c50EC9D7655617ec787dc8087f7AB4678
+AXPStaking: 0xb3faFa1d03b852DFe9BfDe413efEF856788fd787
+AXPParticipationVault: 0xF70605341b4f73a5bFa89D363652a973007CC338
+```
+
+Deployment metadata:
+
+```text
+blockchain/deployments/bsc-mainnet.json
+```
+
+The Participation Vault is deployed but paused. No public sale is open.
+
 ## Tokenomics on-chain
 
 ```text

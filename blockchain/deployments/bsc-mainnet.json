@@ -1,0 +1,27 @@
+{
+  "network": "bscMainnet",
+  "chainId": 56,
+  "deployedAt": "2026-06-19",
+  "deployer": "0x4c182480c3559A15311FdeB075C1d7af9D4D8854",
+  "contracts": {
+    "AXPToken": "0x88cF3943F6e250C4f15Bc6aFEd5192663b68Eda2",
+    "AXPFounderVesting": "0x7C6AB042076468e9e4B45B9caaBB3DD3da5bcD6e",
+    "AXPAgentRegistry": "0x5e91402c50EC9D7655617ec787dc8087f7AB4678",
+    "AXPStaking": "0xb3faFa1d03b852DFe9BfDe413efEF856788fd787",
+    "AXPParticipationVault": "0xF70605341b4f73a5bFa89D363652a973007CC338"
+  },
+  "token": {
+    "name": "Agent Exchange Protocol",
+    "symbol": "AXP",
+    "decimals": 18,
+    "totalSupply": "1000000000"
+  },
+  "participationVault": {
+    "status": "paused",
+    "reservedAXP": "20000000",
+    "paymentAssets": ["BNB", "official BSC WBNB"],
+    "officialBscWbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+    "minimumDepositBNB": "0.01",
+    "saleOpen": false
+  }
+}

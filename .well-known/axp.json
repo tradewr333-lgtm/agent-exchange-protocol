@@ -42,12 +42,30 @@
     "credit_markets": "planned"
   },
   "blockchain": {
-    "status": "testnet_contracts_prepared",
-    "target_network": "BNB Smart Chain Testnet",
-    "chain_id": 97,
+    "status": "mainnet_deployed",
+    "target_network": "BNB Smart Chain",
+    "chain_id": 56,
     "contracts_path": "blockchain/contracts",
     "deploy_script": "blockchain/scripts/deploy-bsc-testnet.js",
-    "mainnet_status": "not_deployed"
+    "mainnet_status": "deployed",
+    "deployments": {
+      "bsc_mainnet": "blockchain/deployments/bsc-mainnet.json"
+    },
+    "contracts": {
+      "AXPToken": "0x88cF3943F6e250C4f15Bc6aFEd5192663b68Eda2",
+      "AXPFounderVesting": "0x7C6AB042076468e9e4B45B9caaBB3DD3da5bcD6e",
+      "AXPAgentRegistry": "0x5e91402c50EC9D7655617ec787dc8087f7AB4678",
+      "AXPStaking": "0xb3faFa1d03b852DFe9BfDe413efEF856788fd787",
+      "AXPParticipationVault": "0xF70605341b4f73a5bFa89D363652a973007CC338"
+    },
+    "participation_vault": {
+      "status": "paused",
+      "sale_open": false,
+      "reserved_axp": "20000000",
+      "minimum_deposit_bnb": "0.01",
+      "payment_assets": ["BNB", "official BSC WBNB"],
+      "official_bsc_wbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
+    }
   },
   "trust_model": {
     "principle": "Trust is replaced by collateral.",

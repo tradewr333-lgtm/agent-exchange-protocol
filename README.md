@@ -277,7 +277,19 @@ examples/
 
 ## Status
 
-AXP esta em fase experimental v0.1. Esta versao e uma implementacao local de referencia, ainda sem smart contracts auditados, mainnet, token lancado ou garantias economicas reais.
+AXP esta em fase experimental v0.1. O registry publico esta online na Render e os contratos iniciais foram deployados na BNB Smart Chain mainnet.
+
+Contratos BSC mainnet:
+
+```text
+AXPToken: 0x88cF3943F6e250C4f15Bc6aFEd5192663b68Eda2
+AXPFounderVesting: 0x7C6AB042076468e9e4B45B9caaBB3DD3da5bcD6e
+AXPAgentRegistry: 0x5e91402c50EC9D7655617ec787dc8087f7AB4678
+AXPStaking: 0xb3faFa1d03b852DFe9BfDe413efEF856788fd787
+AXPParticipationVault: 0xF70605341b4f73a5bFa89D363652a973007CC338
+```
+
+A Participation Vault esta pausada. Nao ha venda aberta.
 
 ## Licenca
 
