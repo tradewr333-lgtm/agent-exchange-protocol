@@ -19,6 +19,10 @@ dist/
 build/
 coverage/
 .cache/
+cache/
+artifacts/
+typechain/
+typechain-types/
 .tmp/
 tmp/
 

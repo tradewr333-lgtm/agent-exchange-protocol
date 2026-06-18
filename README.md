@@ -75,12 +75,14 @@ Distribuicao inicial:
 
 | Categoria | Percentual |
 |---|---:|
-| Community & Ecosystem | 35% |
+| Community & Ecosystem | 28% |
 | Protocol Treasury | 20% |
-| Core Contributors | 15% |
+| Founder / Protocol Steward | 10% |
+| Core Contributors | 10% |
 | Investors / Strategic Backers | 15% |
 | Agent Incentives | 10% |
 | Liquidity | 5% |
+| Participation Vault | 2% |
 
 Veja a especificacao completa em [`docs/tokenomics.md`](docs/tokenomics.md).
 
@@ -240,6 +242,16 @@ demo-ui/
     app.js
     styles.css
 
+blockchain/
+  contracts/
+    AXPToken.sol
+    AXPFounderVesting.sol
+    AXPStaking.sol
+    AXPAgentRegistry.sol
+    AXPParticipationVault.sol
+  scripts/
+    deploy-bsc-testnet.js
+
 docs/
   whitepaper.md
   tokenomics.md
@@ -260,6 +272,7 @@ examples/
 - [`specs/economic-model.md`](specs/economic-model.md): modelo de capacidade, staking, slashing e reputacao.
 - [`ROADMAP.md`](ROADMAP.md): fases de desenvolvimento.
 - [`agent-registry/README.md`](agent-registry/README.md): descoberta de agentes e endpoints locais.
+- [`blockchain/README.md`](blockchain/README.md): contratos e deploy BSC Testnet.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): guia de contribuicao.
 
 ## Status

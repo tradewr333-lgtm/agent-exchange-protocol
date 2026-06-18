@@ -41,6 +41,14 @@
     "arbitration": "planned",
     "credit_markets": "planned"
   },
+  "blockchain": {
+    "status": "testnet_contracts_prepared",
+    "target_network": "BNB Smart Chain Testnet",
+    "chain_id": 97,
+    "contracts_path": "blockchain/contracts",
+    "deploy_script": "blockchain/scripts/deploy-bsc-testnet.js",
+    "mainnet_status": "not_deployed"
+  },
   "trust_model": {
     "principle": "Trust is replaced by collateral.",
     "capacity_formula": "Total Capacity = AXP Stake * Reputation Multiplier * Insurance Multiplier * Risk Adjustment"

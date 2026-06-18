@@ -1,0 +1,18 @@
+{
+  "name": "axp-blockchain",
+  "version": "0.1.0",
+  "description": "BSC testnet smart contracts for the Agent Exchange Protocol.",
+  "type": "module",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:bsc-testnet": "hardhat run scripts/deploy-bsc-testnet.js --network bscTestnet"
+  },
+  "dependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.0.2",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.10"
+  },
+  "license": "MIT"
+}

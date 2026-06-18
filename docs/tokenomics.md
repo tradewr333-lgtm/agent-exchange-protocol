@@ -24,21 +24,49 @@ O protocolo deve priorizar captura de valor via uso real, taxas, staking e slash
 
 | Categoria | Percentual | Quantidade | Uso |
 |---|---:|---:|---|
-| Community & Ecosystem | 35% | 350.000.000 AXP | grants, builders, integracoes, programas comunitarios |
+| Community & Ecosystem | 28% | 280.000.000 AXP | grants, builders, integracoes, programas comunitarios |
 | Protocol Treasury | 20% | 200.000.000 AXP | auditorias, operacao, reservas, desenvolvimento governado |
-| Core Contributors | 15% | 150.000.000 AXP | equipe inicial e contribuidores principais |
+| Founder / Protocol Steward | 10% | 100.000.000 AXP | criacao, desenho, coordenacao e stewardship inicial |
+| Core Contributors | 10% | 100.000.000 AXP | equipe inicial e contribuidores principais |
 | Investors / Strategic Backers | 15% | 150.000.000 AXP | capital estrategico e parceiros |
 | Agent Incentives | 10% | 100.000.000 AXP | agentes iniciais, uso real, bootstrap de rede |
 | Liquidity | 5% | 50.000.000 AXP | liquidez inicial em DEX/CEX e market making |
+| Participation Vault | 2% | 20.000.000 AXP | vault opcional para participacao publica contra BNB |
 
 ## Vesting sugerido
 
+- Founder / Protocol Steward: 4 anos, com 1 ano de cliff, liberacao mensal apos o cliff.
 - Core Contributors: 4 anos, com 1 ano de cliff.
 - Investors: 3 anos, com 1 ano de cliff.
 - Treasury: liberacao por governanca.
 - Community & Ecosystem: distribuicao progressiva por grants e contribuicoes.
 - Agent Incentives: distribuicao baseada em uso real do protocolo.
 - Liquidity: liberacao parcial no lancamento, com controles de mercado.
+- Participation Vault: contrato pausado por padrao; abertura somente apos testnet, revisao de risco e comunicacao publica.
+
+## Founder / Protocol Steward
+
+A alocacao Founder / Protocol Steward recompensa a criacao, desenho, coordenacao e manutencao inicial do AXP. Essa alocacao possui cliff de 12 meses e vesting de 48 meses, alinhando incentivos com a saude de longo prazo do protocolo e reduzindo risco de despejo no mercado.
+
+```text
+Founder / Protocol Steward: 100.000.000 AXP
+Cliff: 12 meses
+Vesting total: 48 meses
+Venda antes do cliff: nao
+Carteira/contrato: publico
+```
+
+## Participation Vault
+
+A Participation Vault reserva 2% do supply para uma futura rodada publica de participacao contra BNB. Ela deve nascer pausada e so deve ser aberta quando o protocolo estiver operacional em testnet, com parametros claros e riscos explicados.
+
+```text
+Participation Vault: 20.000.000 AXP
+Objetivo: permitir compra limitada de AXP contra BNB
+Estado inicial: pausada
+Limite por wallet: obrigatorio
+Sem promessa de retorno, rendimento ou valorizacao
+```
 
 ## Utilidades do token
 
