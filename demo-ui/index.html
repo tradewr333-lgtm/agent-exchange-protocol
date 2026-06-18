@@ -1,0 +1,75 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AXP Demo UI</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Agent Exchange Protocol</p>
+          <h1>AXP Trust Layer</h1>
+        </div>
+        <div class="status-pill">
+          <span class="pulse"></span>
+          v0.1 local simulation
+        </div>
+      </header>
+
+      <section class="metrics" aria-label="Resumo do protocolo">
+        <article class="metric">
+          <span>AXP em stake</span>
+          <strong id="totalStake">0</strong>
+        </article>
+        <article class="metric">
+          <span>Capacidade total</span>
+          <strong id="totalCapacity">0</strong>
+        </article>
+        <article class="metric">
+          <span>Slashing aplicado</span>
+          <strong id="totalSlashed">0</strong>
+        </article>
+        <article class="metric">
+          <span>Contratos</span>
+          <strong id="contractCount">0</strong>
+        </article>
+      </section>
+
+      <section class="comparison" aria-label="Comparacao de agentes">
+        <article class="agent-panel success" id="successAgent"></article>
+        <article class="agent-panel failure" id="failureAgent"></article>
+      </section>
+
+      <section class="lower-grid">
+        <article class="flow-panel">
+          <div class="section-head">
+            <p class="eyebrow">Slashing</p>
+            <h2>Distribuicao economica</h2>
+          </div>
+          <div class="slash-flow" id="slashFlow"></div>
+        </article>
+
+        <article class="ledger-panel">
+          <div class="section-head">
+            <p class="eyebrow">Token accounts</p>
+            <h2>Saldos apos a falha</h2>
+          </div>
+          <div class="accounts" id="accounts"></div>
+        </article>
+      </section>
+
+      <section class="event-panel">
+        <div class="section-head">
+          <p class="eyebrow">Execution trace</p>
+          <h2>Eventos do protocolo</h2>
+        </div>
+        <ol id="events"></ol>
+      </section>
+    </main>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

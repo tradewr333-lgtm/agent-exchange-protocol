@@ -1,0 +1,21 @@
+﻿{
+    "name":  "axp-core",
+    "version":  "0.1.0",
+    "description":  "Reference implementation of the Agent Exchange Protocol MVP.",
+    "type":  "module",
+    "main":  "src/index.js",
+    "scripts":  {
+                    "demo":  "node src/demo.js",
+                    "test":  "node --test",
+                    "demo:compare":  "node src/demo-comparison.js",
+                    "demo:ui":  "node ../demo-ui/server.js"
+                },
+    "keywords":  [
+                     "agents",
+                     "reputation",
+                     "staking",
+                     "capacity",
+                     "protocol"
+                 ],
+    "license":  "MIT"
+}
