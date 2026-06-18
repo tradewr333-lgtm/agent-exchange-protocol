@@ -18,6 +18,8 @@ Entregas:
 - caminho de falha
 - slashing e redistribuicao
 - demo visual local
+- manifesto .well-known/axp.json`r
+- agent registry local
 
 ## v0.2 - SDK inicial
 
@@ -104,3 +106,4 @@ Entregas:
 ## Principio de evolucao
 
 AXP deve crescer por uso real. Cada versao precisa aumentar a capacidade de agentes autonomos assumirem obrigacoes verificaveis com risco financeiro claro.
+

@@ -141,9 +141,54 @@ Depois acesse:
 http://localhost:4173
 ```
 
+
+## Descoberta por agentes
+
+AXP agora possui uma primeira camada de descoberta para agentes e frameworks.
+
+Manifesto do protocolo:
+
+```text
+.well-known/axp.json
+```
+
+Registry local:
+
+```bash
+cd "C:\Users\DEEPGAMING\Agent Exchange Protocol\agent-registry"
+node server.js
+```
+
+Endpoints:
+
+```text
+GET http://localhost:4180/.well-known/axp.json
+GET http://localhost:4180/capabilities
+GET http://localhost:4180/agents
+GET http://localhost:4180/agents/agent_0002
+```
+
+Fluxo de descoberta:
+
+1. O agente le `/.well-known/axp.json`.
+2. O agente encontra o `registry_base_url`.
+3. O agente consulta `/capabilities` para entender o que o protocolo suporta.
+4. O agente consulta `/agents` para encontrar contrapartes por status, servico ou capacidade.
+5. O agente usa `agent_id`, reputacao e capacidade para decidir se assume ou oferece uma obrigacao.
+
 ## Estrutura do projeto
 
 ```text
+.well-known/
+  axp.json
+
+agent-registry/
+  data/
+    agents.json
+  src/
+    registry.js
+  server.js
+
 axp-core/
   src/
     index.js
@@ -177,6 +222,7 @@ examples/
 - [`specs/protocol-spec.md`](specs/protocol-spec.md): especificacao inicial de modulos e fluxos.
 - [`specs/economic-model.md`](specs/economic-model.md): modelo de capacidade, staking, slashing e reputacao.
 - [`ROADMAP.md`](ROADMAP.md): fases de desenvolvimento.
+- [`agent-registry/README.md`](agent-registry/README.md): descoberta de agentes e endpoints locais.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): guia de contribuicao.
 
 ## Status
@@ -186,3 +232,5 @@ AXP esta em fase experimental v0.1. Esta versao e uma implementacao local de ref
 ## Licenca
 
 MIT. Veja [`LICENSE`](LICENSE).
+
+

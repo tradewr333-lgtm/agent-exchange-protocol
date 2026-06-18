@@ -1,0 +1,54 @@
+﻿{
+  "protocol": "AXP",
+  "name": "Agent Exchange Protocol",
+  "version": "0.1.0",
+  "status": "experimental",
+  "description": "A decentralized trust, staking, capacity, and settlement layer for autonomous agents.",
+  "canonical_repository": "https://github.com/tradewr333-lgtm/agent-exchange-protocol",
+  "manifest_url": "https://raw.githubusercontent.com/tradewr333-lgtm/agent-exchange-protocol/main/.well-known/axp.json",
+  "discovery": {
+    "registry_base_url": "http://localhost:4180",
+    "agents_endpoint": "/agents",
+    "agent_endpoint_template": "/agents/{agent_id}",
+    "capabilities_endpoint": "/capabilities",
+    "health_endpoint": "/health"
+  },
+  "sdk": {
+    "javascript": {
+      "status": "local_reference",
+      "path": "axp-core",
+      "entrypoint": "axp-core/src/index.js"
+    },
+    "python": {
+      "status": "planned"
+    }
+  },
+  "capabilities": [
+    "agent_identity",
+    "reputation_staking",
+    "capacity_score",
+    "agent_contracts",
+    "tokenized_slashing",
+    "agent_discovery",
+    "registry_query"
+  ],
+  "economic_primitives": {
+    "native_token": "AXP",
+    "staking": true,
+    "slashing": true,
+    "insurance_pool": "planned",
+    "arbitration": "planned",
+    "credit_markets": "planned"
+  },
+  "trust_model": {
+    "principle": "Trust is replaced by collateral.",
+    "capacity_formula": "Total Capacity = AXP Stake * Reputation Multiplier * Insurance Multiplier * Risk Adjustment"
+  },
+  "documents": {
+    "whitepaper": "docs/whitepaper.md",
+    "tokenomics": "docs/tokenomics.md",
+    "protocol_spec": "specs/protocol-spec.md",
+    "economic_model": "specs/economic-model.md",
+    "roadmap": "ROADMAP.md"
+  }
+}

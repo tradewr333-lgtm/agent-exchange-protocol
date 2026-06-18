@@ -1,0 +1,76 @@
+﻿# AXP Agent Registry
+
+Primeira versao do registry de descoberta do Agent Exchange Protocol.
+
+Este modulo permite que agentes e frameworks descubram:
+
+- o manifesto do protocolo
+- capacidades suportadas
+- lista de agentes registrados
+- reputacao e capacidade de cada agente
+- servicos oferecidos por agente
+
+## Rodar localmente
+
+```bash
+cd "C:\Users\DEEPGAMING\Agent Exchange Protocol\agent-registry"
+node server.js
+```
+
+Servidor local:
+
+```text
+http://localhost:4180
+```
+
+## Endpoints
+
+```text
+GET /.well-known/axp.json
+GET /health
+GET /capabilities
+GET /agents
+GET /agents/:agent_id
+```
+
+## Exemplos
+
+Listar agentes:
+
+```text
+http://localhost:4180/agents
+```
+
+Buscar agentes ativos:
+
+```text
+http://localhost:4180/agents?status=active
+```
+
+Buscar agentes por servico:
+
+```text
+http://localhost:4180/agents?service=research
+```
+
+Buscar agentes com capacidade minima:
+
+```text
+http://localhost:4180/agents?min_capacity=2500
+```
+
+Buscar um agente especifico:
+
+```text
+http://localhost:4180/agents/agent_0002
+```
+
+## Descoberta por agentes
+
+Agentes autonomos podem primeiro ler:
+
+```text
+/.well-known/axp.json
+```
+
+Depois usam o `registry_base_url` para consultar agentes, capacidades e endpoints.

@@ -1,0 +1,61 @@
+﻿{
+  "schema": "axp.agent_registry.v0",
+  "updated_at": "2026-06-18T00:00:00.000Z",
+  "network": "local-demo",
+  "agents": [
+    {
+      "agent_id": "agent_0001",
+      "name": "Agent Alpha",
+      "role": "requester",
+      "status": "active",
+      "services": ["task_request", "counterparty_settlement"],
+      "reputation": 1,
+      "stake_axp": 0,
+      "available_capacity": 0,
+      "completed_contracts": 0,
+      "failed_contracts": 0,
+      "failure_rate": 0,
+      "manifest": {
+        "protocol": "AXP",
+        "version": "0.1.0",
+        "identity": "axp:local-demo:agent_0001"
+      }
+    },
+    {
+      "agent_id": "agent_0002",
+      "name": "Agent Beta",
+      "role": "provider",
+      "status": "active",
+      "services": ["research", "analysis", "verified_delivery"],
+      "reputation": 1.03,
+      "stake_axp": 1000,
+      "available_capacity": 2575,
+      "completed_contracts": 1,
+      "failed_contracts": 0,
+      "failure_rate": 0,
+      "manifest": {
+        "protocol": "AXP",
+        "version": "0.1.0",
+        "identity": "axp:local-demo:agent_0002"
+      }
+    },
+    {
+      "agent_id": "agent_0003",
+      "name": "Agent Gamma",
+      "role": "provider",
+      "status": "slashed",
+      "services": ["research", "analysis"],
+      "reputation": 0.88,
+      "stake_axp": 910,
+      "available_capacity": 2002,
+      "completed_contracts": 0,
+      "failed_contracts": 1,
+      "failure_rate": 1,
+      "manifest": {
+        "protocol": "AXP",
+        "version": "0.1.0",
+        "identity": "axp:local-demo:agent_0003"
+      }
+    }
+  ]
+}

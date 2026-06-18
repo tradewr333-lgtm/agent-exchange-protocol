@@ -8,7 +8,8 @@
                     "demo":  "node src/demo.js",
                     "test":  "node --test",
                     "demo:compare":  "node src/demo-comparison.js",
-                    "demo:ui":  "node ../demo-ui/server.js"
+                    "demo:ui":  "node ../demo-ui/server.js",
+                    "registry":  "node ../agent-registry/server.js"
                 },
     "keywords":  [
                      "agents",
