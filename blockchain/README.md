@@ -45,7 +45,13 @@ Comprador envia BNB ou WBNB, e nenhum outro ativo
 -> BNB/WBNB vai diretamente para a proceeds wallet indicada pelo fundador/protocolo
 ```
 
-No deploy inicial de testnet, a vault aceita BNB nativo. Para WBNB, configure `wbnb` com o contrato WBNB e desative/ative BNB conforme a estrategia definida antes do lancamento.
+No deploy inicial de testnet, a vault aceita BNB nativo. Na BSC mainnet, WBNB so e aceito se for o contrato oficial:
+
+```text
+0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
+```
+
+Qualquer outro token e rejeitado pelo contrato.
 
 Parametros obrigatorios:
 

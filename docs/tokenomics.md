@@ -71,6 +71,12 @@ Destino dos BNB/WBNB: proceeds wallet indicada pelo fundador/protocolo
 Sem promessa de retorno, rendimento ou valorizacao
 ```
 
+O WBNB aceito na BSC mainnet deve ser somente o contrato oficial:
+
+```text
+0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
+```
+
 ## Utilidades do token
 
 ### 1. Reputation Staking

@@ -10,6 +10,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 contract AXPParticipationVault is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    address public constant OFFICIAL_BSC_WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
+
     IERC20 public immutable axp;
     IERC20 public wbnb;
     address public proceedsWallet;
@@ -143,7 +145,8 @@ contract AXPParticipationVault is Ownable, Pausable, ReentrancyGuard {
         uint256 maxBNBPerWallet_,
         address proceedsWallet_
     ) internal {
-        require(acceptsNativeBNB_ || address(wbnb_) != address(0), "AXPVault: BNB or WBNB required");
+        require(acceptsNativeBNB_ || address(wbnb_) == OFFICIAL_BSC_WBNB, "AXPVault: BNB or official WBNB required");
+        require(address(wbnb_) == address(0) || address(wbnb_) == OFFICIAL_BSC_WBNB, "AXPVault: unofficial WBNB");
         require(axpPerBNB_ > 0, "AXPVault: rate required");
         require(minBNBDeposit_ >= 0.01 ether, "AXPVault: minimum too low");
         require(maxBNBPerWallet_ >= minBNBDeposit_, "AXPVault: invalid wallet cap");
