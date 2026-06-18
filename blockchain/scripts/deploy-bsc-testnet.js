@@ -52,6 +52,7 @@ const participationVault = await ParticipationVault.deploy(
   ethers.ZeroAddress,
   true,
   ethers.parseEther('1000000'),
+  ethers.parseEther('0.01'),
   ethers.parseEther('0.5'),
 );
 await participationVault.waitForDeployment();

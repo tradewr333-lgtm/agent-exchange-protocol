@@ -11,24 +11,26 @@ contract AXPParticipationVault is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable axp;
-    IERC20 public paymentToken;
+    IERC20 public wbnb;
     address public proceedsWallet;
     bool public acceptsNativeBNB;
-    uint256 public axpPerPaymentToken;
-    uint256 public maxPaymentPerWallet;
+    uint256 public axpPerBNB;
+    uint256 public minBNBDeposit;
+    uint256 public maxBNBPerWallet;
     uint256 public totalSold;
     uint256 public saleOpensAt;
     uint256 public saleClosesAt;
 
-    mapping(address => uint256) public contributedPayment;
+    mapping(address => uint256) public contributedBNBEquivalent;
 
     event Purchase(address indexed buyer, address indexed paymentToken, uint256 paymentAmount, uint256 axpAmount);
     event SaleWindowUpdated(uint256 opensAt, uint256 closesAt);
     event TermsUpdated(
-        address indexed paymentToken,
+        address indexed wbnb,
         bool acceptsNativeBNB,
-        uint256 axpPerPaymentToken,
-        uint256 maxPaymentPerWallet,
+        uint256 axpPerBNB,
+        uint256 minBNBDeposit,
+        uint256 maxBNBPerWallet,
         address proceedsWallet
     );
     event RescueProceeds(address indexed token, address indexed to, uint256 amount);
@@ -37,14 +39,15 @@ contract AXPParticipationVault is Ownable, Pausable, ReentrancyGuard {
         IERC20 axpToken,
         address initialOwner,
         address proceedsWallet_,
-        IERC20 paymentToken_,
+        IERC20 wbnb_,
         bool acceptsNativeBNB_,
-        uint256 axpPerPaymentToken_,
-        uint256 maxPaymentPerWallet_
+        uint256 axpPerBNB_,
+        uint256 minBNBDeposit_,
+        uint256 maxBNBPerWallet_
     ) Ownable(initialOwner) Pausable() {
         require(address(axpToken) != address(0), "AXPVault: token required");
         axp = axpToken;
-        _setTerms(paymentToken_, acceptsNativeBNB_, axpPerPaymentToken_, maxPaymentPerWallet_, proceedsWallet_);
+        _setTerms(wbnb_, acceptsNativeBNB_, axpPerBNB_, minBNBDeposit_, maxBNBPerWallet_, proceedsWallet_);
         _pause();
     }
 
@@ -53,12 +56,13 @@ contract AXPParticipationVault is Ownable, Pausable, ReentrancyGuard {
         require(block.timestamp >= saleOpensAt, "AXPVault: sale not open");
         require(saleClosesAt == 0 || block.timestamp <= saleClosesAt, "AXPVault: sale closed");
         require(msg.value > 0, "AXPVault: BNB required");
-        require(contributedPayment[msg.sender] + msg.value <= maxPaymentPerWallet, "AXPVault: wallet cap exceeded");
+        require(msg.value >= minBNBDeposit, "AXPVault: below minimum deposit");
+        require(contributedBNBEquivalent[msg.sender] + msg.value <= maxBNBPerWallet, "AXPVault: wallet cap exceeded");
 
-        uint256 axpAmount = (msg.value * axpPerPaymentToken) / 1 ether;
+        uint256 axpAmount = (msg.value * axpPerBNB) / 1 ether;
         require(axp.balanceOf(address(this)) >= axpAmount, "AXPVault: insufficient AXP");
 
-        contributedPayment[msg.sender] += msg.value;
+        contributedBNBEquivalent[msg.sender] += msg.value;
         totalSold += axpAmount;
         axp.safeTransfer(msg.sender, axpAmount);
 
@@ -67,21 +71,21 @@ contract AXPParticipationVault is Ownable, Pausable, ReentrancyGuard {
         emit Purchase(msg.sender, address(0), msg.value, axpAmount);
     }
 
-    function buyWithPaymentToken(uint256 paymentAmount) external nonReentrant whenNotPaused {
-        require(address(paymentToken) != address(0), "AXPVault: payment token disabled");
+    function buyWithWBNB(uint256 wbnbAmount) external nonReentrant whenNotPaused {
+        require(address(wbnb) != address(0), "AXPVault: WBNB disabled");
         require(block.timestamp >= saleOpensAt, "AXPVault: sale not open");
         require(saleClosesAt == 0 || block.timestamp <= saleClosesAt, "AXPVault: sale closed");
-        require(paymentAmount > 0, "AXPVault: payment required");
-        require(contributedPayment[msg.sender] + paymentAmount <= maxPaymentPerWallet, "AXPVault: wallet cap exceeded");
+        require(wbnbAmount >= minBNBDeposit, "AXPVault: below minimum deposit");
+        require(contributedBNBEquivalent[msg.sender] + wbnbAmount <= maxBNBPerWallet, "AXPVault: wallet cap exceeded");
 
-        uint256 axpAmount = (paymentAmount * axpPerPaymentToken) / 1 ether;
+        uint256 axpAmount = (wbnbAmount * axpPerBNB) / 1 ether;
         require(axp.balanceOf(address(this)) >= axpAmount, "AXPVault: insufficient AXP");
 
-        contributedPayment[msg.sender] += paymentAmount;
+        contributedBNBEquivalent[msg.sender] += wbnbAmount;
         totalSold += axpAmount;
-        paymentToken.safeTransferFrom(msg.sender, proceedsWallet, paymentAmount);
+        wbnb.safeTransferFrom(msg.sender, proceedsWallet, wbnbAmount);
         axp.safeTransfer(msg.sender, axpAmount);
-        emit Purchase(msg.sender, address(paymentToken), paymentAmount, axpAmount);
+        emit Purchase(msg.sender, address(wbnb), wbnbAmount, axpAmount);
     }
 
     function setSaleWindow(uint256 opensAt, uint256 closesAt) external onlyOwner {
@@ -92,13 +96,14 @@ contract AXPParticipationVault is Ownable, Pausable, ReentrancyGuard {
     }
 
     function setTerms(
-        IERC20 paymentToken_,
+        IERC20 wbnb_,
         bool acceptsNativeBNB_,
-        uint256 axpPerPaymentToken_,
-        uint256 maxPaymentPerWallet_,
+        uint256 axpPerBNB_,
+        uint256 minBNBDeposit_,
+        uint256 maxBNBPerWallet_,
         address proceedsWallet_
     ) external onlyOwner {
-        _setTerms(paymentToken_, acceptsNativeBNB_, axpPerPaymentToken_, maxPaymentPerWallet_, proceedsWallet_);
+        _setTerms(wbnb_, acceptsNativeBNB_, axpPerBNB_, minBNBDeposit_, maxBNBPerWallet_, proceedsWallet_);
     }
 
     function openSale() external onlyOwner {
@@ -118,11 +123,11 @@ contract AXPParticipationVault is Ownable, Pausable, ReentrancyGuard {
         emit RescueProceeds(address(0), to, amount);
     }
 
-    function rescuePaymentToken(address to, uint256 amount) external onlyOwner {
+    function rescueWBNB(address to, uint256 amount) external onlyOwner {
         require(to != address(0), "AXPVault: recipient required");
-        require(address(paymentToken) != address(0), "AXPVault: payment token disabled");
-        paymentToken.safeTransfer(to, amount);
-        emit RescueProceeds(address(paymentToken), to, amount);
+        require(address(wbnb) != address(0), "AXPVault: WBNB disabled");
+        wbnb.safeTransfer(to, amount);
+        emit RescueProceeds(address(wbnb), to, amount);
     }
 
     function recoverUnsoldAXP(address to, uint256 amount) external onlyOwner {
@@ -131,26 +136,30 @@ contract AXPParticipationVault is Ownable, Pausable, ReentrancyGuard {
     }
 
     function _setTerms(
-        IERC20 paymentToken_,
+        IERC20 wbnb_,
         bool acceptsNativeBNB_,
-        uint256 axpPerPaymentToken_,
-        uint256 maxPaymentPerWallet_,
+        uint256 axpPerBNB_,
+        uint256 minBNBDeposit_,
+        uint256 maxBNBPerWallet_,
         address proceedsWallet_
     ) internal {
-        require(acceptsNativeBNB_ || address(paymentToken_) != address(0), "AXPVault: payment method required");
-        require(axpPerPaymentToken_ > 0, "AXPVault: rate required");
-        require(maxPaymentPerWallet_ > 0, "AXPVault: wallet cap required");
+        require(acceptsNativeBNB_ || address(wbnb_) != address(0), "AXPVault: BNB or WBNB required");
+        require(axpPerBNB_ > 0, "AXPVault: rate required");
+        require(minBNBDeposit_ >= 0.01 ether, "AXPVault: minimum too low");
+        require(maxBNBPerWallet_ >= minBNBDeposit_, "AXPVault: invalid wallet cap");
         require(proceedsWallet_ != address(0), "AXPVault: proceeds required");
-        paymentToken = paymentToken_;
+        wbnb = wbnb_;
         acceptsNativeBNB = acceptsNativeBNB_;
-        axpPerPaymentToken = axpPerPaymentToken_;
-        maxPaymentPerWallet = maxPaymentPerWallet_;
+        axpPerBNB = axpPerBNB_;
+        minBNBDeposit = minBNBDeposit_;
+        maxBNBPerWallet = maxBNBPerWallet_;
         proceedsWallet = proceedsWallet_;
         emit TermsUpdated(
-            address(paymentToken_),
+            address(wbnb_),
             acceptsNativeBNB_,
-            axpPerPaymentToken_,
-            maxPaymentPerWallet_,
+            axpPerBNB_,
+            minBNBDeposit_,
+            maxBNBPerWallet_,
             proceedsWallet_
         );
     }
