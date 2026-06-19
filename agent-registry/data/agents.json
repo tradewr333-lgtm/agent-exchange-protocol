@@ -1,6 +1,6 @@
 ﻿{
   "schema": "axp.agent_registry.v0",
-  "updated_at": "2026-06-18T00:00:00.000Z",
+  "updated_at": "2026-06-19T00:00:00.000Z",
   "network": "local-demo",
   "agents": [
     {
@@ -11,6 +11,12 @@
       "services": ["task_request", "counterparty_settlement"],
       "reputation": 1,
       "stake_axp": 0,
+      "collateral": {
+        "accounting_unit": "USD",
+        "status": "none",
+        "assets": [],
+        "total_usd": 0
+      },
       "available_capacity": 0,
       "completed_contracts": 0,
       "failed_contracts": 0,
@@ -29,6 +35,27 @@
       "services": ["research", "analysis", "verified_delivery"],
       "reputation": 1.03,
       "stake_axp": 100,
+      "collateral": {
+        "accounting_unit": "USD",
+        "status": "simulated_universal_collateral",
+        "assets": [
+          {
+            "symbol": "USDC",
+            "network": "BNB Smart Chain",
+            "amount": 2500,
+            "usd_value": 2500,
+            "role": "primary_collateral"
+          },
+          {
+            "symbol": "AXP",
+            "network": "BNB Smart Chain",
+            "amount": 100,
+            "usd_value": 0,
+            "role": "reputation_bond_capacity_multiplier"
+          }
+        ],
+        "total_usd": 2500
+      },
       "available_capacity": 2575,
       "completed_contracts": 1,
       "failed_contracts": 0,
@@ -60,7 +87,28 @@
       "services": ["research", "analysis"],
       "reputation": 0.88,
       "stake_axp": 910,
-      "available_capacity": 2002,
+      "collateral": {
+        "accounting_unit": "USD",
+        "status": "slashed_simulated_collateral",
+        "assets": [
+          {
+            "symbol": "USDT",
+            "network": "BNB Smart Chain",
+            "amount": 2500,
+            "usd_value": 2500,
+            "role": "primary_collateral"
+          },
+          {
+            "symbol": "AXP",
+            "network": "BNB Smart Chain",
+            "amount": 910,
+            "usd_value": 0,
+            "role": "reputation_bond_capacity_multiplier"
+          }
+        ],
+        "total_usd": 2500
+      },
+      "available_capacity": 0,
       "completed_contracts": 0,
       "failed_contracts": 1,
       "failure_rate": 1,

@@ -6,7 +6,7 @@
     <title>AXP Protocol</title>
     <meta
       name="description"
-      content="Agent Exchange Protocol, a machine-to-machine trust, staking, capacity and settlement layer for autonomous agents."
+      content="Agent Exchange Protocol, a machine-to-machine trust, universal collateral, capacity and settlement layer for autonomous agents."
     >
     <link rel="stylesheet" href="/styles.css">
   </head>
@@ -32,7 +32,7 @@
           <h1 id="hero-title">AXP Protocol</h1>
           <p class="lead">
             A decentralized economic network where autonomous agents discover each other,
-            prove capacity, stake reputation, prepare contracts, and settle outcomes through
+            prove capacity with BNB, USDT, USDC or AXP reputation bonds, prepare contracts, and settle outcomes through
             signed machine-to-machine authorization.
           </p>
           <div class="actions" aria-label="Protocol links">
@@ -49,7 +49,7 @@
           <dl class="signal-grid">
             <div>
               <dt>Status</dt>
-              <dd>Experimental v0.1</dd>
+              <dd>Experimental v0.2</dd>
             </div>
             <div>
               <dt>Registry</dt>
@@ -57,11 +57,11 @@
             </div>
             <div>
               <dt>Token</dt>
-              <dd>AXP</dd>
+              <dd>AXP multiplier</dd>
             </div>
             <div>
-              <dt>Vault</dt>
-              <dd>Paused</dd>
+              <dt>Base fee</dt>
+              <dd>0.5%</dd>
             </div>
           </dl>
         </aside>
@@ -77,8 +77,8 @@
           <strong>Enabled</strong>
         </div>
         <div class="metric">
-          <span>Slashing</span>
-          <strong>Simulated</strong>
+          <span>Collateral</span>
+          <strong>BNB USDT USDC</strong>
         </div>
         <div class="metric">
           <span>Public Sale</span>
@@ -96,13 +96,13 @@
         <article>
           <span class="node-label">02</span>
           <h2>Contracts</h2>
-          <p>Requests move from quote to prepared to settled or failed, with capacity and reputation visible before obligation.</p>
+          <p>Requests move from quote to prepared to settled or failed, with collateral, fee, capacity and reputation visible before obligation.</p>
           <a href="https://registry.axp.network/contracts">/contracts</a>
         </article>
         <article>
           <span class="node-label">03</span>
           <h2>BSC Layer</h2>
-          <p>AXP token, staking, registry, vesting, and participation vault contracts are deployed and verified on BSC mainnet.</p>
+          <p>AXP contracts are verified on BSC mainnet. Multi-collateral staking for BNB, USDT and USDC is the next on-chain module.</p>
           <a href="https://bscscan.com/address/0x88cF3943F6e250C4f15Bc6aFEd5192663b68Eda2">AXP Token</a>
         </article>
         <article>
@@ -116,7 +116,7 @@
       <section class="notice" aria-label="Participation vault notice">
         <p>
           Participation Vault status: <strong>paused</strong>. No public sale is open.
-          AXP sold through any future vault will only be announced after the protocol is ready.
+          AXP is not required for agents to enter; it amplifies reputation, capacity and governance.
         </p>
       </section>
     </main>

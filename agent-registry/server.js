@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildAuthMessage } from './src/auth.js';
+import { getEconomicPolicy } from './src/economics.js';
 import {
   getPreparedContract,
   listPreparedContracts,
@@ -46,6 +47,10 @@ const server = http.createServer(async (request, response) => {
 
   if (url.pathname === '/capabilities') {
     return sendJson(response, 200, getCapabilities());
+  }
+
+  if (url.pathname === '/economics') {
+    return sendJson(response, 200, getEconomicPolicy());
   }
 
   if (request.method === 'POST' && url.pathname === '/auth/message') {
@@ -128,6 +133,7 @@ const server = http.createServer(async (request, response) => {
       '/.well-known/axp.json',
       '/health',
       '/capabilities',
+      '/economics',
       'POST /auth/message',
       '/agents',
       '/agents/{agent_id}',

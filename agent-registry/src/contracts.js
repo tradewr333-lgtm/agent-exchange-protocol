@@ -3,6 +3,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyAgentAuth } from './auth.js';
+import { calculateProtocolFee, getAgentEconomicProfile } from './economics.js';
 import { getAgent } from './registry.js';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -21,12 +22,13 @@ export function quoteContract(payload = {}) {
 
   const requestedCapacity = Number(payload.requested_capacity);
   const service = String(payload.service);
+  const economicProfile = getAgentEconomicProfile(provider);
   const serviceSupported = provider.services.includes(service);
-  const capacityAvailable = provider.available_capacity >= requestedCapacity;
+  const capacityAvailable = economicProfile.available_capacity >= requestedCapacity;
   const providerActive = provider.status === 'active';
   const obligationAccepted = providerActive && serviceSupported && capacityAvailable;
-  const capacityAfter = Math.max(provider.available_capacity - requestedCapacity, 0);
-  const riskAdjustment = calculateRiskAdjustment(provider);
+  const capacityAfter = Math.max(economicProfile.available_capacity - requestedCapacity, 0);
+  const protocolFee = calculateProtocolFee(requestedCapacity);
 
   return {
     ok: true,
@@ -41,15 +43,24 @@ export function quoteContract(payload = {}) {
       requested_capacity: requestedCapacity,
       provider_status: provider.status,
       provider_reputation: provider.reputation,
-      provider_stake_axp: provider.stake_axp,
-      provider_available_capacity: provider.available_capacity,
+      provider_collateral_usd: economicProfile.collateral_usd,
+      provider_collateral: economicProfile.collateral,
+      provider_axp_reputation_bond: economicProfile.axp_reputation_bond,
+      provider_axp_trust_multiplier: economicProfile.axp_trust_multiplier,
+      provider_total_capacity: economicProfile.total_capacity,
+      provider_available_capacity: economicProfile.available_capacity,
       capacity_after_prepare: capacityAfter,
       service_supported: serviceSupported,
       capacity_available: capacityAvailable,
       obligation_accepted: obligationAccepted,
-      risk_adjustment: riskAdjustment,
+      risk_adjustment: economicProfile.risk_adjustment,
       failure_rate: provider.failure_rate,
-      settlement_asset: 'AXP',
+      collateral_accounting_unit: 'USD',
+      accepted_collateral_assets: ['BNB', 'WBNB', 'USDT', 'USDC'],
+      axp_required_for_entry: false,
+      axp_role: 'reputation_bond_and_capacity_multiplier',
+      protocol_fee: protocolFee,
+      settlement_asset: payload.settlement_asset ?? 'USD-equivalent collateral',
       evidence: {
         discovery_url: 'https://registry.axp.network/agents',
         provider_metadata_url: `https://registry.axp.network/agents/${provider.agent_id}`,
@@ -105,7 +116,10 @@ export async function prepareContract(payload = {}) {
     terms: {
       service: quote.service,
       requested_capacity: quote.requested_capacity,
-      settlement_asset: 'AXP',
+      collateral_accounting_unit: 'USD',
+      accepted_collateral_assets: quote.accepted_collateral_assets,
+      protocol_fee: quote.protocol_fee,
+      settlement_asset: quote.settlement_asset,
       slashable: true,
       arbitration_status: 'planned',
       insurance_status: 'planned',
@@ -300,18 +314,13 @@ function createEmptyContractStore() {
   };
 }
 
-function calculateRiskAdjustment(provider) {
-  const failurePenalty = Math.min(Number(provider.failure_rate) || 0, 1);
-  return Number((1 - failurePenalty).toFixed(4));
-}
-
 function buildQuoteId(payload, provider) {
   const source = JSON.stringify({
     requester_agent_id: payload.requester_agent_id ?? null,
     provider_agent_id: provider.agent_id,
     service: payload.service,
     requested_capacity: Number(payload.requested_capacity),
-    stake_axp: provider.stake_axp,
+    collateral_usd: provider.collateral_usd,
     available_capacity: provider.available_capacity,
   });
 

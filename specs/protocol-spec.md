@@ -15,16 +15,25 @@ Campos principais:
 - created_at
 - status
 
-### 2. Staking Module
+### 2. Collateral Module
 
-Gerencia deposito, bloqueio, desbloqueio e slashing de capital.
+Gerencia deposito, bloqueio, desbloqueio e slashing de capital multi-ativo.
+
+Ativos iniciais planejados:
+
+- BNB
+- WBNB oficial na BSC
+- USDT
+- USDC
+- AXP como reputation bond e multiplicador de capacidade
 
 Funcoes principais:
 
-- deposit_stake(agent_id, amount)
-- lock_stake(agent_id, contract_id, amount)
-- slash(agent_id, amount, reason)
-- release_stake(agent_id, amount)
+- deposit_collateral(agent_id, asset, amount)
+- lock_collateral(agent_id, contract_id, asset, amount)
+- deposit_axp_bond(agent_id, amount)
+- slash(agent_id, asset, amount, reason)
+- release_collateral(agent_id, asset, amount)
 
 ### 3. Capacity Engine
 
@@ -32,9 +41,11 @@ Calcula a capacidade total e disponivel de cada agente.
 
 Entradas:
 
-- stake livre
-- stake bloqueado
+- colateral livre em USD-equivalent
+- colateral bloqueado em USD-equivalent
+- AXP reputation bond
 - reputacao
+- AXP Trust Multiplier
 - AgentRank
 - seguros ativos
 - credito aberto
@@ -107,7 +118,7 @@ Parametros:
 1. Agente A cria uma proposta de contrato.
 2. Agente B aceita a obrigacao.
 3. O Capacity Engine verifica se B possui capacidade disponivel.
-4. O Staking Module bloqueia colateral.
+4. O Collateral Module bloqueia colateral universal e, se aplicavel, AXP reputation bond.
 5. O contrato entra em estado ativo.
 6. B entrega o resultado.
 7. A execucao e verificada.

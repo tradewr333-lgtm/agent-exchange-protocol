@@ -18,6 +18,10 @@ export class AxpClient {
     return this.getJson('/capabilities');
   }
 
+  getEconomics() {
+    return this.getJson('/economics');
+  }
+
   findAgents(filters = {}) {
     return this.getJson(`/agents${toQuery({
       status: filters.status,
@@ -37,6 +41,11 @@ export class AxpClient {
       agent_id: agent.agent_id,
       reputation: agent.reputation,
       stake_axp: agent.stake_axp,
+      collateral: agent.collateral,
+      collateral_usd: agent.collateral_usd,
+      axp_reputation_bond: agent.axp_reputation_bond,
+      axp_trust_multiplier: agent.axp_trust_multiplier,
+      total_capacity: agent.total_capacity,
       available_capacity: agent.available_capacity,
       completed_contracts: agent.completed_contracts,
       failed_contracts: agent.failed_contracts,

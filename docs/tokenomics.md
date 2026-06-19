@@ -1,14 +1,17 @@
-﻿# AXP Tokenomics
+# AXP Tokenomics
 
 ## Visao geral
 
-O token AXP e o ativo economico nativo do Agent Exchange Protocol. Ele serve como colateral de reputacao, unidade de staking, mecanismo de slashing, meio de pagamento de taxas, base para seguros, incentivo de governanca e recurso de capacidade para agentes autonomos.
+O token AXP e o ativo nativo de reputacao, governanca e amplificacao economica do Agent Exchange Protocol. Ele nao deve ser a unica forma de colateral operacional.
 
-A funcao principal do token e transformar confianca em risco financeiro verificavel.
+O protocolo deve permitir que agentes entrem usando ativos liquidos e familiares, principalmente BNB, WBNB, USDT e USDC na BNB Smart Chain. O AXP entra como reputation bond, multiplicador de capacidade, governanca, descontos e direitos futuros em seguros/arbitragem.
 
 ```text
-AXP = reputacao colateralizada + capacidade economica + penalidade programavel
+AXP = reputation bond + governance + capacity multiplier
+Universal Collateral = BNB/WBNB/USDT/USDC used to secure obligations
 ```
+
+Essa separacao reduz atrito: o agente pode trabalhar usando colateral que ja possui. Depois, conforme cresce, ele tem incentivo economico para manter AXP porque isso aumenta capacidade, prioridade e eficiencia.
 
 ## Supply
 
@@ -18,7 +21,7 @@ Modelo: supply fixo
 Inflacao inicial: nenhuma
 ```
 
-O protocolo deve priorizar captura de valor via uso real, taxas, staking e slashing, em vez de emissoes inflacionarias permanentes.
+O protocolo deve priorizar captura de valor via uso real, volume de contratos, taxas e demanda por reputacao, em vez de emissoes inflacionarias permanentes.
 
 ## Distribuicao inicial
 
@@ -31,70 +34,127 @@ O protocolo deve priorizar captura de valor via uso real, taxas, staking e slash
 | Investors / Strategic Backers | 15% | 150.000.000 AXP | capital estrategico e parceiros |
 | Agent Incentives | 10% | 100.000.000 AXP | agentes iniciais, uso real, bootstrap de rede |
 | Liquidity | 5% | 50.000.000 AXP | liquidez inicial em DEX/CEX e market making |
-| Participation Vault | 2% | 20.000.000 AXP | vault opcional para participacao publica contra BNB |
+| Participation Vault | 2% | 20.000.000 AXP | vault opcional para participacao publica contra BNB/WBNB |
 
-## Vesting sugerido
+## Universal Collateral
 
-- Founder / Protocol Steward: 4 anos, com 1 ano de cliff, liberacao mensal apos o cliff.
-- Core Contributors: 4 anos, com 1 ano de cliff.
-- Investors: 3 anos, com 1 ano de cliff.
-- Treasury: liberacao por governanca.
-- Community & Ecosystem: distribuicao progressiva por grants e contribuicoes.
-- Agent Incentives: distribuicao baseada em uso real do protocolo.
-- Liquidity: liberacao parcial no lancamento, com controles de mercado.
-- Participation Vault: contrato pausado por padrao; abertura somente apos testnet, revisao de risco e comunicacao publica.
+O colateral operacional inicial planejado para BNB Smart Chain inclui:
 
-## Founder / Protocol Steward
+| Ativo | Papel | Status |
+|---|---|---|
+| BNB | colateral nativo | planejado on-chain |
+| WBNB oficial | colateral wrapped | planejado on-chain |
+| USDT | colateral stablecoin | planejado on-chain |
+| USDC | colateral stablecoin | planejado on-chain |
 
-A alocacao Founder / Protocol Steward recompensa a criacao, desenho, coordenacao e manutencao inicial do AXP. Essa alocacao possui cliff de 12 meses e vesting de 48 meses, alinhando incentivos com a saude de longo prazo do protocolo e reduzindo risco de despejo no mercado.
-
-```text
-Founder / Protocol Steward: 100.000.000 AXP
-Cliff: 12 meses
-Vesting total: 48 meses
-Venda antes do cliff: nao
-Carteira/contrato: publico
-```
-
-## Participation Vault
-
-A Participation Vault reserva 2% do supply para uma futura rodada publica de participacao somente contra BNB ou WBNB. Ela deve nascer pausada e so deve ser aberta quando o protocolo estiver operacional em testnet, com parametros claros e riscos explicados.
-
-```text
-Participation Vault: 20.000.000 AXP
-Objetivo: permitir compra limitada de AXP contra BNB ou WBNB, e nenhum outro ativo
-Estado inicial: pausada
-Deposito minimo: 0.01 BNB ou 0.01 WBNB
-Ratio: X AXP por 1 BNB/WBNB, definida depois de observar demanda real dos agentes
-Limite por wallet: obrigatorio
-Destino dos BNB/WBNB: proceeds wallet indicada pelo fundador/protocolo
-Sem promessa de retorno, rendimento ou valorizacao
-```
-
-O WBNB aceito na BSC mainnet deve ser somente o contrato oficial:
+WBNB oficial na BSC mainnet:
 
 ```text
 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
 ```
 
-## Utilidades do token
+Todos os colaterais sao contabilizados internamente em USD-equivalent para calcular capacidade, risco e exposicao.
 
-### 1. Reputation Staking
+## Papel do AXP
 
-Agentes bloqueiam AXP para assumir obrigacoes economicas. O stake e usado como garantia contra falha, fraude, abandono ou inadimplencia.
+AXP nao deve ser exigido para um agente entrar na rede. Ele deve funcionar como acelerador economico.
 
-### 2. Capacity Collateral
+Utilidades principais:
 
-A capacidade de um agente depende de seu stake, reputacao, seguro e risco aberto.
+- reputation bond
+- multiplicador de capacidade
+- governanca
+- descontos futuros em taxas
+- prioridade em discovery/ranking
+- direitos futuros em arbitragem
+- direitos futuros em pools de seguro
+
+## Formula de capacidade
 
 ```text
-Total Capacity = AXP Stake * Reputation Multiplier * Insurance Multiplier * Risk Adjustment
-Available Capacity = Total Capacity - Active Obligations - Pending Dispute Exposure
+Capacity =
+Universal Collateral USD
+* Reputation Multiplier
+* AXP Trust Multiplier
+* Insurance Multiplier
+* Risk Adjustment
 ```
 
-### 3. Slashing
+Exemplo:
 
-Quando um agente falha, parte do stake e cortada. A distribuicao padrao do slashing e:
+```text
+Agente A:
+100.000 USDC collateral
+0 AXP
+Capacity base: 100.000 USD-equivalent
+
+Agente B:
+100.000 USDC collateral
+50.000 AXP reputation bond
+Capacity maior por AXP Trust Multiplier
+```
+
+O AXP aumenta capacidade, mas nao compra reputacao sozinho. Historico ruim, disputas e slashing reduzem o multiplicador de risco.
+
+## Protocol Fee Ceiling
+
+A taxa-base do protocolo deve ser baixa e previsivel:
+
+```text
+Protocol base fee: 0,5%
+Fee ceiling: 0,5%
+Alteracao do teto: somente por governanca
+```
+
+O objetivo e criar uma infraestrutura de grande volume. AXP deve ganhar por adoção e fluxo, nao por extracao agressiva de taxas.
+
+## Staking Yield
+
+Na fase inicial, staking de AXP nao deve pagar yield inflacionario.
+
+AXP bloqueado serve para:
+
+- reputacao
+- governanca
+- multiplicador de capacidade
+- alinhamento economico
+
+Yield para stakers so deve existir depois de receita real do protocolo.
+
+Modelo futuro possivel:
+
+```text
+40% Treasury
+30% Development
+20% Insurance / Risk Reserves
+10% AXP Stakers
+```
+
+Essa divisao e apenas uma diretriz futura, nao promessa atual.
+
+## Participation Vault
+
+A Participation Vault reserva 2% do supply para uma futura rodada publica de participacao somente contra BNB ou WBNB. Ela deve permanecer pausada enquanto o protocolo amadurece e ate existir demanda real de agentes.
+
+```text
+Participation Vault: 20.000.000 AXP
+Estado inicial: pausada
+Compra permitida: somente BNB ou WBNB oficial
+Deposito minimo: 0.01 BNB ou 0.01 WBNB
+Ratio: X AXP por 1 BNB/WBNB, definida depois de observar demanda real
+Destino dos BNB/WBNB: proceeds wallet indicada pelo fundador/protocolo
+Sem promessa de retorno, rendimento ou valorizacao
+```
+
+## Slashing
+
+O slashing pode atingir:
+
+- colateral universal bloqueado para uma obrigacao
+- AXP reputation bond
+- ambos, dependendo do tipo de falha
+
+Distribuicao sugerida:
 
 | Destino | Percentual |
 |---|---:|
@@ -103,72 +163,21 @@ Quando um agente falha, parte do stake e cortada. A distribuicao padrao do slash
 | Arbitrators / Verifiers | 10% |
 | Protocol Treasury | 10% |
 
-### 4. Taxas do protocolo
-
-AXP pode ser usado para pagar:
-
-- registro de agentes
-- criacao de contratos
-- arbitragem
-- premios de seguro
-- acesso a dados de reputacao
-- chamadas premium ao registry
-- taxas de mercado de credito
-
-### 5. Insurance Pool
-
-Participantes podem depositar AXP em pools de seguro. Esses pools recebem premios pagos por agentes que buscam cobertura contra falhas. Em eventos cobertos, o pool indeniza a contraparte e pode recuperar parte do valor via slashing.
-
-### 6. Governanca
-
-Stakers de AXP podem governar parametros do protocolo, incluindo:
-
-- taxas
-- formulas de capacidade
-- severidade de slashing
-- criterios de arbitragem
-- modulos aceitos
-- uso da treasury
-- politicas de incentivos
-
-## Principio de desenho
-
-AXP nao deve permitir que capital compre reputacao sozinho.
-
-```text
-Muito stake + baixa reputacao = capacidade limitada
-Pouco stake + alta reputacao = capacidade limitada
-Muito stake + alta reputacao = alta capacidade
-```
-
-A reputacao deve nascer de execucao verificavel, nao apenas de saldo.
-
 ## Captura de valor
 
 A demanda por AXP aumenta quando:
 
-1. Mais agentes precisam fazer stake.
-2. Mais contratos exigem colateral.
-3. Marketplaces exigem Capacity Score minimo.
-4. Seguradoras precisam reservas em AXP.
-5. Arbitros e verificadores recebem taxas.
-6. Agentes com boa reputacao acessam credito maior.
-
-## Ciclo economico
-
-```text
-Mais agentes entram
--> mais contratos sao criados
--> mais AXP e bloqueado em stake
--> menos oferta circulante fica disponivel
--> mais taxas sao geradas
--> mais seguros e credito sao demandados
--> reputacao passa a ter valor financeiro
-```
+1. agentes querem maior Capacity Score;
+2. marketplaces priorizam agentes com AXP Trust Multiplier;
+3. agentes querem descontos de taxa;
+4. agentes querem participar de governanca;
+5. arbitradores, seguradores e verificadores exigem bond;
+6. o volume de contratos aumenta a receita real do protocolo.
 
 ## Regra central
 
-O token AXP existe para precificar confianca entre agentes autonomos.
+O AXP nao deve ser uma barreira de entrada.
 
-Sem AXP, um agente promete.
-Com AXP, um agente garante.
+Sem AXP, um agente ainda pode operar com colateral universal.
+
+Com AXP, um agente opera com mais capacidade, mais prioridade e maior alinhamento economico.

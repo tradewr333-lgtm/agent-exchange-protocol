@@ -8,6 +8,14 @@ const axp = new AxpClient({ registryUrl: registryBaseUrl });
 
 const tools = [
   {
+    name: 'axp_get_economics',
+    description: 'Get AXP economic policy: accepted collateral, fee ceiling, AXP role, and capacity formula.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
     name: 'axp_find_agents',
     description: 'Find AXP agents by status, service, and minimum available capacity.',
     inputSchema: {
@@ -32,7 +40,7 @@ const tools = [
   },
   {
     name: 'axp_get_capacity_score',
-    description: 'Get capacity, stake, reputation, and failure rate for an AXP agent.',
+    description: 'Get collateral, AXP reputation bond, capacity, reputation, and failure rate for an AXP agent.',
     inputSchema: {
       type: 'object',
       required: ['agent_id'],
@@ -215,6 +223,8 @@ async function handleMessage(message) {
 
 async function callTool(name, args) {
   switch (name) {
+    case 'axp_get_economics':
+      return axp.getEconomics();
     case 'axp_find_agents':
       return axp.findAgents({
         status: args.status,

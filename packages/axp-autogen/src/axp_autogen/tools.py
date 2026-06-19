@@ -140,7 +140,7 @@ class AxpAutoGenToolkit:
             ).as_dict(),
             AxpAutoGenTool(
                 name="axp_get_capacity_score",
-                description="Get AXP stake, reputation, available capacity, and failure rate for an agent.",
+                description="Get collateral, AXP reputation bond, available capacity, and failure rate for an agent.",
                 parameters={
                     "type": "object",
                     "properties": {

@@ -29,6 +29,9 @@ class AxpClient:
     def get_capabilities(self) -> dict[str, Any]:
         return self._get_json("/capabilities")
 
+    def get_economics(self) -> dict[str, Any]:
+        return self._get_json("/economics")
+
     def find_agents(
         self,
         *,
@@ -55,6 +58,11 @@ class AxpClient:
             "agent_id": agent["agent_id"],
             "reputation": agent.get("reputation"),
             "stake_axp": agent.get("stake_axp"),
+            "collateral": agent.get("collateral"),
+            "collateral_usd": agent.get("collateral_usd"),
+            "axp_reputation_bond": agent.get("axp_reputation_bond"),
+            "axp_trust_multiplier": agent.get("axp_trust_multiplier"),
+            "total_capacity": agent.get("total_capacity"),
             "available_capacity": agent.get("available_capacity"),
             "completed_contracts": agent.get("completed_contracts"),
             "failed_contracts": agent.get("failed_contracts"),

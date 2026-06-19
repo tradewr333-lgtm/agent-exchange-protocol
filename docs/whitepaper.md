@@ -10,21 +10,35 @@ AXP substitui confianca subjetiva por garantias economicas. Um agente nao e conf
 
 A economia dos agentes autonomos precisa de uma camada nativa de confianca. Humanos usam contratos, tribunais, bancos, reputacao social e garantias legais. Agentes autonomos precisam de equivalentes programaveis, liquidos e auditaveis.
 
-AXP propoe que a reputacao de agentes se torne um ativo financeiro. Esse ativo nasce da combinacao entre desempenho, stake, penalidades, volume economico, contrapartes e verificacao.
+AXP propoe que a reputacao de agentes se torne um ativo financeiro. Esse ativo nasce da combinacao entre desempenho, colateral, AXP reputation bond, penalidades, volume economico, contrapartes e verificacao.
+
+## Modelo economico v0.2
+
+AXP nao deve obrigar agentes a comprar o token para comecar. O protocolo deve aceitar colateral universal em ativos liquidos e familiares, como BNB, WBNB, USDT e USDC na BNB Smart Chain.
+
+O token AXP passa a atuar como acelerador economico:
+
+- aumenta Capacity Score por meio do AXP Trust Multiplier;
+- alinha agentes com a governanca;
+- funciona como reputation bond;
+- pode gerar descontos e direitos futuros em seguros/arbitragem;
+- nao substitui colateral real.
+
+O protocolo cobra taxa-base de 0,5% por contrato, com teto inicial de 0,5% alteravel somente por governanca. A tese e gerar cash flow por volume, nao por friccao.
 
 ## Primitivos
 
 ### On-chain Identity
 
-Cada agente possui uma identidade on-chain usada para registrar historico, contratos, reputacao, stake, seguros, credito e disputas.
+Cada agente possui uma identidade on-chain usada para registrar historico, contratos, reputacao, colateral, AXP reputation bond, seguros, credito e disputas.
 
 ### Reputation Staking
 
-Agentes bloqueiam capital para assumir obrigacoes. Esse capital serve como garantia de desempenho. Em caso de falha, parte do stake pode ser cortada.
+Agentes bloqueiam capital para assumir obrigacoes. Esse capital pode ser BNB, WBNB, USDT, USDC e/ou AXP reputation bond. Em caso de falha, parte da exposicao bloqueada pode ser cortada.
 
 ### Capacity Score
 
-O Capacity Score define quanto risco economico um agente pode assumir. Ele considera stake, reputacao, seguros, historico, obrigacoes abertas e qualidade das contrapartes.
+O Capacity Score define quanto risco economico um agente pode assumir. Ele considera colateral universal, AXP Trust Multiplier, reputacao, seguros, historico, obrigacoes abertas e qualidade das contrapartes.
 
 ### AgentRank
 
@@ -54,7 +68,7 @@ Um agente so pode assumir obrigacoes proporcionais a sua capacidade disponivel.
 Capacidade Disponivel = Capacidade Total - Obrigacoes Ativas
 ```
 
-Se um agente possui capacidade total de 100.000 unidades, mas ja assumiu 70.000 em obrigacoes, so pode assumir mais 30.000 sem adicionar stake, seguro ou garantia externa.
+Se um agente possui capacidade total de 100.000 unidades, mas ja assumiu 70.000 em obrigacoes, so pode assumir mais 30.000 sem adicionar colateral, AXP reputation bond, seguro ou garantia externa.
 
 ## Falha e penalidade
 
@@ -63,7 +77,7 @@ Quando um agente falha:
 1. O contrato entra em disputa.
 2. Evidencias sao avaliadas.
 3. A arbitragem determina o resultado.
-4. O stake pode ser cortado.
+4. O colateral e/ou AXP reputation bond pode ser cortado.
 5. A contraparte pode ser compensada.
 6. O seguro pode ser acionado.
 7. A reputacao e recalculada.

@@ -24,6 +24,14 @@
     "minimumDepositBNB": "0.01",
     "saleOpen": false
   },
+  "multiCollateral": {
+    "status": "planned",
+    "accountingUnit": "USD",
+    "acceptedAssetsPlanned": ["BNB", "official BSC WBNB", "USDT", "USDC"],
+    "protocolFeeCeilingBps": 50,
+    "axpRole": "reputation bond, governance, and capacity multiplier",
+    "note": "Current mainnet deployment contains AXP token, registry, AXP staking, vesting, and paused participation vault. Multi-collateral staking requires a future audited contract deployment."
+  },
   "verification": {
     "status": "verified",
     "explorer": "https://bscscan.com",

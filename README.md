@@ -1,8 +1,8 @@
 ﻿# Agent Exchange Protocol (AXP)
 
-**A decentralized trust, staking, capacity, and settlement layer for autonomous agents.**
+**A decentralized trust, collateral, capacity, and settlement layer for autonomous agents.**
 
-AXP e um protocolo economico descentralizado para agentes autonomos. Ele permite que agentes registrem identidade, bloqueiem colateral, assumam obrigacoes, firmem contratos, construam reputacao, sofram slashing em caso de falha e operem dentro de uma capacidade economica verificavel.
+AXP e um protocolo economico descentralizado para agentes autonomos. Ele permite que agentes registrem identidade, bloqueiem colateral em ativos familiares como BNB, WBNB, USDT ou USDC, assumam obrigacoes, firmem contratos, construam reputacao, sofram slashing em caso de falha e operem dentro de uma capacidade economica verificavel.
 
 A tese central:
 
@@ -23,12 +23,13 @@ Esse ambiente precisa responder perguntas simples:
 - O que acontece se ele falhar?
 - Quem compensa a contraparte?
 
-AXP resolve isso transformando reputacao em capacidade economica colateralizada.
+AXP resolve isso transformando colateral, reputacao e historico em capacidade economica verificavel. O token AXP nao precisa ser uma barreira de entrada: ele funciona como reputation bond, governanca e multiplicador de capacidade.
 
 ## Primitivos centrais
 
 - **On-chain Identity**: identidade verificavel para agentes.
-- **Reputation Staking**: AXP bloqueado como garantia de comportamento.
+- **Universal Collateral**: BNB, WBNB, USDT e USDC como colateral operacional inicial planejado na BNB Smart Chain.
+- **AXP Reputation Bond**: AXP bloqueado para ampliar reputacao, governanca e capacidade, sem obrigar todo agente novo a comprar AXP.
 - **Capacity Score**: limite de obrigacoes que um agente pode assumir.
 - **AgentRank**: ranking economico baseado em execucao, risco e historico.
 - **Agent-to-Agent Contracts**: contratos entre agentes com termos, valor, stake e resultado.
@@ -38,25 +39,60 @@ AXP resolve isso transformando reputacao em capacidade economica colateralizada.
 
 ## Como funciona
 
-Um agente deposita AXP, bloqueia parte desse saldo como stake de reputacao e recebe uma capacidade economica proporcional ao seu colateral e historico.
+Um agente deposita colateral universal, como USDC, USDT ou BNB. Se tambem bloquear AXP, ganha um multiplicador de confianca e capacidade, mas consegue entrar no protocolo sem comprar AXP no primeiro dia.
 
 ```text
-Total Capacity = AXP Stake * Reputation Multiplier * Insurance Multiplier * Risk Adjustment
+Total Capacity = Universal Collateral USD * Reputation Multiplier * AXP Trust Multiplier * Insurance Multiplier * Risk Adjustment
 Available Capacity = Total Capacity - Active Obligations - Pending Dispute Exposure
 ```
 
 Se o agente entrega, sua reputacao e capacidade aumentam.
 
-Se o agente falha, parte do stake e cortada e distribuida entre contraparte, insurance pool, arbitros e treasury.
+Se o agente falha, parte do colateral e/ou AXP reputation bond e cortada e distribuida entre contraparte, insurance pool, arbitros e treasury.
+
+## Modelo economico v0.2
+
+O objetivo do AXP e maximizar volume e adocao, nao forcar compra de token. Por isso, o modelo economico separa colateral operacional de AXP.
+
+Colateral aceito inicialmente na BNB Smart Chain:
+
+```text
+BNB
+WBNB oficial: 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
+USDT
+USDC
+```
+
+AXP passa a atuar como:
+
+- reputation bond
+- multiplicador de capacidade
+- governanca
+- desconto futuro de taxas
+- direito futuro em arbitragem e seguros
+
+Taxa-base do protocolo:
+
+```text
+0,5% do valor do contrato
+Teto: 0,5%, alteravel somente por governanca
+Yield inicial de staking AXP: nenhum
+```
+
+Endpoint publico para agentes:
+
+```text
+https://registry.axp.network/economics
+```
 
 ## Token AXP
 
-O token AXP e o ativo economico nativo do protocolo.
+O token AXP e o ativo economico nativo do protocolo, mas nao deve ser o unico colateral operacional.
 
 Usos principais:
 
-- reputation staking
-- capacity collateral
+- reputation bond
+- capacity multiplier
 - slashing
 - pagamento de taxas
 - insurance pools
@@ -93,13 +129,13 @@ A implementacao de referencia esta em [`axp-core`](axp-core).
 Ela demonstra:
 
 - registro de agentes
-- funding em AXP
-- reputation staking
+- funding em colateral universal
+- reputation bond em AXP
 - calculo de Capacity Score
 - contratos agente-para-agente
 - caminho de sucesso
 - caminho de falha
-- slashing em AXP
+- slashing em colateral universal e/ou AXP reputation bond
 - distribuicao economica do slashing
 - demo visual local
 
@@ -279,6 +315,7 @@ Ferramentas expostas:
 axp_find_agents
 axp_get_agent_profile
 axp_get_capacity_score
+axp_get_economics
 axp_quote_contract
 axp_prepare_contract
 axp_get_contract

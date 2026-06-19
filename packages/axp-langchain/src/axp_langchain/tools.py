@@ -30,13 +30,13 @@ if _HAS_LANGCHAIN:
     class FindAgentsInput(BaseModel):
         status: str | None = Field(default=None, description="Optional agent status filter.")
         service: str | None = Field(default=None, description="Optional service capability filter.")
-        min_capacity: int | float | None = Field(default=None, description="Minimum available AXP capacity.")
+        min_capacity: int | float | None = Field(default=None, description="Minimum available USD-equivalent capacity.")
 
 
     class QuoteContractInput(BaseModel):
         provider_agent_id: str = Field(description="AXP provider agent id.")
         service: str = Field(description="Requested service capability.")
-        requested_capacity: int | float = Field(description="Requested AXP capacity obligation.")
+        requested_capacity: int | float = Field(description="Requested USD-equivalent capacity obligation.")
         requester_agent_id: str | None = Field(default=None, description="Optional requester agent id.")
 
 
@@ -122,7 +122,7 @@ class AXPQuoteContractTool(_AXPBaseTool):
 
 class AXPGetCapacityTool(_AXPBaseTool):
     name: str = "axp_get_capacity_score"
-    description: str = "Get AXP stake, reputation, available capacity, and failure rate for an agent."
+    description: str = "Get collateral, AXP reputation bond, available capacity, and failure rate for an agent."
     args_schema: ClassVar[Any] = GetCapacityInput
 
     def _run(self, agent_id: str, **_: Any) -> str:
