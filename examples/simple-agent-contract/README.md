@@ -1,19 +1,50 @@
-﻿# Simple Agent Contract Example
+# Simple Signed Agent Contract Example
 
-Este exemplo mostra o MVP do AXP em funcionamento:
+Este exemplo mostra um agente assinando uma mensagem AXP com sua wallet operadora e chamando:
 
-1. Agent Alpha e registrado como solicitante.
-2. Agent Beta e registrado como prestador.
-3. Beta deposita stake de reputacao.
-4. Alpha cria um contrato para Beta.
-5. Beta aceita a obrigacao.
-6. Beta falha.
-7. O protocolo aplica slashing e reduz reputacao/capacidade.
-
-Para rodar:
-
-```bash
-cd "C:\Users\DEEPGAMING\Agent Exchange Protocol\axp-core"
-node src/demo.js
+```text
+POST https://registry.axp.network/contracts/prepare
 ```
 
+Fluxo:
+
+1. O script monta o escopo `contracts.prepare`.
+2. O script pede a mensagem canonica em `/auth/message`.
+3. A wallet operadora assina a mensagem.
+4. O script envia a assinatura em `auth`.
+5. O registry prepara um contrato `prepared`.
+
+## Rodar
+
+Na raiz do projeto:
+
+```bash
+npm install
+node examples/simple-agent-contract/prepare-signed-contract.js
+```
+
+Ou:
+
+```bash
+npm run example:prepare
+```
+
+Por padrao, o script usa:
+
+```text
+AXP_REGISTRY_URL=https://registry.axp.network
+AXP_REQUESTER_AGENT_ID=agent_0001
+AXP_PROVIDER_AGENT_ID=agent_0002
+AXP_SERVICE=research
+AXP_REQUESTED_CAPACITY=100
+```
+
+Para outro agente:
+
+```powershell
+$env:AXP_AGENT_PRIVATE_KEY="0x..."
+$env:AXP_PROVIDER_AGENT_ID="agent_0002"
+npm run example:prepare
+```
+
+O script tambem tenta ler `blockchain/.env` local se `AXP_AGENT_PRIVATE_KEY` nao estiver definida. A private key nunca e impressa.

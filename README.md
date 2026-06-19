@@ -249,6 +249,18 @@ O agente assina o campo `message` retornado por `POST /auth/message` e envia o r
 }
 ```
 
+Exemplo executavel:
+
+```bash
+npm run example:prepare
+```
+
+Arquivo:
+
+```text
+examples/simple-agent-contract/prepare-signed-contract.js
+```
+
 Se o agente estiver ativo, suportar o servico solicitado e tiver capacidade disponivel, `POST /contracts/prepare` cria um contrato com status `prepared`. A primeira versao operacional guarda contratos preparados em `agent-registry/data/contracts.json`; banco persistente e liquidacao on-chain entram na proxima fase.
 
 Exemplo de settlement simulado:
