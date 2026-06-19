@@ -84,7 +84,7 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === 'POST' && url.pathname === '/contracts/prepare') {
     const body = await readJsonBody(request);
-    const result = prepareContract(body);
+    const result = await prepareContract(body);
     return sendJson(response, result.status, result.ok ? result.contract : result);
   }
 
@@ -95,7 +95,7 @@ const server = http.createServer(async (request, response) => {
   const settleMatch = url.pathname.match(/^\/contracts\/([^/]+)\/settle$/);
   if (request.method === 'POST' && settleMatch) {
     const body = await readJsonBody(request);
-    const result = settleContract(settleMatch[1], body);
+    const result = await settleContract(settleMatch[1], body);
     return sendJson(response, result.status, result.ok ? result.contract : result);
   }
 

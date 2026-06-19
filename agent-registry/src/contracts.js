@@ -59,7 +59,7 @@ export function quoteContract(payload = {}) {
   };
 }
 
-export function prepareContract(payload = {}) {
+export async function prepareContract(payload = {}) {
   const quoteResult = quoteContract(payload);
   if (!quoteResult.ok) {
     return quoteResult;
@@ -75,7 +75,7 @@ export function prepareContract(payload = {}) {
     };
   }
 
-  const authResult = verifyAgentAuth({
+  const authResult = await verifyAgentAuth({
     action: 'contracts.prepare',
     agentId: payload.provider_agent_id,
     auth: payload.auth,
@@ -125,7 +125,7 @@ export function getPreparedContract(contractId) {
   return loadContractStore().contracts.find((contract) => contract.contract_id === contractId) ?? null;
 }
 
-export function settleContract(contractId, payload = {}) {
+export async function settleContract(contractId, payload = {}) {
   const validation = validateSettlementPayload(payload);
   if (!validation.ok) {
     return validation;
@@ -151,7 +151,7 @@ export function settleContract(contractId, payload = {}) {
     return { ok: false, status: 401, error: 'auth_agent_not_contract_party' };
   }
 
-  const authResult = verifyAgentAuth({
+  const authResult = await verifyAgentAuth({
     action: 'contracts.settle',
     agentId: authAgentId,
     auth: payload.auth,

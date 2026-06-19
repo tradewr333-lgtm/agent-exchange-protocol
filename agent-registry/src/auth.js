@@ -1,4 +1,3 @@
-import { verifyMessage } from 'ethers';
 import { getAgent } from './registry.js';
 
 const AUTH_WINDOW_MS = 10 * 60 * 1000;
@@ -15,7 +14,7 @@ export function buildAuthMessage({ action, agentId, address, nonce, issuedAt, sc
   ].join('\n');
 }
 
-export function verifyAgentAuth({ action, agentId, auth, scope }) {
+export async function verifyAgentAuth({ action, agentId, auth, scope }) {
   const agent = getAgent(agentId);
   if (!agent) {
     return { ok: false, status: 404, error: 'auth_agent_not_found' };
@@ -54,12 +53,13 @@ export function verifyAgentAuth({ action, agentId, auth, scope }) {
   });
 
   try {
+    const { verifyMessage } = await import('ethers');
     const recovered = verifyMessage(message, auth.signature);
     if (!sameAddress(recovered, expectedOperator)) {
       return { ok: false, status: 401, error: 'invalid_signature' };
     }
   } catch {
-    return { ok: false, status: 401, error: 'invalid_signature' };
+    return { ok: false, status: 503, error: 'signature_verifier_unavailable' };
   }
 
   return {
