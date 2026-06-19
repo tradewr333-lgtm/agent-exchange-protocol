@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verifyAgentAuth } from './auth.js';
 import { getAgent } from './registry.js';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -74,6 +75,16 @@ export function prepareContract(payload = {}) {
     };
   }
 
+  const authResult = verifyAgentAuth({
+    action: 'contracts.prepare',
+    agentId: payload.provider_agent_id,
+    auth: payload.auth,
+    scope: buildPrepareScope(payload),
+  });
+  if (!authResult.ok) {
+    return authResult;
+  }
+
   const contractId = `axp_contract_${randomUUID()}`;
   const contract = {
     contract_id: contractId,
@@ -83,6 +94,14 @@ export function prepareContract(payload = {}) {
     prepared_at: new Date().toISOString(),
     expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     quote,
+    authorization: {
+      action: 'contracts.prepare',
+      agent_id: authResult.auth.agent_id,
+      signer: authResult.signer,
+      nonce: authResult.auth.nonce,
+      issued_at: authResult.auth.issued_at,
+      scope: buildPrepareScope(payload),
+    },
     terms: {
       service: quote.service,
       requested_capacity: quote.requested_capacity,
@@ -127,6 +146,21 @@ export function settleContract(contractId, payload = {}) {
     };
   }
 
+  const authAgentId = payload?.auth?.agent_id;
+  if (![contract.quote.requester_agent_id, contract.quote.provider_agent_id].includes(authAgentId)) {
+    return { ok: false, status: 401, error: 'auth_agent_not_contract_party' };
+  }
+
+  const authResult = verifyAgentAuth({
+    action: 'contracts.settle',
+    agentId: authAgentId,
+    auth: payload.auth,
+    scope: buildSettlementScope(contractId, payload.outcome),
+  });
+  if (!authResult.ok) {
+    return authResult;
+  }
+
   const outcome = payload.outcome;
   const settledAt = new Date().toISOString();
   const updatedContract = {
@@ -137,7 +171,11 @@ export function settleContract(contractId, payload = {}) {
       outcome,
       evidence_uri: payload.evidence_uri ?? null,
       notes: payload.notes ?? null,
-      reported_by: payload.reported_by ?? null,
+      reported_by: authAgentId,
+      signer: authResult.signer,
+      nonce: authResult.auth.nonce,
+      issued_at: authResult.auth.issued_at,
+      scope: buildSettlementScope(contractId, outcome),
       simulated: true,
       onchain_slashing_status: outcome === 'failed' ? 'pending_connection' : 'not_required',
       slashable: outcome === 'failed',
@@ -188,6 +226,19 @@ function validateContractPayload(payload) {
   }
 
   return { ok: true };
+}
+
+function buildPrepareScope(payload) {
+  return [
+    `provider:${payload.provider_agent_id}`,
+    `requester:${payload.requester_agent_id ?? 'none'}`,
+    `service:${payload.service}`,
+    `capacity:${Number(payload.requested_capacity)}`,
+  ].join('|');
+}
+
+function buildSettlementScope(contractId, outcome) {
+  return `contract:${contractId}|outcome:${outcome}`;
 }
 
 function validateSettlementPayload(payload) {

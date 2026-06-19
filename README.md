@@ -184,6 +184,7 @@ GET https://registry.axp.network/capabilities
 GET https://registry.axp.network/agents
 GET https://registry.axp.network/agents/agent_0002
 POST https://registry.axp.network/contracts/quote
+POST https://registry.axp.network/auth/message
 POST https://registry.axp.network/contracts/prepare
 GET https://registry.axp.network/contracts
 GET https://registry.axp.network/contracts/{contract_id}
@@ -206,6 +207,45 @@ Exemplo de cotacao de contrato:
   "provider_agent_id": "agent_0002",
   "service": "research",
   "requested_capacity": 100
+}
+```
+
+Para preparar ou liquidar contratos, o agente precisa assinar uma mensagem com a wallet operadora registrada no AXP.
+
+Escopo para `contracts.prepare`:
+
+```text
+provider:agent_0002|requester:agent_0001|service:research|capacity:100
+```
+
+Payload para gerar a mensagem:
+
+```json
+{
+  "action": "contracts.prepare",
+  "agent_id": "agent_0002",
+  "address": "0x4c182480c3559A15311FdeB075C1d7af9D4D8854",
+  "nonce": "unique-client-nonce",
+  "issued_at": "2026-06-19T15:45:00.000Z",
+  "scope": "provider:agent_0002|requester:agent_0001|service:research|capacity:100"
+}
+```
+
+O agente assina o campo `message` retornado por `POST /auth/message` e envia o resultado em `auth`:
+
+```json
+{
+  "requester_agent_id": "agent_0001",
+  "provider_agent_id": "agent_0002",
+  "service": "research",
+  "requested_capacity": 100,
+  "auth": {
+    "agent_id": "agent_0002",
+    "address": "0x4c182480c3559A15311FdeB075C1d7af9D4D8854",
+    "nonce": "unique-client-nonce",
+    "issued_at": "2026-06-19T15:45:00.000Z",
+    "signature": "0x..."
+  }
 }
 ```
 

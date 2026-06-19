@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildAuthMessage } from './src/auth.js';
 import {
   getPreparedContract,
   listPreparedContracts,
@@ -31,6 +32,27 @@ const server = http.createServer(async (request, response) => {
 
   if (url.pathname === '/capabilities') {
     return sendJson(response, 200, getCapabilities());
+  }
+
+  if (request.method === 'POST' && url.pathname === '/auth/message') {
+    const body = await readJsonBody(request);
+    const validation = validateAuthMessageBody(body);
+    if (!validation.ok) {
+      return sendJson(response, validation.status, validation);
+    }
+
+    return sendJson(response, 200, {
+      protocol: 'AXP',
+      version: '0.1.0',
+      message: buildAuthMessage({
+        action: body.action,
+        agentId: body.agent_id,
+        address: body.address,
+        nonce: body.nonce,
+        issuedAt: body.issued_at,
+        scope: body.scope,
+      }),
+    });
   }
 
   if (url.pathname === '/agents') {
@@ -92,6 +114,7 @@ const server = http.createServer(async (request, response) => {
       '/.well-known/axp.json',
       '/health',
       '/capabilities',
+      'POST /auth/message',
       '/agents',
       '/agents/{agent_id}',
       'POST /contracts/quote',
@@ -143,4 +166,18 @@ function readJsonBody(request) {
 
     request.on('error', () => resolve(null));
   });
+}
+
+function validateAuthMessageBody(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, status: 400, error: 'invalid_json_body' };
+  }
+
+  for (const field of ['action', 'agent_id', 'address', 'nonce', 'issued_at', 'scope']) {
+    if (!body[field] || typeof body[field] !== 'string') {
+      return { ok: false, status: 400, error: `${field}_required` };
+    }
+  }
+
+  return { ok: true };
 }

@@ -3,7 +3,7 @@ services:
     name: agent-exchange-protocol
     runtime: node
     plan: free
-    buildCommand: node --check agent-registry/server.js && node --check agent-registry/src/registry.js
+    buildCommand: npm install && npm run check
     startCommand: node agent-registry/server.js
     healthCheckPath: /health
     autoDeployTrigger: commit

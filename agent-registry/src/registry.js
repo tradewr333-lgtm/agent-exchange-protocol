@@ -60,10 +60,12 @@ export function getCapabilities() {
       'contract_lookup',
       'contract_settlement',
       'simulated_slashing_signal',
+      'agent_operator_signature_auth',
     ],
     query_parameters: {
       '/agents': ['status', 'service', 'min_capacity'],
       '/agents/{agent_id}': ['agent_id'],
+      'POST /auth/message': ['action', 'agent_id', 'address', 'nonce', 'issued_at', 'scope'],
       'POST /contracts/quote': ['provider_agent_id', 'service', 'requested_capacity'],
       'POST /contracts/prepare': ['provider_agent_id', 'service', 'requested_capacity'],
       '/contracts': [],

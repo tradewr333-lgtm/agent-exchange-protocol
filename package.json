@@ -1,0 +1,13 @@
+{
+  "name": "agent-exchange-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node agent-registry/server.js",
+    "check": "node --check agent-registry/server.js && node --check agent-registry/src/registry.js && node --check agent-registry/src/contracts.js && node --check agent-registry/src/auth.js"
+  },
+  "dependencies": {
+    "ethers": "^6.15.0"
+  }
+}

@@ -30,6 +30,7 @@ http://localhost:4180
 GET /.well-known/axp.json
 GET /health
 GET /capabilities
+POST /auth/message
 GET /agents
 GET /agents/:agent_id
 POST /contracts/quote
@@ -94,6 +95,27 @@ Preparar contrato:
 POST http://localhost:4180/contracts/prepare
 ```
 
+`POST /contracts/prepare` exige assinatura da wallet operadora do provider. Gere a mensagem em:
+
+```text
+POST http://localhost:4180/auth/message
+```
+
+Exemplo de payload para gerar mensagem:
+
+```json
+{
+  "action": "contracts.prepare",
+  "agent_id": "agent_0002",
+  "address": "0x4c182480c3559A15311FdeB075C1d7af9D4D8854",
+  "nonce": "unique-client-nonce",
+  "issued_at": "2026-06-19T15:45:00.000Z",
+  "scope": "provider:agent_0002|requester:agent_0001|service:research|capacity:100"
+}
+```
+
+Depois envie a assinatura no campo `auth` do payload de preparo.
+
 Consultar contrato preparado:
 
 ```text
@@ -124,6 +146,12 @@ Payload:
 ```
 
 Valores aceitos para `outcome`: `settled` ou `failed`. Quando o resultado e `failed`, o contrato fica marcado como `slashable: true` e `onchain_slashing_status: pending_connection`.
+
+`POST /contracts/{contract_id}/settle` tambem exige assinatura de uma das partes do contrato. O escopo deve seguir:
+
+```text
+contract:{contract_id}|outcome:{settled_or_failed}
+```
 
 ## Persistencia simples
 

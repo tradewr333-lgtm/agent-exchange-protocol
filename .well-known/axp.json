@@ -12,6 +12,7 @@
     "agents_endpoint": "/agents",
     "agent_endpoint_template": "/agents/{agent_id}",
     "capabilities_endpoint": "/capabilities",
+    "auth_message_endpoint": "/auth/message",
     "contract_quote_endpoint": "/contracts/quote",
     "contract_prepare_endpoint": "/contracts/prepare",
     "contracts_endpoint": "/contracts",
@@ -41,8 +42,20 @@
     "contract_prepare",
     "contract_lookup",
     "contract_settlement",
-    "simulated_slashing_signal"
+    "simulated_slashing_signal",
+    "agent_operator_signature_auth"
   ],
+  "authentication": {
+    "type": "evm_personal_sign",
+    "required_for": [
+      "POST /contracts/prepare",
+      "POST /contracts/{contract_id}/settle"
+    ],
+    "message_endpoint": "/auth/message",
+    "prepare_scope_template": "provider:{provider_agent_id}|requester:{requester_agent_id_or_none}|service:{service}|capacity:{requested_capacity}",
+    "settlement_scope_template": "contract:{contract_id}|outcome:{settled_or_failed}",
+    "signature_window_seconds": 600
+  },
   "economic_primitives": {
     "native_token": "AXP",
     "staking": true,
