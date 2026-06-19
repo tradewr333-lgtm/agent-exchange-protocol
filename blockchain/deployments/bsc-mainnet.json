@@ -23,5 +23,17 @@
     "officialBscWbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
     "minimumDepositBNB": "0.01",
     "saleOpen": false
+  },
+  "verification": {
+    "status": "verified",
+    "explorer": "https://bscscan.com",
+    "verifiedAt": "2026-06-19",
+    "contracts": {
+      "AXPToken": "https://bscscan.com/address/0x88cF3943F6e250C4f15Bc6aFEd5192663b68Eda2#code",
+      "AXPFounderVesting": "https://bscscan.com/address/0x7C6AB042076468e9e4B45B9caaBB3DD3da5bcD6e#code",
+      "AXPAgentRegistry": "https://bscscan.com/address/0x5e91402c50EC9D7655617ec787dc8087f7AB4678#code",
+      "AXPStaking": "https://bscscan.com/address/0xb3faFa1d03b852DFe9BfDe413efEF856788fd787#code",
+      "AXPParticipationVault": "https://bscscan.com/address/0xF70605341b4f73a5bFa89D363652a973007CC338#code"
+    }
   }
 }

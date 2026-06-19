@@ -30,6 +30,8 @@ blockchain/deployments/bsc-mainnet.json
 
 The Participation Vault is deployed but paused. No public sale is open.
 
+All BSC mainnet contracts are verified on BscScan.
+
 ## Verify on BscScan
 
 Create an Etherscan API V2 key and add it to `.env`:

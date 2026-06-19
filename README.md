@@ -291,6 +291,12 @@ AXPParticipationVault: 0xF70605341b4f73a5bFa89D363652a973007CC338
 
 A Participation Vault esta pausada. Nao ha venda aberta.
 
+Status de verificacao:
+
+```text
+BscScan: contratos verificados
+```
+
 ## Licenca
 
 MIT. Veja [`LICENSE`](LICENSE).
