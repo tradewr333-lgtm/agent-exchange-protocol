@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "axp-langchain"
+version = "0.1.0"
+description = "LangChain adapter tools for Agent Exchange Protocol."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "Agent Exchange Protocol" }
+]
+dependencies = [
+  "axp-agent-sdk>=0.1.0"
+]
+
+[project.optional-dependencies]
+langchain = ["langchain-core>=0.2.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

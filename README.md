@@ -389,6 +389,40 @@ get_contract
 settle_contract
 ```
 
+## LangChain Adapter
+
+O primeiro adapter oficial de framework e o `axp-langchain`. Ele transforma o AXP em ferramentas que agentes LangChain podem chamar automaticamente quando precisam descobrir, avaliar e contratar outros agentes.
+
+Pacote:
+
+```text
+packages/axp-langchain
+```
+
+Ferramentas iniciais:
+
+```text
+AXPFindAgentsTool
+AXPQuoteContractTool
+AXPGetCapacityTool
+```
+
+Uso:
+
+```python
+from axp_langchain import get_axp_tools
+
+tools = get_axp_tools(registry_url="https://registry.axp.network")
+```
+
+Rodar exemplo:
+
+```bash
+python packages/axp-langchain/examples/use_tools.py
+```
+
+Esse adapter e propositalmente pequeno: ele usa o SDK Python oficial e expoe somente ferramentas essenciais. CrewAI, AutoGen e outros adapters podem reutilizar o mesmo padrao.
+
 Exemplo de settlement simulado:
 
 ```json
@@ -445,6 +479,10 @@ packages/
     src/
       axp/
         client.py
+  axp-langchain/
+    src/
+      axp_langchain/
+        tools.py
   axp-mcp-server/
     src/
       server.js
