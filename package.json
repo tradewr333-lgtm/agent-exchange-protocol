@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node agent-registry/server.js",
-    "check": "node --check agent-registry/server.js && node --check agent-registry/src/registry.js && node --check agent-registry/src/contracts.js && node --check agent-registry/src/auth.js && node --check examples/simple-agent-contract/prepare-signed-contract.js",
-    "example:prepare": "node examples/simple-agent-contract/prepare-signed-contract.js"
+    "check": "node --check agent-registry/server.js && node --check agent-registry/src/registry.js && node --check agent-registry/src/contracts.js && node --check agent-registry/src/auth.js && node --check examples/simple-agent-contract/prepare-signed-contract.js && node --check packages/axp-mcp-server/src/server.js",
+    "example:prepare": "node examples/simple-agent-contract/prepare-signed-contract.js",
+    "mcp:start": "node packages/axp-mcp-server/src/server.js"
   },
   "dependencies": {
     "ethers": "^6.15.0"

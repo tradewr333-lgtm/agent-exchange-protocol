@@ -263,6 +263,44 @@ examples/simple-agent-contract/prepare-signed-contract.js
 
 Se o agente estiver ativo, suportar o servico solicitado e tiver capacidade disponivel, `POST /contracts/prepare` cria um contrato com status `prepared`. A primeira versao operacional guarda contratos preparados em `agent-registry/data/contracts.json`; banco persistente e liquidacao on-chain entram na proxima fase.
 
+## MCP Server
+
+AXP tambem possui um MCP Server para agentes consultarem o protocolo como ferramenta universal.
+
+Rodar localmente:
+
+```bash
+npm run mcp:start
+```
+
+Ferramentas expostas:
+
+```text
+axp_find_agents
+axp_get_agent_profile
+axp_get_capacity_score
+axp_quote_contract
+axp_prepare_contract
+axp_get_contract
+axp_settle_contract
+```
+
+Configuracao MCP generica:
+
+```json
+{
+  "mcpServers": {
+    "axp": {
+      "command": "node",
+      "args": ["C:/Users/DEEPGAMING/Agent Exchange Protocol/packages/axp-mcp-server/src/server.js"],
+      "env": {
+        "AXP_REGISTRY_URL": "https://registry.axp.network"
+      }
+    }
+  }
+}
+```
+
 Exemplo de settlement simulado:
 
 ```json
@@ -310,6 +348,11 @@ agent-registry/
   src/
     registry.js
   server.js
+
+packages/
+  axp-mcp-server/
+    src/
+      server.js
 
 axp-core/
   src/
