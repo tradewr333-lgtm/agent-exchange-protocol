@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildAuthMessage } from './src/auth.js';
@@ -14,12 +15,25 @@ import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/regis
 const port = Number.parseInt(process.env.PORT ?? '4180', 10);
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const manifestPath = join(currentDir, '..', '.well-known', 'axp.json');
+const publicPath = join(currentDir, 'public');
 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', `http://localhost:${port}`);
 
   if (request.method === 'OPTIONS') {
     return sendJson(response, 204, {});
+  }
+
+  if (url.pathname === '/') {
+    return sendHtml(response, 200, readFileSync(join(publicPath, 'index.html'), 'utf8'));
+  }
+
+  if (url.pathname === '/styles.css') {
+    return sendAsset(response, 'text/css; charset=utf-8', readFileSync(join(publicPath, 'styles.css'), 'utf8'));
+  }
+
+  if (url.pathname === '/app.js') {
+    return sendAsset(response, 'application/javascript; charset=utf-8', readFileSync(join(publicPath, 'app.js'), 'utf8'));
   }
 
   if (url.pathname === '/health') {
@@ -138,6 +152,21 @@ function sendJson(response, status, body) {
     'access-control-allow-methods': 'GET, POST, OPTIONS',
   });
   response.end(`${JSON.stringify(body, null, 2)}\n`);
+}
+
+function sendHtml(response, status, body) {
+  response.writeHead(status, {
+    'content-type': 'text/html; charset=utf-8',
+  });
+  response.end(body);
+}
+
+function sendAsset(response, contentType, body) {
+  response.writeHead(200, {
+    'content-type': contentType,
+    'cache-control': 'public, max-age=300',
+  });
+  response.end(body);
 }
 
 function readJsonBody(request) {
