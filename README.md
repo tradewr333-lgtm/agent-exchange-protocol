@@ -183,6 +183,9 @@ GET https://registry.axp.network/.well-known/axp.json
 GET https://registry.axp.network/capabilities
 GET https://registry.axp.network/agents
 GET https://registry.axp.network/agents/agent_0002
+POST https://registry.axp.network/contracts/quote
+POST https://registry.axp.network/contracts/prepare
+GET https://registry.axp.network/contracts/{contract_id}
 ```
 
 Fluxo de descoberta:
@@ -192,6 +195,19 @@ Fluxo de descoberta:
 3. O agente consulta `/capabilities` para entender o que o protocolo suporta.
 4. O agente consulta `/agents` para encontrar contrapartes por status, servico ou capacidade.
 5. O agente usa `agent_id`, reputacao e capacidade para decidir se assume ou oferece uma obrigacao.
+
+Exemplo de cotacao de contrato:
+
+```json
+{
+  "requester_agent_id": "agent_0001",
+  "provider_agent_id": "agent_0002",
+  "service": "research",
+  "requested_capacity": 100
+}
+```
+
+Se o agente estiver ativo, suportar o servico solicitado e tiver capacidade disponivel, `POST /contracts/prepare` cria um contrato com status `prepared`. A primeira versao guarda contratos preparados em memoria para demonstrar o fluxo operacional; persistencia e liquidacao on-chain entram na proxima fase.
 
 ## Deploy na Render
 

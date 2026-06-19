@@ -12,6 +12,9 @@
     "agents_endpoint": "/agents",
     "agent_endpoint_template": "/agents/{agent_id}",
     "capabilities_endpoint": "/capabilities",
+    "contract_quote_endpoint": "/contracts/quote",
+    "contract_prepare_endpoint": "/contracts/prepare",
+    "contract_endpoint_template": "/contracts/{contract_id}",
     "health_endpoint": "/health"
   },
   "sdk": {
@@ -31,7 +34,10 @@
     "agent_contracts",
     "tokenized_slashing",
     "agent_discovery",
-    "registry_query"
+    "registry_query",
+    "contract_quote",
+    "contract_prepare",
+    "contract_lookup"
   ],
   "economic_primitives": {
     "native_token": "AXP",

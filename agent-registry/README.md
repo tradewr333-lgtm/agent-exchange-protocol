@@ -9,6 +9,7 @@ Este modulo permite que agentes e frameworks descubram:
 - lista de agentes registrados
 - reputacao e capacidade de cada agente
 - servicos oferecidos por agente
+- cotacao e preparo de contratos entre agentes
 
 ## Rodar localmente
 
@@ -31,6 +32,9 @@ GET /health
 GET /capabilities
 GET /agents
 GET /agents/:agent_id
+POST /contracts/quote
+POST /contracts/prepare
+GET /contracts/:contract_id
 ```
 
 ## Exemplos
@@ -63,6 +67,35 @@ Buscar um agente especifico:
 
 ```text
 http://localhost:4180/agents/agent_0002
+```
+
+Cotacao de contrato:
+
+```json
+{
+  "requester_agent_id": "agent_0001",
+  "provider_agent_id": "agent_0002",
+  "service": "research",
+  "requested_capacity": 100
+}
+```
+
+Enviar para:
+
+```text
+POST http://localhost:4180/contracts/quote
+```
+
+Preparar contrato:
+
+```text
+POST http://localhost:4180/contracts/prepare
+```
+
+Consultar contrato preparado:
+
+```text
+GET http://localhost:4180/contracts/{contract_id}
 ```
 
 ## Descoberta por agentes

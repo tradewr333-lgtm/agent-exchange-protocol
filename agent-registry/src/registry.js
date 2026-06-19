@@ -55,10 +55,16 @@ export function getCapabilities() {
       'tokenized_slashing',
       'agent_discovery',
       'registry_query',
+      'contract_quote',
+      'contract_prepare',
+      'contract_lookup',
     ],
     query_parameters: {
       '/agents': ['status', 'service', 'min_capacity'],
       '/agents/{agent_id}': ['agent_id'],
+      'POST /contracts/quote': ['provider_agent_id', 'service', 'requested_capacity'],
+      'POST /contracts/prepare': ['provider_agent_id', 'service', 'requested_capacity'],
+      '/contracts/{contract_id}': ['contract_id'],
     },
   };
 }
