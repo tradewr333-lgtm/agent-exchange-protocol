@@ -8,14 +8,7 @@ export const ACCEPTED_COLLATERAL = [
     network: 'BNB Smart Chain',
     chain_id: 56,
     type: 'native',
-    status: 'planned_onchain',
-  },
-  {
-    symbol: 'WBNB',
-    network: 'BNB Smart Chain',
-    chain_id: 56,
-    type: 'bep20',
-    address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
+    role: 'network_gas_and_native_collateral',
     status: 'planned_onchain',
   },
   {
@@ -24,6 +17,7 @@ export const ACCEPTED_COLLATERAL = [
     chain_id: 56,
     type: 'bep20',
     address: '0x55d398326f99059ff775485246999027b3197955',
+    role: 'stablecoin_collateral',
     status: 'planned_onchain',
   },
   {
@@ -32,6 +26,7 @@ export const ACCEPTED_COLLATERAL = [
     chain_id: 56,
     type: 'bep20',
     address: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
+    role: 'stablecoin_collateral',
     status: 'planned_onchain',
   },
 ];
@@ -40,7 +35,7 @@ export function getEconomicPolicy() {
   return {
     protocol: 'AXP',
     economic_model_version: ECONOMIC_MODEL_VERSION,
-    principle: 'Universal collateral for adoption; AXP as reputation and capacity accelerator.',
+    principle: 'BNB, USDT, and USDC as operational collateral; AXP as reputation and capacity accelerator.',
     accepted_collateral: ACCEPTED_COLLATERAL,
     collateral_accounting_unit: 'USD',
     native_token_role: {
@@ -56,7 +51,14 @@ export function getEconomicPolicy() {
       ceiling_change_requires_governance: true,
       charged_on: 'prepared_contract_value',
     },
-    capacity_formula: 'Capacity = Universal Collateral USD * Reputation Multiplier * AXP Trust Multiplier * Insurance Multiplier * Risk Adjustment',
+    capacity_formula: 'Capacity = BNB/USDT/USDC Collateral USD * Reputation Multiplier * AXP Trust Multiplier * Insurance Multiplier * Risk Adjustment',
+    proof_of_trust: {
+      status: 'specification',
+      score_formula: 'Trust Score = Trust Created - Trust Destroyed',
+      trust_created_inputs: ['settled_volume_usd', 'success_rate', 'counterparty_diversity', 'time_weight'],
+      trust_destroyed_inputs: ['failed_volume_usd', 'disputes_lost', 'late_delivery_penalties', 'slashing_events'],
+      purpose: 'Measure economically verified trust created by agents without relying on ratings or subjective stars.',
+    },
   };
 }
 

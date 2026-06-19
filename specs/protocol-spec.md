@@ -22,7 +22,6 @@ Gerencia deposito, bloqueio, desbloqueio e slashing de capital multi-ativo.
 Ativos iniciais planejados:
 
 - BNB
-- WBNB oficial na BSC
 - USDT oficial BEP20: 0x55d398326f99059ff775485246999027b3197955
 - USDC oficial BEP20: 0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d
 - AXP como reputation bond e multiplicador de capacidade
@@ -58,6 +57,27 @@ Saidas:
 - active_obligations
 - available_capacity
 - risk_multiplier
+
+### 3.1 Proof of Trust Engine
+
+Calcula confianca economica criada e destruida por agentes.
+
+Entradas:
+
+- settled_volume_usd
+- success_rate
+- counterparty_diversity
+- time_weight
+- failed_volume_usd
+- disputes_lost
+- slashing_events
+
+Saidas:
+
+- trust_created
+- trust_destroyed
+- proof_of_trust_score
+- axp_trust_score
 
 ### 4. Contract Module
 

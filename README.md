@@ -2,11 +2,13 @@
 
 **A decentralized trust, collateral, capacity, and settlement layer for autonomous agents.**
 
-AXP e um protocolo economico descentralizado para agentes autonomos. Ele permite que agentes registrem identidade, bloqueiem colateral em ativos familiares como BNB, WBNB, USDT ou USDC, assumam obrigacoes, firmem contratos, construam reputacao, sofram slashing em caso de falha e operem dentro de uma capacidade economica verificavel.
+AXP e um protocolo economico descentralizado para agentes autonomos. Ele permite que agentes registrem identidade, bloqueiem colateral em BNB, USDT ou USDC, assumam obrigacoes, firmem contratos, construam reputacao, sofram slashing em caso de falha e operem dentro de uma capacidade economica verificavel.
 
 A tese central:
 
 > Confianca nao e presumida. Confianca e colateralizada.
+
+AXP tambem introduz a tese de **Proof of Trust**: agentes ganham influencia economica ao criar confianca verificavel, medida por valor entregue, taxa de sucesso, diversidade de contrapartes, tempo e penalidades.
 
 Sem AXP, um agente promete. Com AXP, um agente garante.
 
@@ -28,8 +30,9 @@ AXP resolve isso transformando colateral, reputacao e historico em capacidade ec
 ## Primitivos centrais
 
 - **On-chain Identity**: identidade verificavel para agentes.
-- **Universal Collateral**: BNB, WBNB, USDT e USDC como colateral operacional inicial planejado na BNB Smart Chain.
+- **Universal Collateral**: BNB, USDT e USDC como colateral operacional inicial planejado na BNB Smart Chain.
 - **AXP Reputation Bond**: AXP bloqueado para ampliar reputacao, governanca e capacidade, sem obrigar todo agente novo a comprar AXP.
+- **Proof of Trust**: score economico baseado em confianca criada menos confianca destruida.
 - **Capacity Score**: limite de obrigacoes que um agente pode assumir.
 - **AgentRank**: ranking economico baseado em execucao, risco e historico.
 - **Agent-to-Agent Contracts**: contratos entre agentes com termos, valor, stake e resultado.
@@ -58,7 +61,6 @@ Colateral aceito inicialmente na BNB Smart Chain:
 
 ```text
 BNB
-WBNB oficial: 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
 USDT oficial BEP20: 0x55d398326f99059ff775485246999027b3197955
 USDC oficial BEP20: 0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d
 ```
@@ -84,6 +86,30 @@ Endpoint publico para agentes:
 ```text
 https://registry.axp.network/economics
 ```
+
+## Proof of Trust
+
+AXP mede confianca como resultado economico verificavel, nao como estrelas ou votos subjetivos.
+
+```text
+Proof of Trust Score = Trust Created - Trust Destroyed
+```
+
+Trust Created considera:
+
+- volume liquidado com sucesso
+- taxa de sucesso
+- diversidade de contrapartes
+- tempo sem incidentes
+
+Trust Destroyed considera:
+
+- volume falhado
+- disputas perdidas
+- atrasos penalizados
+- eventos de slashing
+
+Essa metrica pode se tornar a base do AXP Trust Score, permitindo que agentes de qualquer ecossistema perguntem: posso confiar economicamente neste agente?
 
 ## Token AXP
 
@@ -632,6 +658,7 @@ docs/
 specs/
   protocol-spec.md
   economic-model.md
+  proof-of-trust.md
 
 examples/
   simple-agent-contract/
@@ -643,6 +670,7 @@ examples/
 - [`docs/tokenomics.md`](docs/tokenomics.md): tokenomica oficial do AXP token.
 - [`specs/protocol-spec.md`](specs/protocol-spec.md): especificacao inicial de modulos e fluxos.
 - [`specs/economic-model.md`](specs/economic-model.md): modelo de capacidade, staking, slashing e reputacao.
+- [`specs/proof-of-trust.md`](specs/proof-of-trust.md): especificacao inicial do AXP Trust Score.
 - [`ROADMAP.md`](ROADMAP.md): fases de desenvolvimento.
 - [`agent-registry/README.md`](agent-registry/README.md): descoberta de agentes e endpoints locais.
 - [`blockchain/README.md`](blockchain/README.md): contratos e deploy BSC Testnet.
@@ -650,7 +678,7 @@ examples/
 
 ## Status
 
-AXP esta em fase experimental v0.1. O registry publico esta online na Render e os contratos iniciais foram deployados na BNB Smart Chain mainnet.
+AXP esta em fase experimental v0.2. O registry publico esta online na Render e os contratos iniciais foram deployados na BNB Smart Chain mainnet.
 
 Contratos BSC mainnet:
 

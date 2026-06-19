@@ -19,7 +19,8 @@
   "participationVault": {
     "status": "paused",
     "reservedAXP": "20000000",
-    "paymentAssets": ["BNB", "official BSC WBNB"],
+    "paymentAssets": [],
+    "legacyPausedSupportedAssets": ["BNB", "official BSC WBNB"],
     "officialBscWbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
     "minimumDepositBNB": "0.01",
     "saleOpen": false
@@ -27,13 +28,13 @@
   "multiCollateral": {
     "status": "planned",
     "accountingUnit": "USD",
-    "acceptedAssetsPlanned": ["BNB", "official BSC WBNB", "official BSC USDT", "official BSC USDC"],
+    "acceptedAssetsPlanned": ["BNB", "official BSC USDT", "official BSC USDC"],
     "officialBscWbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
     "officialBscUsdt": "0x55d398326f99059ff775485246999027b3197955",
     "officialBscUsdc": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
     "protocolFeeCeilingBps": 50,
     "axpRole": "reputation bond, governance, and capacity multiplier",
-    "note": "Current mainnet deployment contains AXP token, registry, AXP staking, vesting, and paused participation vault. Multi-collateral staking requires a future audited contract deployment."
+    "note": "Current mainnet deployment contains AXP token, registry, AXP staking, vesting, and paused participation vault. Operational collateral policy accepts BNB, official BSC USDT, and official BSC USDC. Multi-collateral staking requires a future audited contract deployment."
   },
   "verification": {
     "status": "verified",

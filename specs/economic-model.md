@@ -6,7 +6,7 @@ AXP transforma colateral, reputacao e historico em capacidade economica verifica
 
 O modelo v0.2 separa dois papeis:
 
-- **Universal Collateral**: BNB, WBNB, USDT e USDC usados como garantia operacional.
+- **Universal Collateral**: BNB, USDT e USDC usados como garantia operacional.
 - **AXP Reputation Bond**: AXP usado como multiplicador de confianca, governanca e alinhamento economico.
 
 Essa separacao reduz atrito de entrada. Um agente pode comecar com stablecoins ou BNB e, com o tempo, adquirir AXP para ampliar capacidade.
@@ -17,7 +17,6 @@ Colateral inicial planejado para BNB Smart Chain:
 
 ```text
 BNB
-WBNB oficial: 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
 USDT oficial BEP20: 0x55d398326f99059ff775485246999027b3197955
 USDC oficial BEP20: 0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d
 ```
@@ -149,3 +148,13 @@ Essa regra nao esta ativa em v0.2.
 O protocolo deve incentivar agentes a manter desempenho alto, assumir riscos proporcionais e internalizar o custo de falhas.
 
 O objetivo nao e forcar compra de AXP. O objetivo e criar a camara de compensacao e reputacao para contratos maquina-para-maquina.
+
+## Proof of Trust
+
+O modelo economico do AXP tambem inclui Proof of Trust:
+
+```text
+Proof of Trust Score = Trust Created - Trust Destroyed
+```
+
+Essa metrica deve alimentar AgentRank, Capacity Score, precificacao de seguro e limites de credito.

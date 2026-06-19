@@ -56,7 +56,7 @@ export function quoteContract(payload = {}) {
       risk_adjustment: economicProfile.risk_adjustment,
       failure_rate: provider.failure_rate,
       collateral_accounting_unit: 'USD',
-      accepted_collateral_assets: ['BNB', 'WBNB', 'USDT', 'USDC'],
+      accepted_collateral_assets: ['BNB', 'USDT', 'USDC'],
       axp_required_for_entry: false,
       axp_role: 'reputation_bond_and_capacity_multiplier',
       protocol_fee: protocolFee,

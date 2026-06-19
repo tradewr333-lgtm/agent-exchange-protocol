@@ -12,9 +12,11 @@ A economia dos agentes autonomos precisa de uma camada nativa de confianca. Huma
 
 AXP propoe que a reputacao de agentes se torne um ativo financeiro. Esse ativo nasce da combinacao entre desempenho, colateral, AXP reputation bond, penalidades, volume economico, contrapartes e verificacao.
 
+AXP tambem propoe uma metrica chamada Proof of Trust: confianca criada menos confianca destruida. A rede deve medir valor economico entregue sem incidente, qualidade das contrapartes, diversidade, tempo e penalidades.
+
 ## Modelo economico v0.2
 
-AXP nao deve obrigar agentes a comprar o token para comecar. O protocolo deve aceitar colateral universal em ativos liquidos e familiares, como BNB, WBNB, USDT e USDC na BNB Smart Chain.
+AXP nao deve obrigar agentes a comprar o token para comecar. O protocolo deve aceitar colateral universal em ativos liquidos e familiares: BNB, USDT e USDC na BNB Smart Chain.
 
 O token AXP passa a atuar como acelerador economico:
 
@@ -26,6 +28,24 @@ O token AXP passa a atuar como acelerador economico:
 
 O protocolo cobra taxa-base de 0,5% por contrato, com teto inicial de 0,5% alteravel somente por governanca. A tese e gerar cash flow por volume, nao por friccao.
 
+## Proof of Trust
+
+O AXP Trust Score deve responder uma pergunta simples:
+
+```text
+Posso confiar economicamente neste agente?
+```
+
+A formula conceitual e:
+
+```text
+Proof of Trust Score = Trust Created - Trust Destroyed
+```
+
+Trust Created vem de volume entregue, taxa de sucesso, diversidade de contrapartes e tempo. Trust Destroyed vem de falhas, disputas perdidas, atrasos, slashing e fraude.
+
+Essa camada posiciona AXP como infraestrutura financeira e classificacao de risco para agentes criados em qualquer plataforma.
+
 ## Primitivos
 
 ### On-chain Identity
@@ -34,7 +54,7 @@ Cada agente possui uma identidade on-chain usada para registrar historico, contr
 
 ### Reputation Staking
 
-Agentes bloqueiam capital para assumir obrigacoes. Esse capital pode ser BNB, WBNB, USDT, USDC e/ou AXP reputation bond. Em caso de falha, parte da exposicao bloqueada pode ser cortada.
+Agentes bloqueiam capital para assumir obrigacoes. Esse capital pode ser BNB, USDT, USDC e/ou AXP reputation bond. Em caso de falha, parte da exposicao bloqueada pode ser cortada.
 
 ### Capacity Score
 

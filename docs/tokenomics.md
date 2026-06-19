@@ -4,11 +4,11 @@
 
 O token AXP e o ativo nativo de reputacao, governanca e amplificacao economica do Agent Exchange Protocol. Ele nao deve ser a unica forma de colateral operacional.
 
-O protocolo deve permitir que agentes entrem usando ativos liquidos e familiares, principalmente BNB, WBNB, USDT e USDC na BNB Smart Chain. O AXP entra como reputation bond, multiplicador de capacidade, governanca, descontos e direitos futuros em seguros/arbitragem.
+O protocolo deve permitir que agentes entrem usando ativos liquidos e familiares: BNB, USDT e USDC na BNB Smart Chain. O AXP entra como reputation bond, multiplicador de capacidade, governanca, descontos e direitos futuros em seguros/arbitragem.
 
 ```text
 AXP = reputation bond + governance + capacity multiplier
-Universal Collateral = BNB/WBNB/USDT/USDC used to secure obligations
+Universal Collateral = BNB/USDT/USDC used to secure obligations
 ```
 
 Essa separacao reduz atrito: o agente pode trabalhar usando colateral que ja possui. Depois, conforme cresce, ele tem incentivo economico para manter AXP porque isso aumenta capacidade, prioridade e eficiencia.
@@ -34,7 +34,7 @@ O protocolo deve priorizar captura de valor via uso real, volume de contratos, t
 | Investors / Strategic Backers | 15% | 150.000.000 AXP | capital estrategico e parceiros |
 | Agent Incentives | 10% | 100.000.000 AXP | agentes iniciais, uso real, bootstrap de rede |
 | Liquidity | 5% | 50.000.000 AXP | liquidez inicial em DEX/CEX e market making |
-| Participation Vault | 2% | 20.000.000 AXP | vault opcional para participacao publica contra BNB/WBNB |
+| Participation Vault | 2% | 20.000.000 AXP | vault opcional pausada para futura participacao publica |
 
 ## Universal Collateral
 
@@ -42,16 +42,9 @@ O colateral operacional inicial planejado para BNB Smart Chain inclui:
 
 | Ativo | Papel | Status |
 |---|---|---|
-| BNB | colateral nativo | planejado on-chain |
-| WBNB oficial | colateral wrapped | planejado on-chain |
+| BNB | gas da rede e colateral nativo | planejado on-chain |
 | USDT | colateral stablecoin | planejado on-chain |
 | USDC | colateral stablecoin | planejado on-chain |
-
-WBNB oficial na BSC mainnet:
-
-```text
-0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
-```
 
 USDT oficial BEP20 na BSC mainnet:
 
@@ -108,6 +101,20 @@ Capacity maior por AXP Trust Multiplier
 
 O AXP aumenta capacidade, mas nao compra reputacao sozinho. Historico ruim, disputas e slashing reduzem o multiplicador de risco.
 
+## Proof of Trust
+
+AXP tambem introduz uma metrica economica chamada Proof of Trust:
+
+```text
+Proof of Trust Score = Trust Created - Trust Destroyed
+```
+
+Trust Created vem de volume liquidado com sucesso, taxa de sucesso, diversidade de contrapartes e tempo.
+
+Trust Destroyed vem de falhas, disputas perdidas, atrasos penalizados, slashing e fraude.
+
+Em v0.2, Proof of Trust e uma metrica de ranking e capacidade. Qualquer emissao futura de AXP baseada nessa metrica exigiria formula auditada, governanca e protecao anti-abuso.
+
 ## Protocol Fee Ceiling
 
 A taxa-base do protocolo deve ser baixa e previsivel:
@@ -146,15 +153,15 @@ Essa divisao e apenas uma diretriz futura, nao promessa atual.
 
 ## Participation Vault
 
-A Participation Vault reserva 2% do supply para uma futura rodada publica de participacao somente contra BNB ou WBNB. Ela deve permanecer pausada enquanto o protocolo amadurece e ate existir demanda real de agentes.
+A Participation Vault reserva 2% do supply para uma futura rodada publica de participacao. Ela deve permanecer pausada enquanto o protocolo amadurece e ate existir demanda real de agentes. A vault nao e o modulo de colateral operacional.
 
 ```text
 Participation Vault: 20.000.000 AXP
 Estado inicial: pausada
-Compra permitida: somente BNB ou WBNB oficial
-Deposito minimo: 0.01 BNB ou 0.01 WBNB
-Ratio: X AXP por 1 BNB/WBNB, definida depois de observar demanda real
-Destino dos BNB/WBNB: proceeds wallet indicada pelo fundador/protocolo
+Compra permitida: nao aberta
+Deposito minimo: nao ativo
+Ratio: nao definido
+Destino de eventual captacao: proceeds wallet indicada pelo fundador/protocolo
 Sem promessa de retorno, rendimento ou valorizacao
 ```
 

@@ -65,7 +65,7 @@ Total Supply: 1.000.000.000 AXP
 
 ## Participation Vault
 
-A vault existe para uma futura rodada publica de participacao somente contra BNB ou WBNB. No deploy, ela recebe 20.000.000 AXP e nasce pausada. Ela nao deve ser aberta antes de:
+A vault existe como mecanismo legado pausado para uma futura rodada publica de participacao. No deploy, ela recebe 20.000.000 AXP e nasce pausada. Ela nao e o modulo de colateral operacional do protocolo e nao deve ser aberta antes de:
 
 - BSC Testnet validada
 - contratos revisados
@@ -78,12 +78,12 @@ Esta vault nao deve ser divulgada como investimento, promessa de retorno ou gara
 Fluxo economico:
 
 ```text
-Comprador envia BNB ou WBNB, e nenhum outro ativo
+Comprador envia ativo permitido pela governanca futura
 -> Vault envia AXP ao comprador
--> BNB/WBNB vai diretamente para a proceeds wallet indicada pelo fundador/protocolo
+-> eventual captacao vai diretamente para a proceeds wallet indicada pelo fundador/protocolo
 ```
 
-No deploy inicial de testnet, a vault aceita BNB nativo. Na BSC mainnet, WBNB so e aceito se for o contrato oficial:
+No deploy inicial, a vault nasceu com suporte a BNB nativo e WBNB oficial, mas permanece pausada. A politica operacional de colateral do protocolo aceita BNB, USDT e USDC.
 
 ```text
 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
@@ -94,9 +94,9 @@ Qualquer outro token e rejeitado pelo contrato.
 Parametros obrigatorios:
 
 ```text
-Pagamento aceito: BNB ou WBNB apenas
-Deposito minimo: 0.01 BNB ou 0.01 WBNB
-Ratio: X AXP por 1 BNB/WBNB, definida apenas depois de medir demanda real dos agentes
+Pagamento aceito: nao aberto
+Deposito minimo: nao ativo
+Ratio: nao definido
 Destino dos pagamentos: proceeds wallet indicada pelo fundador/protocolo
 ```
 

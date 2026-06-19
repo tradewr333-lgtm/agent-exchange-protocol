@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "status": "experimental",
   "description": "A decentralized trust, collateral, reputation, capacity, and settlement layer for autonomous agents.",
+  "contact": "contact@axp.network",
   "canonical_repository": "https://github.com/tradewr333-lgtm/agent-exchange-protocol",
   "manifest_url": "https://raw.githubusercontent.com/tradewr333-lgtm/agent-exchange-protocol/main/.well-known/axp.json",
   "discovery": {
@@ -91,13 +92,7 @@
         "symbol": "BNB",
         "type": "native",
         "chain_id": 56,
-        "status": "planned_onchain"
-      },
-      {
-        "symbol": "WBNB",
-        "type": "BEP20",
-        "chain_id": 56,
-        "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+        "role": "network_gas_and_native_collateral",
         "status": "planned_onchain"
       },
       {
@@ -105,6 +100,7 @@
         "type": "BEP20",
         "chain_id": 56,
         "address": "0x55d398326f99059ff775485246999027b3197955",
+        "role": "stablecoin_collateral",
         "status": "planned_onchain"
       },
       {
@@ -112,6 +108,7 @@
         "type": "BEP20",
         "chain_id": 56,
         "address": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+        "role": "stablecoin_collateral",
         "status": "planned_onchain"
       }
     ],
@@ -125,6 +122,25 @@
     "insurance_pool": "planned",
     "arbitration": "planned",
     "credit_markets": "planned"
+  },
+  "proof_of_trust": {
+    "status": "specification",
+    "principle": "Agents earn influence by creating economically verified trust.",
+    "score_formula": "Trust Score = Trust Created - Trust Destroyed",
+    "trust_created_inputs": [
+      "settled_volume_usd",
+      "success_rate",
+      "counterparty_diversity",
+      "time_weight"
+    ],
+    "trust_destroyed_inputs": [
+      "failed_volume_usd",
+      "disputes_lost",
+      "late_delivery_penalties",
+      "slashing_events"
+    ],
+    "emission_policy": "not_active",
+    "emission_note": "Any future AXP emissions based on Proof of Trust require audited formulas and governance approval."
   },
   "blockchain": {
     "status": "mainnet_deployed",
@@ -148,8 +164,10 @@
       "sale_open": false,
       "reserved_axp": "20000000",
       "minimum_deposit_bnb": "0.01",
-      "payment_assets": ["BNB", "official BSC WBNB"],
-      "official_bsc_wbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
+      "payment_assets": [],
+      "legacy_paused_supported_assets": ["BNB", "official BSC WBNB"],
+      "official_bsc_wbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+      "note": "Paused legacy participation vault metadata. Not part of the operational collateral policy."
     },
     "verification": {
       "status": "verified",
@@ -167,14 +185,15 @@
   },
   "trust_model": {
     "principle": "Trust is replaced by collateral.",
-    "capacity_formula": "Capacity = Universal Collateral USD * Reputation Multiplier * AXP Trust Multiplier * Insurance Multiplier * Risk Adjustment",
-    "adoption_principle": "Agents can enter with BNB, WBNB, USDT, or USDC collateral; AXP amplifies trust and capacity instead of blocking entry."
+    "capacity_formula": "Capacity = BNB/USDT/USDC Collateral USD * Reputation Multiplier * AXP Trust Multiplier * Insurance Multiplier * Risk Adjustment",
+    "adoption_principle": "Agents can enter with BNB, USDT, or USDC collateral; AXP amplifies trust and capacity instead of blocking entry."
   },
   "documents": {
     "whitepaper": "docs/whitepaper.md",
     "tokenomics": "docs/tokenomics.md",
     "protocol_spec": "specs/protocol-spec.md",
     "economic_model": "specs/economic-model.md",
+    "proof_of_trust": "specs/proof-of-trust.md",
     "roadmap": "ROADMAP.md"
   }
 }
