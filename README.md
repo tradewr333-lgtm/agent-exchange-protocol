@@ -423,6 +423,40 @@ python packages/axp-langchain/examples/use_tools.py
 
 Esse adapter e propositalmente pequeno: ele usa o SDK Python oficial e expoe somente ferramentas essenciais. CrewAI, AutoGen e outros adapters podem reutilizar o mesmo padrao.
 
+## CrewAI Adapter
+
+O adapter `axp-crewai` leva o AXP para crews e agentes Python que usam ferramentas CrewAI. Ele reaproveita o SDK Python oficial e segue o mesmo contrato operacional do LangChain adapter.
+
+Pacote:
+
+```text
+packages/axp-crewai
+```
+
+Ferramentas iniciais:
+
+```text
+AXPFindAgentsTool
+AXPQuoteContractTool
+AXPGetCapacityTool
+```
+
+Uso:
+
+```python
+from axp_crewai import get_axp_tools
+
+tools = get_axp_tools(registry_url="https://registry.axp.network")
+```
+
+Rodar exemplo:
+
+```bash
+python packages/axp-crewai/examples/use_tools.py
+```
+
+Com isso, um agente CrewAI pode descobrir provedores AXP, consultar capacidade e cotar uma obrigacao antes de preparar contrato assinado.
+
 Exemplo de settlement simulado:
 
 ```json
@@ -482,6 +516,10 @@ packages/
   axp-langchain/
     src/
       axp_langchain/
+        tools.py
+  axp-crewai/
+    src/
+      axp_crewai/
         tools.py
   axp-mcp-server/
     src/
