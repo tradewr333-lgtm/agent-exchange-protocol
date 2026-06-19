@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
+import { AxpClient } from '../../axp-sdk-typescript/src/index.js';
+
 const registryBaseUrl = (process.env.AXP_REGISTRY_URL ?? 'https://registry.axp.network').replace(/\/$/, '');
 const protocolVersion = '2024-11-05';
+const axp = new AxpClient({ registryUrl: registryBaseUrl });
 
 const tools = [
   {
@@ -213,30 +216,20 @@ async function handleMessage(message) {
 async function callTool(name, args) {
   switch (name) {
     case 'axp_find_agents':
-      return getJson(`/agents${toQuery({
+      return axp.findAgents({
         status: args.status,
         service: args.service,
-        min_capacity: args.min_capacity,
-      })}`);
+        minCapacity: args.min_capacity,
+      });
     case 'axp_get_agent_profile':
       requireFields(args, ['agent_id']);
-      return getJson(`/agents/${encodeURIComponent(args.agent_id)}`);
-    case 'axp_get_capacity_score': {
+      return axp.getAgentProfile(args.agent_id);
+    case 'axp_get_capacity_score':
       requireFields(args, ['agent_id']);
-      const agent = await getJson(`/agents/${encodeURIComponent(args.agent_id)}`);
-      return {
-        agent_id: agent.agent_id,
-        reputation: agent.reputation,
-        stake_axp: agent.stake_axp,
-        available_capacity: agent.available_capacity,
-        completed_contracts: agent.completed_contracts,
-        failed_contracts: agent.failed_contracts,
-        failure_rate: agent.failure_rate,
-      };
-    }
+      return axp.getCapacityScore(args.agent_id);
     case 'axp_quote_contract':
       requireFields(args, ['provider_agent_id', 'service', 'requested_capacity']);
-      return postJson('/contracts/quote', {
+      return axp.quoteContract({
         requester_agent_id: args.requester_agent_id,
         provider_agent_id: args.provider_agent_id,
         service: args.service,
@@ -244,7 +237,7 @@ async function callTool(name, args) {
       });
     case 'axp_prepare_contract':
       requireFields(args, ['provider_agent_id', 'service', 'requested_capacity', 'auth']);
-      return postJson('/contracts/prepare', {
+      return axp.prepareContract({
         requester_agent_id: args.requester_agent_id,
         provider_agent_id: args.provider_agent_id,
         service: args.service,
@@ -253,10 +246,10 @@ async function callTool(name, args) {
       });
     case 'axp_get_contract':
       requireFields(args, ['contract_id']);
-      return getJson(`/contracts/${encodeURIComponent(args.contract_id)}`);
+      return axp.getContract(args.contract_id);
     case 'axp_settle_contract':
       requireFields(args, ['contract_id', 'outcome', 'auth']);
-      return postJson(`/contracts/${encodeURIComponent(args.contract_id)}/settle`, {
+      return axp.settleContract(args.contract_id, {
         outcome: args.outcome,
         evidence_uri: args.evidence_uri,
         notes: args.notes,
@@ -265,45 +258,6 @@ async function callTool(name, args) {
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
-}
-
-async function getJson(path) {
-  const response = await fetch(`${registryBaseUrl}${path}`);
-  return readJsonResponse(response, path);
-}
-
-async function postJson(path, body) {
-  const response = await fetch(`${registryBaseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  return readJsonResponse(response, path);
-}
-
-async function readJsonResponse(response, path) {
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(`${path} failed: ${JSON.stringify(payload)}`);
-  }
-
-  return payload;
-}
-
-function toQuery(params) {
-  const search = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      search.set(key, String(value));
-    }
-  }
-
-  const query = search.toString();
-  return query ? `?${query}` : '';
 }
 
 function requireFields(args, fields) {

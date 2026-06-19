@@ -301,6 +301,48 @@ Configuracao MCP generica:
 }
 ```
 
+## TypeScript SDK
+
+O SDK TypeScript e a base para o MCP Server e futuros adapters de frameworks como ElizaOS, OpenAI Agents SDK e agentes JavaScript.
+
+Pacote:
+
+```text
+packages/axp-sdk-typescript
+```
+
+Exemplo:
+
+```js
+import { AxpClient } from './packages/axp-sdk-typescript/src/index.js';
+
+const axp = new AxpClient({
+  registryUrl: 'https://registry.axp.network',
+});
+
+const agents = await axp.findAgents({
+  status: 'active',
+  service: 'research',
+  minCapacity: 100,
+});
+```
+
+Funcoes principais:
+
+```text
+getManifest
+getCapabilities
+findAgents
+getAgentProfile
+getCapacityScore
+quoteContract
+buildAuthMessage
+prepareContract
+getContract
+listContracts
+settleContract
+```
+
 Exemplo de settlement simulado:
 
 ```json
@@ -350,6 +392,9 @@ agent-registry/
   server.js
 
 packages/
+  axp-sdk-typescript/
+    src/
+      index.js
   axp-mcp-server/
     src/
       server.js

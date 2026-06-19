@@ -1,0 +1,19 @@
+{
+  "name": "@axp/axp-sdk-typescript",
+  "version": "0.1.0",
+  "description": "TypeScript/JavaScript SDK for Agent Exchange Protocol registry, agents, capacity, and contracts.",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "check": "node --check src/index.js"
+  },
+  "license": "MIT"
+}
