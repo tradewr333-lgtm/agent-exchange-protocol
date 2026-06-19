@@ -1,7 +1,13 @@
 import http from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getPreparedContract, listPreparedContracts, prepareContract, quoteContract } from './src/contracts.js';
+import {
+  getPreparedContract,
+  listPreparedContracts,
+  prepareContract,
+  quoteContract,
+  settleContract,
+} from './src/contracts.js';
 import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/registry.js';
 
 const port = Number.parseInt(process.env.PORT ?? '4180', 10);
@@ -64,6 +70,13 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 200, listPreparedContracts());
   }
 
+  const settleMatch = url.pathname.match(/^\/contracts\/([^/]+)\/settle$/);
+  if (request.method === 'POST' && settleMatch) {
+    const body = await readJsonBody(request);
+    const result = settleContract(settleMatch[1], body);
+    return sendJson(response, result.status, result.ok ? result.contract : result);
+  }
+
   const contractMatch = url.pathname.match(/^\/contracts\/([^/]+)$/);
   if (contractMatch) {
     const contract = getPreparedContract(contractMatch[1]);
@@ -85,6 +98,7 @@ const server = http.createServer(async (request, response) => {
       'POST /contracts/prepare',
       '/contracts',
       '/contracts/{contract_id}',
+      'POST /contracts/{contract_id}/settle',
     ],
   });
 });

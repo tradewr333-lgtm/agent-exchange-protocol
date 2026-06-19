@@ -36,6 +36,7 @@ POST /contracts/quote
 POST /contracts/prepare
 GET /contracts
 GET /contracts/:contract_id
+POST /contracts/:contract_id/settle
 ```
 
 ## Exemplos
@@ -104,6 +105,25 @@ Listar contratos preparados:
 ```text
 GET http://localhost:4180/contracts
 ```
+
+Liquidar contrato de forma simulada:
+
+```text
+POST http://localhost:4180/contracts/{contract_id}/settle
+```
+
+Payload:
+
+```json
+{
+  "outcome": "settled",
+  "reported_by": "agent_0001",
+  "evidence_uri": "https://example.com/evidence.json",
+  "notes": "Delivery accepted by requester."
+}
+```
+
+Valores aceitos para `outcome`: `settled` ou `failed`. Quando o resultado e `failed`, o contrato fica marcado como `slashable: true` e `onchain_slashing_status: pending_connection`.
 
 ## Persistencia simples
 

@@ -187,6 +187,7 @@ POST https://registry.axp.network/contracts/quote
 POST https://registry.axp.network/contracts/prepare
 GET https://registry.axp.network/contracts
 GET https://registry.axp.network/contracts/{contract_id}
+POST https://registry.axp.network/contracts/{contract_id}/settle
 ```
 
 Fluxo de descoberta:
@@ -209,6 +210,19 @@ Exemplo de cotacao de contrato:
 ```
 
 Se o agente estiver ativo, suportar o servico solicitado e tiver capacidade disponivel, `POST /contracts/prepare` cria um contrato com status `prepared`. A primeira versao operacional guarda contratos preparados em `agent-registry/data/contracts.json`; banco persistente e liquidacao on-chain entram na proxima fase.
+
+Exemplo de settlement simulado:
+
+```json
+{
+  "outcome": "settled",
+  "reported_by": "agent_0001",
+  "evidence_uri": "https://example.com/evidence.json",
+  "notes": "Delivery accepted by requester."
+}
+```
+
+Use `outcome: "failed"` para sinalizar falha. Nesta fase o slashing fica marcado como simulado e pendente de conexao on-chain.
 
 ## Deploy na Render
 

@@ -106,6 +106,59 @@ export function getPreparedContract(contractId) {
   return loadContractStore().contracts.find((contract) => contract.contract_id === contractId) ?? null;
 }
 
+export function settleContract(contractId, payload = {}) {
+  const validation = validateSettlementPayload(payload);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  const store = loadContractStore();
+  const contract = store.contracts.find((item) => item.contract_id === contractId);
+  if (!contract) {
+    return { ok: false, status: 404, error: 'contract_not_found', contract_id: contractId };
+  }
+
+  if (['settled', 'failed'].includes(contract.status)) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'contract_already_finalized',
+      contract,
+    };
+  }
+
+  const outcome = payload.outcome;
+  const settledAt = new Date().toISOString();
+  const updatedContract = {
+    ...contract,
+    status: outcome,
+    settled_at: settledAt,
+    settlement: {
+      outcome,
+      evidence_uri: payload.evidence_uri ?? null,
+      notes: payload.notes ?? null,
+      reported_by: payload.reported_by ?? null,
+      simulated: true,
+      onchain_slashing_status: outcome === 'failed' ? 'pending_connection' : 'not_required',
+      slashable: outcome === 'failed',
+    },
+  };
+
+  saveContractStore({
+    ...store,
+    updated_at: settledAt,
+    contracts: store.contracts.map((item) => (
+      item.contract_id === contractId ? updatedContract : item
+    )),
+  });
+
+  return {
+    ok: true,
+    status: 200,
+    contract: updatedContract,
+  };
+}
+
 export function listPreparedContracts() {
   const store = loadContractStore();
   return {
@@ -137,6 +190,18 @@ function validateContractPayload(payload) {
   return { ok: true };
 }
 
+function validateSettlementPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return { ok: false, status: 400, error: 'invalid_json_body' };
+  }
+
+  if (!['settled', 'failed'].includes(payload.outcome)) {
+    return { ok: false, status: 400, error: 'outcome_must_be_settled_or_failed' };
+  }
+
+  return { ok: true };
+}
+
 function loadContractStore() {
   if (!existsSync(contractsPath)) {
     return createEmptyContractStore();
@@ -160,17 +225,19 @@ function loadContractStore() {
 
 function savePreparedContract(contract) {
   const store = loadContractStore();
-  const nextStore = {
+  saveContractStore({
     schema: 'axp.contract_store.v0',
     updated_at: new Date().toISOString(),
     contracts: [
       ...store.contracts.filter((item) => item.contract_id !== contract.contract_id),
       contract,
     ],
-  };
+  });
+}
 
+function saveContractStore(store) {
   const tempPath = `${contractsPath}.tmp`;
-  writeFileSync(tempPath, `${JSON.stringify(nextStore, null, 2)}\n`);
+  writeFileSync(tempPath, `${JSON.stringify(store, null, 2)}\n`);
   renameSync(tempPath, contractsPath);
 }
 

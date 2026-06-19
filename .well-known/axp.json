@@ -16,6 +16,7 @@
     "contract_prepare_endpoint": "/contracts/prepare",
     "contracts_endpoint": "/contracts",
     "contract_endpoint_template": "/contracts/{contract_id}",
+    "contract_settle_endpoint_template": "/contracts/{contract_id}/settle",
     "health_endpoint": "/health"
   },
   "sdk": {
@@ -38,7 +39,9 @@
     "registry_query",
     "contract_quote",
     "contract_prepare",
-    "contract_lookup"
+    "contract_lookup",
+    "contract_settlement",
+    "simulated_slashing_signal"
   ],
   "economic_primitives": {
     "native_token": "AXP",

@@ -58,6 +58,8 @@ export function getCapabilities() {
       'contract_quote',
       'contract_prepare',
       'contract_lookup',
+      'contract_settlement',
+      'simulated_slashing_signal',
     ],
     query_parameters: {
       '/agents': ['status', 'service', 'min_capacity'],
@@ -66,6 +68,7 @@ export function getCapabilities() {
       'POST /contracts/prepare': ['provider_agent_id', 'service', 'requested_capacity'],
       '/contracts': [],
       '/contracts/{contract_id}': ['contract_id'],
+      'POST /contracts/{contract_id}/settle': ['outcome', 'evidence_uri', 'notes', 'reported_by'],
     },
   };
 }
