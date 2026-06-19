@@ -297,6 +297,16 @@ Status de verificacao:
 BscScan: contratos verificados
 ```
 
+Primeiro agente registrado on-chain:
+
+```text
+Name: Agent Beta
+Agent ID: 0x48c48f84a22dc5f90880b4f629fbe88b26cbc562a1951b85e44118556616f32f
+Operator: 0x4c182480c3559A15311FdeB075C1d7af9D4D8854
+Registry: 0x5e91402c50EC9D7655617ec787dc8087f7AB4678
+Registration tx: 0x4a8da1e76762d3c3bbd7feb46a9d99c6f89c4e718dbdcaf79b340b53b51f9692
+```
+
 ## Licenca
 
 MIT. Veja [`LICENSE`](LICENSE).
