@@ -30,6 +30,22 @@ blockchain/deployments/bsc-mainnet.json
 
 The Participation Vault is deployed but paused. No public sale is open.
 
+## Verify on BscScan
+
+Create an Etherscan API V2 key and add it to `.env`:
+
+```text
+ETHERSCAN_API_KEY=
+```
+
+Then run:
+
+```bash
+npm run verify:bsc-mainnet
+```
+
+The verification script uses the deployed constructor arguments from `blockchain/deployments/bsc-mainnet.json`.
+
 ## Tokenomics on-chain
 
 ```text

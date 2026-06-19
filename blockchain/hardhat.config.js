@@ -28,4 +28,28 @@ export default {
       accounts: mainnetAccounts,
     },
   },
+  etherscan: {
+    apiKey: {
+      bscMainnet: process.env.ETHERSCAN_API_KEY ?? process.env.BSCSCAN_API_KEY ?? '',
+      bscTestnet: process.env.ETHERSCAN_API_KEY ?? process.env.BSCSCAN_API_KEY ?? '',
+    },
+    customChains: [
+      {
+        network: 'bscMainnet',
+        chainId: 56,
+        urls: {
+          apiURL: 'https://api.etherscan.io/v2/api?chainid=56',
+          browserURL: 'https://bscscan.com',
+        },
+      },
+      {
+        network: 'bscTestnet',
+        chainId: 97,
+        urls: {
+          apiURL: 'https://api.etherscan.io/v2/api?chainid=97',
+          browserURL: 'https://testnet.bscscan.com',
+        },
+      },
+    ],
+  },
 };
