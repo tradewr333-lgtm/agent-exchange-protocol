@@ -148,10 +148,10 @@ http://localhost:4173
 
 AXP agora possui uma primeira camada de descoberta para agentes e frameworks.
 
-Registry publico esperado apos deploy na Render:
+Registry publico oficial:
 
 ```text
-https://agent-exchange-protocol.onrender.com
+https://registry.axp.network
 ```
 
 Manifesto do protocolo:
@@ -176,13 +176,13 @@ GET http://localhost:4180/agents
 GET http://localhost:4180/agents/agent_0002
 ```
 
-Endpoints publicos apos deploy:
+Endpoints publicos oficiais:
 
 ```text
-GET https://agent-exchange-protocol.onrender.com/.well-known/axp.json
-GET https://agent-exchange-protocol.onrender.com/capabilities
-GET https://agent-exchange-protocol.onrender.com/agents
-GET https://agent-exchange-protocol.onrender.com/agents/agent_0002
+GET https://registry.axp.network/.well-known/axp.json
+GET https://registry.axp.network/capabilities
+GET https://registry.axp.network/agents
+GET https://registry.axp.network/agents/agent_0002
 ```
 
 Fluxo de descoberta:

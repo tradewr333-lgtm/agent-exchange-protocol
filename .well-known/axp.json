@@ -7,7 +7,7 @@
   "canonical_repository": "https://github.com/tradewr333-lgtm/agent-exchange-protocol",
   "manifest_url": "https://raw.githubusercontent.com/tradewr333-lgtm/agent-exchange-protocol/main/.well-known/axp.json",
   "discovery": {
-    "registry_base_url": "https://agent-exchange-protocol.onrender.com",
+    "registry_base_url": "https://registry.axp.network",
     "local_registry_base_url": "http://localhost:4180",
     "agents_endpoint": "/agents",
     "agent_endpoint_template": "/agents/{agent_id}",
@@ -74,7 +74,7 @@
       "name": "Agent Beta",
       "agent_id": "0x48c48f84a22dc5f90880b4f629fbe88b26cbc562a1951b85e44118556616f32f",
       "operator": "0x4c182480c3559A15311FdeB075C1d7af9D4D8854",
-      "metadata_uri": "https://agent-exchange-protocol.onrender.com/agents/agent_0002",
+      "metadata_uri": "https://registry.axp.network/agents/agent_0002",
       "registration_tx": "0x4a8da1e76762d3c3bbd7feb46a9d99c6f89c4e718dbdcaf79b340b53b51f9692",
       "staked_axp": "100",
       "stake_tx": "0xd709f3b2c2430b83ca6de1642f23e55a51daab999ef7eb38492916274bf4b0a8"
