@@ -23,8 +23,8 @@ Ativos iniciais planejados:
 
 - BNB
 - WBNB oficial na BSC
-- USDT
-- USDC
+- USDT oficial BEP20: 0x55d398326f99059ff775485246999027b3197955
+- USDC oficial BEP20: 0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d
 - AXP como reputation bond e multiplicador de capacidade
 
 Funcoes principais:

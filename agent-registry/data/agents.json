@@ -42,6 +42,7 @@
           {
             "symbol": "USDC",
             "network": "BNB Smart Chain",
+            "address": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
             "amount": 2500,
             "usd_value": 2500,
             "role": "primary_collateral"
@@ -94,6 +95,7 @@
           {
             "symbol": "USDT",
             "network": "BNB Smart Chain",
+            "address": "0x55d398326f99059ff775485246999027b3197955",
             "amount": 2500,
             "usd_value": 2500,
             "role": "primary_collateral"

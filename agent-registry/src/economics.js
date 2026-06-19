@@ -23,6 +23,7 @@ export const ACCEPTED_COLLATERAL = [
     network: 'BNB Smart Chain',
     chain_id: 56,
     type: 'bep20',
+    address: '0x55d398326f99059ff775485246999027b3197955',
     status: 'planned_onchain',
   },
   {
@@ -30,6 +31,7 @@ export const ACCEPTED_COLLATERAL = [
     network: 'BNB Smart Chain',
     chain_id: 56,
     type: 'bep20',
+    address: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
     status: 'planned_onchain',
   },
 ];

@@ -59,8 +59,8 @@ Colateral aceito inicialmente na BNB Smart Chain:
 ```text
 BNB
 WBNB oficial: 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
-USDT
-USDC
+USDT oficial BEP20: 0x55d398326f99059ff775485246999027b3197955
+USDC oficial BEP20: 0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d
 ```
 
 AXP passa a atuar como:
