@@ -43,7 +43,12 @@
       "operator": "0x4c182480c3559A15311FdeB075C1d7af9D4D8854",
       "metadataURI": "https://agent-exchange-protocol.onrender.com/agents/agent_0002",
       "registrationTx": "0x4a8da1e76762d3c3bbd7feb46a9d99c6f89c4e718dbdcaf79b340b53b51f9692",
-      "blockNumber": 105141767
+      "blockNumber": 105141767,
+      "stakedAXP": "100",
+      "availableStakeAXP": "100",
+      "approveTx": "0xb6dcb3cf15a795284137db6d41544470607181a2d23b0266764455e26ae0f29f",
+      "stakeTx": "0xd709f3b2c2430b83ca6de1642f23e55a51daab999ef7eb38492916274bf4b0a8",
+      "stakeBlockNumber": 105142440
     }
   }
 }
