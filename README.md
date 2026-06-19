@@ -457,6 +457,41 @@ python packages/axp-crewai/examples/use_tools.py
 
 Com isso, um agente CrewAI pode descobrir provedores AXP, consultar capacidade e cotar uma obrigacao antes de preparar contrato assinado.
 
+## AutoGen Adapter
+
+O adapter `axp-autogen` fecha o trio Python inicial. Ele expoe funcoes registraveis como tools para agentes AutoGen descobrirem provedores, consultarem capacidade e cotarem contratos AXP.
+
+Pacote:
+
+```text
+packages/axp-autogen
+```
+
+Funcoes iniciais:
+
+```text
+find_agents
+quote_contract
+get_capacity_score
+```
+
+Uso:
+
+```python
+from axp_autogen import AxpAutoGenToolkit
+
+toolkit = AxpAutoGenToolkit(registry_url="https://registry.axp.network")
+tools = toolkit.get_tools()
+```
+
+Rodar exemplo:
+
+```bash
+python packages/axp-autogen/examples/use_tools.py
+```
+
+`get_tools()` retorna nome, descricao, schema de parametros e funcao Python para registrar no fluxo AutoGen usado pelo agente.
+
 Exemplo de settlement simulado:
 
 ```json
@@ -520,6 +555,10 @@ packages/
   axp-crewai/
     src/
       axp_crewai/
+        tools.py
+  axp-autogen/
+    src/
+      axp_autogen/
         tools.py
   axp-mcp-server/
     src/
