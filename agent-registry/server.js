@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getPreparedContract, prepareContract, quoteContract } from './src/contracts.js';
+import { getPreparedContract, listPreparedContracts, prepareContract, quoteContract } from './src/contracts.js';
 import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/registry.js';
 
 const port = Number.parseInt(process.env.PORT ?? '4180', 10);
@@ -60,6 +60,10 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, result.status, result.ok ? result.contract : result);
   }
 
+  if (url.pathname === '/contracts') {
+    return sendJson(response, 200, listPreparedContracts());
+  }
+
   const contractMatch = url.pathname.match(/^\/contracts\/([^/]+)$/);
   if (contractMatch) {
     const contract = getPreparedContract(contractMatch[1]);
@@ -79,6 +83,7 @@ const server = http.createServer(async (request, response) => {
       '/agents/{agent_id}',
       'POST /contracts/quote',
       'POST /contracts/prepare',
+      '/contracts',
       '/contracts/{contract_id}',
     ],
   });

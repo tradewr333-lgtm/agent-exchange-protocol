@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getAgent } from './registry.js';
 
-const preparedContracts = new Map();
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const contractsPath = join(currentDir, '..', 'data', 'contracts.json');
 
 export function quoteContract(payload = {}) {
   const validation = validateContractPayload(payload);
@@ -89,7 +93,7 @@ export function prepareContract(payload = {}) {
     },
   };
 
-  preparedContracts.set(contractId, contract);
+  savePreparedContract(contract);
 
   return {
     ok: true,
@@ -99,7 +103,17 @@ export function prepareContract(payload = {}) {
 }
 
 export function getPreparedContract(contractId) {
-  return preparedContracts.get(contractId) ?? null;
+  return loadContractStore().contracts.find((contract) => contract.contract_id === contractId) ?? null;
+}
+
+export function listPreparedContracts() {
+  const store = loadContractStore();
+  return {
+    schema: store.schema,
+    updated_at: store.updated_at,
+    count: store.contracts.length,
+    contracts: store.contracts,
+  };
 }
 
 function validateContractPayload(payload) {
@@ -121,6 +135,51 @@ function validateContractPayload(payload) {
   }
 
   return { ok: true };
+}
+
+function loadContractStore() {
+  if (!existsSync(contractsPath)) {
+    return createEmptyContractStore();
+  }
+
+  try {
+    const store = JSON.parse(readFileSync(contractsPath, 'utf8').replace(/^\uFEFF/, ''));
+    if (!Array.isArray(store.contracts)) {
+      return createEmptyContractStore();
+    }
+
+    return {
+      schema: store.schema ?? 'axp.contract_store.v0',
+      updated_at: store.updated_at ?? null,
+      contracts: store.contracts,
+    };
+  } catch {
+    return createEmptyContractStore();
+  }
+}
+
+function savePreparedContract(contract) {
+  const store = loadContractStore();
+  const nextStore = {
+    schema: 'axp.contract_store.v0',
+    updated_at: new Date().toISOString(),
+    contracts: [
+      ...store.contracts.filter((item) => item.contract_id !== contract.contract_id),
+      contract,
+    ],
+  };
+
+  const tempPath = `${contractsPath}.tmp`;
+  writeFileSync(tempPath, `${JSON.stringify(nextStore, null, 2)}\n`);
+  renameSync(tempPath, contractsPath);
+}
+
+function createEmptyContractStore() {
+  return {
+    schema: 'axp.contract_store.v0',
+    updated_at: null,
+    contracts: [],
+  };
 }
 
 function calculateRiskAdjustment(provider) {

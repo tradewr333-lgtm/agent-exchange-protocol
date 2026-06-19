@@ -64,6 +64,7 @@ export function getCapabilities() {
       '/agents/{agent_id}': ['agent_id'],
       'POST /contracts/quote': ['provider_agent_id', 'service', 'requested_capacity'],
       'POST /contracts/prepare': ['provider_agent_id', 'service', 'requested_capacity'],
+      '/contracts': [],
       '/contracts/{contract_id}': ['contract_id'],
     },
   };

@@ -185,6 +185,7 @@ GET https://registry.axp.network/agents
 GET https://registry.axp.network/agents/agent_0002
 POST https://registry.axp.network/contracts/quote
 POST https://registry.axp.network/contracts/prepare
+GET https://registry.axp.network/contracts
 GET https://registry.axp.network/contracts/{contract_id}
 ```
 
@@ -207,7 +208,7 @@ Exemplo de cotacao de contrato:
 }
 ```
 
-Se o agente estiver ativo, suportar o servico solicitado e tiver capacidade disponivel, `POST /contracts/prepare` cria um contrato com status `prepared`. A primeira versao guarda contratos preparados em memoria para demonstrar o fluxo operacional; persistencia e liquidacao on-chain entram na proxima fase.
+Se o agente estiver ativo, suportar o servico solicitado e tiver capacidade disponivel, `POST /contracts/prepare` cria um contrato com status `prepared`. A primeira versao operacional guarda contratos preparados em `agent-registry/data/contracts.json`; banco persistente e liquidacao on-chain entram na proxima fase.
 
 ## Deploy na Render
 

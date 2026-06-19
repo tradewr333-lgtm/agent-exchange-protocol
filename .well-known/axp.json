@@ -14,6 +14,7 @@
     "capabilities_endpoint": "/capabilities",
     "contract_quote_endpoint": "/contracts/quote",
     "contract_prepare_endpoint": "/contracts/prepare",
+    "contracts_endpoint": "/contracts",
     "contract_endpoint_template": "/contracts/{contract_id}",
     "health_endpoint": "/health"
   },

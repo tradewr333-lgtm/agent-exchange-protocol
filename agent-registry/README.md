@@ -34,6 +34,7 @@ GET /agents
 GET /agents/:agent_id
 POST /contracts/quote
 POST /contracts/prepare
+GET /contracts
 GET /contracts/:contract_id
 ```
 
@@ -97,6 +98,22 @@ Consultar contrato preparado:
 ```text
 GET http://localhost:4180/contracts/{contract_id}
 ```
+
+Listar contratos preparados:
+
+```text
+GET http://localhost:4180/contracts
+```
+
+## Persistencia simples
+
+Contratos preparados sao salvos em:
+
+```text
+agent-registry/data/contracts.json
+```
+
+Esse armazenamento simples sobrevive a reinicios do processo local. Em producao, a proxima fase deve trocar esse arquivo por banco/volume persistente antes de liquidacao real on-chain.
 
 ## Descoberta por agentes
 
