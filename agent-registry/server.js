@@ -12,6 +12,8 @@ import { getEconomicPolicy } from './src/economics.js';
 import { getAgentPassport, performAxpHandshake } from './src/passport.js';
 import { getAgentRiskReport, getAgentTrustScore, getBestAgent, getTrustRanking } from './src/trust-score.js';
 import {
+  acceptContract,
+  fundContract,
   getPreparedContract,
   listPreparedContracts,
   prepareContract,
@@ -427,6 +429,20 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 200, await listPreparedContracts());
   }
 
+  const fundMatch = url.pathname.match(/^\/contracts\/([^/]+)\/fund$/);
+  if (request.method === 'POST' && fundMatch) {
+    const body = await readJsonBody(request);
+    const result = await fundContract(fundMatch[1], body);
+    return sendJson(response, result.status, result.ok ? result.contract : result);
+  }
+
+  const acceptMatch = url.pathname.match(/^\/contracts\/([^/]+)\/accept$/);
+  if (request.method === 'POST' && acceptMatch) {
+    const body = await readJsonBody(request);
+    const result = await acceptContract(acceptMatch[1], body);
+    return sendJson(response, result.status, result.ok ? result.contract : result);
+  }
+
   const settleMatch = url.pathname.match(/^\/contracts\/([^/]+)\/settle$/);
   if (request.method === 'POST' && settleMatch) {
     const body = await readJsonBody(request);
@@ -484,6 +500,8 @@ const server = http.createServer(async (request, response) => {
       'POST /contracts/prepare',
       '/contracts',
       '/contracts/{contract_id}',
+      'POST /contracts/{contract_id}/fund',
+      'POST /contracts/{contract_id}/accept',
       'POST /contracts/{contract_id}/settle',
     ],
   });
@@ -868,9 +886,12 @@ async function buildNetworkHtml() {
         width: 100%;
         height: 640px;
         background:
+          linear-gradient(rgba(138, 247, 190, 0.055) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(131, 232, 255, 0.045) 1px, transparent 1px),
           linear-gradient(135deg, rgba(138, 247, 190, 0.05), transparent 42%),
           radial-gradient(circle at 65% 30%, rgba(131, 232, 255, 0.08), transparent 22rem),
           #04090a;
+        background-size: 42px 42px, 42px 42px, auto, auto, auto;
       }
 
       .graph-copy {
@@ -975,13 +996,13 @@ async function buildNetworkHtml() {
           <div class="graph-copy">
             <div>
               <p class="eyebrow">Proof of Trust in motion</p>
-              <h2>Agents become nodes. Contracts become links. Trust events become hashed pulses.</h2>
+              <h2>Agents become transistors. Contracts become circuit paths. Trust events become electrical pulses.</h2>
               <p>Hash model: <span class="hash">SHA-256(agent + counterparty + contract + value + timestamp + data)</span></p>
             </div>
             <div class="legend">
-              <span>mint: active trust</span>
-              <span>cyan: agent node</span>
-              <span>violet: event pulse</span>
+              <span>mint: trust current</span>
+              <span>cyan: agent transistor</span>
+              <span>violet: hashed event pulse</span>
             </div>
           </div>
         </section>
@@ -1087,12 +1108,30 @@ async function buildNetworkHtml() {
 
       function drawGrid() {
         ctx.save();
-        ctx.globalAlpha = 0.12;
-        ctx.strokeStyle = '#8af7be';
-        for (let x = 0; x < state.width; x += 72) {
+        ctx.globalAlpha = 0.16;
+        ctx.strokeStyle = '#244348';
+        ctx.lineWidth = 1;
+        for (let x = 24; x < state.width; x += 96) {
           ctx.beginPath();
           ctx.moveTo(x, 0);
-          ctx.lineTo(x + Math.sin(state.time + x) * 10, state.height);
+          ctx.lineTo(x, state.height);
+          ctx.stroke();
+        }
+        for (let y = 28; y < state.height; y += 84) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(state.width, y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 0.28;
+        ctx.strokeStyle = '#8af7be';
+        for (let i = 0; i < 12; i += 1) {
+          const y = ((i * 73 + state.time * 16) % state.height);
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(state.width * 0.18, y);
+          ctx.lineTo(state.width * 0.18, y + 24);
+          ctx.lineTo(state.width * 0.42, y + 24);
           ctx.stroke();
         }
         ctx.restore();
@@ -1108,15 +1147,39 @@ async function buildNetworkHtml() {
           const to = getNode(link.to);
           if (!from || !to) return;
           const pulse = (Math.sin(state.time * 2.2 + index) + 1) / 2;
+          const midX = from.x + (to.x - from.x) * 0.5;
           ctx.save();
-          ctx.strokeStyle = link.status === 'settled' ? 'rgba(138, 247, 190, 0.44)' : 'rgba(131, 232, 255, 0.28)';
-          ctx.lineWidth = 1 + pulse * 1.5;
+          ctx.strokeStyle = link.status === 'settled' || link.status === 'trust_created'
+            ? 'rgba(138, 247, 190, 0.52)'
+            : 'rgba(131, 232, 255, 0.32)';
+          ctx.lineWidth = 1.1 + pulse * 1.2;
           ctx.beginPath();
           ctx.moveTo(from.x, from.y);
+          ctx.lineTo(midX, from.y);
+          ctx.lineTo(midX, to.y);
           ctx.lineTo(to.x, to.y);
           ctx.stroke();
+
+          const t = (state.time * 0.45 + index * 0.13) % 1;
+          const point = tracePoint(from, to, midX, t);
+          ctx.shadowColor = '#8af7be';
+          ctx.shadowBlur = 18;
+          ctx.fillStyle = link.status === 'failed' || link.status === 'contract_failed' ? '#f5ce67' : '#8af7be';
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 3.5 + pulse * 2, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
         });
+      }
+
+      function tracePoint(from, to, midX, t) {
+        if (t < 0.33) {
+          return { x: from.x + (midX - from.x) * (t / 0.33), y: from.y };
+        }
+        if (t < 0.66) {
+          return { x: midX, y: from.y + (to.y - from.y) * ((t - 0.33) / 0.33) };
+        }
+        return { x: midX + (to.x - midX) * ((t - 0.66) / 0.34), y: to.y };
       }
 
       function drawEvents() {
@@ -1143,15 +1206,23 @@ async function buildNetworkHtml() {
           ctx.save();
           ctx.shadowColor = node.online ? '#8af7be' : '#83e8ff';
           ctx.shadowBlur = 14 + glow * 12;
-          ctx.fillStyle = node.online ? '#8af7be' : '#83e8ff';
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.strokeStyle = node.online ? '#8af7be' : '#83e8ff';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(node.x - radius, node.y - radius, radius * 2, radius * 2);
+          ctx.fillStyle = node.online ? 'rgba(138, 247, 190, 0.16)' : 'rgba(131, 232, 255, 0.16)';
+          ctx.fillRect(node.x - radius, node.y - radius, radius * 2, radius * 2);
           ctx.shadowBlur = 0;
-          ctx.fillStyle = 'rgba(2, 6, 7, 0.95)';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
           ctx.beginPath();
-          ctx.arc(node.x, node.y, Math.max(3, radius - 5), 0, Math.PI * 2);
-          ctx.fill();
+          ctx.moveTo(node.x - radius - 8, node.y);
+          ctx.lineTo(node.x - radius, node.y);
+          ctx.moveTo(node.x + radius, node.y);
+          ctx.lineTo(node.x + radius + 8, node.y);
+          ctx.moveTo(node.x, node.y - radius - 8);
+          ctx.lineTo(node.x, node.y - radius);
+          ctx.moveTo(node.x, node.y + radius);
+          ctx.lineTo(node.x, node.y + radius + 8);
+          ctx.stroke();
           ctx.fillStyle = '#dff8f2';
           ctx.font = '12px Inter, system-ui, sans-serif';
           ctx.fillText(node.label, node.x + radius + 8, node.y + 4);

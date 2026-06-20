@@ -372,6 +372,36 @@ class AxpClient:
         _require_value(contract_id, "contract_id")
         return self._get_json(f"/contracts/{contract_id}")
 
+    def fund_contract(
+        self,
+        contract_id: str,
+        *,
+        auth: dict[str, Any],
+        payment_asset: str | None = None,
+    ) -> dict[str, Any]:
+        _require_value(contract_id, "contract_id")
+        return self._post_json(
+            f"/contracts/{contract_id}/fund",
+            {
+                "payment_asset": payment_asset,
+                "auth": auth,
+            },
+        )
+
+    def accept_contract(
+        self,
+        contract_id: str,
+        *,
+        auth: dict[str, Any],
+    ) -> dict[str, Any]:
+        _require_value(contract_id, "contract_id")
+        return self._post_json(
+            f"/contracts/{contract_id}/accept",
+            {
+                "auth": auth,
+            },
+        )
+
     def settle_contract(
         self,
         contract_id: str,
@@ -477,6 +507,14 @@ def build_heartbeat_scope(
 
 def build_settlement_scope(*, contract_id: str, outcome: str) -> str:
     return f"contract:{contract_id}|outcome:{outcome}"
+
+
+def build_funding_scope(*, contract_id: str) -> str:
+    return f"contract:{contract_id}|fund:true"
+
+
+def build_acceptance_scope(*, contract_id: str) -> str:
+    return f"contract:{contract_id}|accept:true"
 
 
 def _query_string(params: dict[str, Any]) -> str:

@@ -23,13 +23,14 @@ export async function quoteContract(payload = {}) {
   }
 
   const requestedCapacity = Number(payload.requested_capacity);
+  const requiredCollateral = normalizeRequiredCollateral(payload, requestedCapacity);
   const service = String(payload.service);
   const economicProfile = getAgentEconomicProfile(provider);
   const serviceSupported = provider.services.includes(service);
-  const capacityAvailable = economicProfile.available_capacity >= requestedCapacity;
+  const capacityAvailable = economicProfile.available_capacity >= requiredCollateral;
   const providerActive = provider.status === 'active';
   const obligationAccepted = providerActive && serviceSupported && capacityAvailable;
-  const capacityAfter = Math.max(economicProfile.available_capacity - requestedCapacity, 0);
+  const capacityAfter = Math.max(economicProfile.available_capacity - requiredCollateral, 0);
   const protocolFee = calculateProtocolFee(requestedCapacity);
 
   return {
@@ -43,6 +44,8 @@ export async function quoteContract(payload = {}) {
       provider_agent_id: provider.agent_id,
       service,
       requested_capacity: requestedCapacity,
+      contract_value_usd: requestedCapacity,
+      required_provider_collateral_usd: requiredCollateral,
       provider_status: provider.status,
       provider_reputation: provider.reputation,
       provider_collateral_usd: economicProfile.collateral_usd,
@@ -62,6 +65,14 @@ export async function quoteContract(payload = {}) {
       axp_required_for_entry: false,
       axp_role: 'reputation_bond_and_capacity_multiplier',
       protocol_fee: protocolFee,
+      escrow_model: {
+        requester_deposits_payment: true,
+        provider_locks_collateral: true,
+        provider_collateral_usd: requiredCollateral,
+        provider_payout_if_settled_usd: round(requestedCapacity - protocolFee.fee_amount),
+        requester_refund_if_failed_usd: requestedCapacity,
+        slashing_status: 'simulated_until_onchain_escrow_enabled',
+      },
       settlement_asset: payload.settlement_asset ?? 'USD-equivalent collateral',
       evidence: {
         discovery_url: 'https://registry.axp.network/agents',
@@ -160,6 +171,9 @@ export async function prepareContract(payload = {}) {
       protocol_fee: quote.protocol_fee,
       settlement_asset: quote.settlement_asset,
       slashable: true,
+      escrow_status: 'awaiting_funding',
+      requester_payment_required_usd: quote.contract_value_usd,
+      required_provider_collateral_usd: quote.required_provider_collateral_usd,
       arbitration_status: 'planned',
       insurance_status: 'planned',
     },
@@ -201,6 +215,155 @@ export async function prepareContract(payload = {}) {
     status: 201,
     contract,
   };
+}
+
+export async function fundContract(contractId, payload = {}) {
+  const store = await loadContractStore();
+  const contract = store.contracts.find((item) => item.contract_id === contractId);
+  if (!contract) {
+    return { ok: false, status: 404, error: 'contract_not_found', contract_id: contractId };
+  }
+
+  if (contract.status !== 'prepared') {
+    return { ok: false, status: 409, error: 'contract_must_be_prepared_before_funding', contract };
+  }
+
+  const requesterAgentId = contract.quote.requester_agent_id;
+  if (!requesterAgentId) {
+    return { ok: false, status: 409, error: 'requester_agent_required_for_escrow_funding', contract_id: contractId };
+  }
+
+  const authResult = await verifyAgentAuth({
+    action: 'contracts.fund',
+    agentId: requesterAgentId,
+    auth: payload.auth,
+    scope: buildFundingScope(contractId),
+  });
+  if (!authResult.ok) {
+    return authResult;
+  }
+
+  const paymentAsset = normalizePaymentAsset(payload.payment_asset ?? payload.asset ?? 'USDC');
+  if (!paymentAsset.ok) {
+    return paymentAsset;
+  }
+
+  const fundedAt = new Date().toISOString();
+  const valueUsd = Number(contract.quote.contract_value_usd ?? contract.quote.requested_capacity);
+  const protocolFee = contract.quote.protocol_fee ?? calculateProtocolFee(valueUsd);
+  const updatedContract = {
+    ...contract,
+    status: 'funded',
+    funded_at: fundedAt,
+    escrow: {
+      status: 'funded',
+      mode: 'offchain_simulated_escrow',
+      requester_agent_id: requesterAgentId,
+      provider_agent_id: contract.quote.provider_agent_id,
+      payment_asset: paymentAsset.asset,
+      payment_amount_usd: valueUsd,
+      protocol_fee_usd: protocolFee.fee_amount,
+      protocol_fee_recipient: protocolFee.recipient_address,
+      provider_payout_if_settled_usd: round(valueUsd - protocolFee.fee_amount),
+      requester_refund_if_failed_usd: valueUsd,
+      provider_collateral_required_usd: Number(contract.quote.required_provider_collateral_usd ?? valueUsd * 0.3),
+      collateral_status: 'awaiting_provider_acceptance',
+      funded_by: requesterAgentId,
+      signer: authResult.signer,
+      nonce: authResult.auth.nonce,
+      issued_at: authResult.auth.issued_at,
+      scope: buildFundingScope(contractId),
+      funded_at: fundedAt,
+    },
+  };
+
+  await saveContractStore({
+    ...store,
+    updated_at: fundedAt,
+    contracts: store.contracts.map((item) => (item.contract_id === contractId ? updatedContract : item)),
+  });
+
+  await appendTrustEvent({
+    event_type: 'contract_funded',
+    agent_id: requesterAgentId,
+    counterparty_id: contract.quote.provider_agent_id,
+    contract_id: contractId,
+    value_usd: valueUsd,
+    data: updatedContract.escrow,
+  });
+
+  return { ok: true, status: 200, contract: updatedContract };
+}
+
+export async function acceptContract(contractId, payload = {}) {
+  const store = await loadContractStore();
+  const contract = store.contracts.find((item) => item.contract_id === contractId);
+  if (!contract) {
+    return { ok: false, status: 404, error: 'contract_not_found', contract_id: contractId };
+  }
+
+  if (contract.status !== 'funded') {
+    return { ok: false, status: 409, error: 'contract_must_be_funded_before_acceptance', contract };
+  }
+
+  const providerAgentId = contract.quote.provider_agent_id;
+  const authResult = await verifyAgentAuth({
+    action: 'contracts.accept',
+    agentId: providerAgentId,
+    auth: payload.auth,
+    scope: buildAcceptanceScope(contractId),
+  });
+  if (!authResult.ok) {
+    return authResult;
+  }
+
+  const provider = await getAgent(providerAgentId);
+  const economicProfile = provider ? getAgentEconomicProfile(provider) : null;
+  const collateralRequired = Number(contract.escrow?.provider_collateral_required_usd ?? contract.quote.required_provider_collateral_usd ?? 0);
+  if (!economicProfile || economicProfile.available_capacity < collateralRequired) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'insufficient_provider_capacity_for_collateral',
+      required_collateral_usd: collateralRequired,
+      available_capacity_usd: economicProfile?.available_capacity ?? 0,
+    };
+  }
+
+  const acceptedAt = new Date().toISOString();
+  const updatedContract = {
+    ...contract,
+    status: 'active',
+    accepted_at: acceptedAt,
+    escrow: {
+      ...contract.escrow,
+      status: 'active',
+      collateral_status: 'locked_simulated',
+      accepted_by: providerAgentId,
+      provider_signer: authResult.signer,
+      provider_nonce: authResult.auth.nonce,
+      provider_issued_at: authResult.auth.issued_at,
+      provider_scope: buildAcceptanceScope(contractId),
+      accepted_at: acceptedAt,
+    },
+  };
+
+  await saveContractStore({
+    ...store,
+    updated_at: acceptedAt,
+    contracts: store.contracts.map((item) => (item.contract_id === contractId ? updatedContract : item)),
+  });
+
+  await appendTrustEvent({
+    event_type: 'contract_accepted',
+    agent_id: providerAgentId,
+    counterparty_id: contract.quote.requester_agent_id,
+    contract_id: contractId,
+    value_usd: collateralRequired,
+    data: updatedContract.escrow,
+  });
+
+  return { ok: true, status: 200, contract: updatedContract };
 }
 
 export async function getPreparedContract(contractId) {
@@ -262,6 +425,12 @@ export async function settleContract(contractId, payload = {}) {
       simulated: true,
       onchain_slashing_status: outcome === 'failed' ? 'pending_connection' : 'not_required',
       slashable: outcome === 'failed',
+      escrow_result: buildEscrowResult(contract, outcome),
+    },
+    escrow: {
+      ...(contract.escrow ?? {}),
+      status: outcome === 'settled' ? 'released' : 'refunded_with_slashing_signal',
+      result: buildEscrowResult(contract, outcome),
     },
   };
 
@@ -359,8 +528,44 @@ function buildPrepareScope(payload) {
   ].join('|');
 }
 
+function buildFundingScope(contractId) {
+  return `contract:${contractId}|fund:true`;
+}
+
+function buildAcceptanceScope(contractId) {
+  return `contract:${contractId}|accept:true`;
+}
+
 function buildSettlementScope(contractId, outcome) {
   return `contract:${contractId}|outcome:${outcome}`;
+}
+
+function buildEscrowResult(contract, outcome) {
+  const valueUsd = Number(contract.quote?.contract_value_usd ?? contract.quote?.requested_capacity ?? 0);
+  const protocolFee = Number(contract.quote?.protocol_fee?.fee_amount ?? calculateProtocolFee(valueUsd).fee_amount);
+  const providerPayout = round(valueUsd - protocolFee);
+  const collateralRequired = Number(contract.quote?.required_provider_collateral_usd ?? valueUsd * 0.3);
+  const slashAmount = round(collateralRequired * 0.3);
+
+  if (outcome === 'settled') {
+    return {
+      mode: 'offchain_simulated_escrow',
+      requester_refund_usd: 0,
+      provider_payout_usd: providerPayout,
+      protocol_fee_usd: protocolFee,
+      provider_collateral_unlocked_usd: collateralRequired,
+      provider_collateral_slashed_usd: 0,
+    };
+  }
+
+  return {
+    mode: 'offchain_simulated_escrow',
+    requester_refund_usd: valueUsd,
+    provider_payout_usd: 0,
+    protocol_fee_usd: 0,
+    provider_collateral_unlocked_usd: round(Math.max(collateralRequired - slashAmount, 0)),
+    provider_collateral_slashed_usd: slashAmount,
+  };
 }
 
 function validateSettlementPayload(payload) {
@@ -373,6 +578,34 @@ function validateSettlementPayload(payload) {
   }
 
   return { ok: true };
+}
+
+function normalizeRequiredCollateral(payload, contractValue) {
+  const raw = payload.required_collateral_usd ?? payload.required_collateral ?? payload.provider_collateral_usd;
+  const value = raw === undefined ? contractValue * 0.3 : Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    return round(contractValue * 0.3);
+  }
+
+  return round(value);
+}
+
+function normalizePaymentAsset(value) {
+  const asset = String(value ?? '').toUpperCase();
+  if (['BNB', 'USDT', 'USDC'].includes(asset)) {
+    return { ok: true, asset };
+  }
+
+  return {
+    ok: false,
+    status: 400,
+    error: 'payment_asset_must_be_bnb_usdt_or_usdc',
+    accepted_assets: ['BNB', 'USDT', 'USDC'],
+  };
+}
+
+function round(value) {
+  return Math.round(Number(value ?? 0) * 1000000) / 1000000;
 }
 
 function buildQuoteId(payload, provider) {

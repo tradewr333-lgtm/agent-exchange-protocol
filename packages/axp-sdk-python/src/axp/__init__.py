@@ -1,6 +1,8 @@
 from .client import (
     AxpClient,
     AxpError,
+    build_acceptance_scope,
+    build_funding_scope,
     build_heartbeat_scope,
     build_prepare_scope,
     build_registration_scope,
@@ -10,6 +12,8 @@ from .client import (
 __all__ = [
     "AxpClient",
     "AxpError",
+    "build_acceptance_scope",
+    "build_funding_scope",
     "build_heartbeat_scope",
     "build_prepare_scope",
     "build_registration_scope",

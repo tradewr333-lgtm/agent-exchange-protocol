@@ -47,6 +47,8 @@
     "contract_prepare_endpoint": "/contracts/prepare",
     "contracts_endpoint": "/contracts",
     "contract_endpoint_template": "/contracts/{contract_id}",
+    "contract_fund_endpoint_template": "/contracts/{contract_id}/fund",
+    "contract_accept_endpoint_template": "/contracts/{contract_id}/accept",
     "contract_settle_endpoint_template": "/contracts/{contract_id}/settle",
     "health_endpoint": "/health"
   },
@@ -137,6 +139,10 @@
     "challenge_delivery_verification",
     "contract_quote",
     "contract_prepare",
+    "contract_funding",
+    "contract_acceptance",
+    "contract_escrow",
+    "offchain_escrow_simulation",
     "contract_lookup",
     "contract_settlement",
     "simulated_slashing_signal",
@@ -164,6 +170,8 @@
       "delivery_verified",
       "delivery_rejected",
       "contract_prepared",
+      "contract_funded",
+      "contract_accepted",
       "contract_settled",
       "contract_failed",
       "trust_created",
@@ -200,6 +208,8 @@
       "POST /agents/register",
       "POST /agents/{agent_id}/heartbeat",
       "POST /contracts/prepare",
+      "POST /contracts/{contract_id}/fund",
+      "POST /contracts/{contract_id}/accept",
       "POST /contracts/{contract_id}/settle"
     ],
     "message_endpoint": "/auth/message",
@@ -222,6 +232,8 @@
     "register_scope_template": "agent:{agent_id}|operator:{operator}|services:{comma_separated_services}|collateral:{asset}:{amount}|manifest:{manifest_url_or_none}",
     "heartbeat_scope_template": "agent:{agent_id}|status:{active_paused_or_offline}|available:{true_or_false}|load:{current_load}|capacity:{available_capacity}|endpoint:{endpoint_or_none}",
     "prepare_scope_template": "provider:{provider_agent_id}|requester:{requester_agent_id_or_none}|service:{service}|capacity:{requested_capacity}",
+    "fund_scope_template": "contract:{contract_id}|fund:true",
+    "accept_scope_template": "contract:{contract_id}|accept:true",
     "contract_prepare_handshake": {
       "default_mode": "advisory",
       "modes": {
@@ -230,6 +242,19 @@
       },
       "policy_field": "trust_policy",
       "mode_field": "handshake_mode"
+    },
+    "contract_escrow": {
+      "status": "offchain_mvp",
+      "flow": [
+        "prepare",
+        "fund",
+        "accept",
+        "settle"
+      ],
+      "requester_payment_assets": ["BNB", "USDT", "USDC"],
+      "provider_collateral": "required_provider_collateral_usd",
+      "fee_model": "0.5% of contract value, not collateral",
+      "slashing_status": "simulated_until_onchain_escrow_enabled"
     },
     "settlement_scope_template": "contract:{contract_id}|outcome:{settled_or_failed}",
     "signature_window_seconds": 600

@@ -386,6 +386,51 @@ const tools = [
     },
   },
   {
+    name: 'axp_fund_contract',
+    description: 'Fund an AXP contract escrow with BNB, USDT, or USDC authorization from the requester agent.',
+    inputSchema: {
+      type: 'object',
+      required: ['contract_id', 'auth'],
+      properties: {
+        contract_id: { type: 'string' },
+        payment_asset: { type: 'string', enum: ['BNB', 'USDT', 'USDC'] },
+        auth: {
+          type: 'object',
+          required: ['agent_id', 'address', 'nonce', 'issued_at', 'signature'],
+          properties: {
+            agent_id: { type: 'string' },
+            address: { type: 'string' },
+            nonce: { type: 'string' },
+            issued_at: { type: 'string' },
+            signature: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+  {
+    name: 'axp_accept_contract',
+    description: 'Accept a funded AXP contract and lock provider collateral in simulated escrow.',
+    inputSchema: {
+      type: 'object',
+      required: ['contract_id', 'auth'],
+      properties: {
+        contract_id: { type: 'string' },
+        auth: {
+          type: 'object',
+          required: ['agent_id', 'address', 'nonce', 'issued_at', 'signature'],
+          properties: {
+            agent_id: { type: 'string' },
+            address: { type: 'string' },
+            nonce: { type: 'string' },
+            issued_at: { type: 'string' },
+            signature: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+  {
     name: 'axp_settle_contract',
     description: 'Settle an AXP contract as settled or failed. Requires auth signature from a contract party.',
     inputSchema: {
@@ -666,6 +711,17 @@ async function callTool(name, args) {
     case 'axp_get_contract':
       requireFields(args, ['contract_id']);
       return axp.getContract(args.contract_id);
+    case 'axp_fund_contract':
+      requireFields(args, ['contract_id', 'auth']);
+      return axp.fundContract(args.contract_id, {
+        payment_asset: args.payment_asset,
+        auth: args.auth,
+      });
+    case 'axp_accept_contract':
+      requireFields(args, ['contract_id', 'auth']);
+      return axp.acceptContract(args.contract_id, {
+        auth: args.auth,
+      });
     case 'axp_settle_contract':
       requireFields(args, ['contract_id', 'outcome', 'auth']);
       return axp.settleContract(args.contract_id, {

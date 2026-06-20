@@ -201,6 +201,18 @@ export class AxpClient {
     return this.getJson(`/contracts/${encodeURIComponent(contractId)}`);
   }
 
+  fundContract(contractId, input) {
+    requireValue(contractId, 'contractId');
+    requireFields(input, ['auth']);
+    return this.postJson(`/contracts/${encodeURIComponent(contractId)}/fund`, input);
+  }
+
+  acceptContract(contractId, input) {
+    requireValue(contractId, 'contractId');
+    requireFields(input, ['auth']);
+    return this.postJson(`/contracts/${encodeURIComponent(contractId)}/accept`, input);
+  }
+
   settleContract(contractId, input) {
     requireValue(contractId, 'contractId');
     requireFields(input, ['outcome', 'auth']);
@@ -328,6 +340,16 @@ export function buildHeartbeatScope({
 
 export function buildSettlementScope({ contractId, outcome }) {
   return `contract:${contractId}|outcome:${outcome}`;
+}
+
+export function buildFundingScope({ contractId }) {
+  requireValue(contractId, 'contractId');
+  return `contract:${contractId}|fund:true`;
+}
+
+export function buildAcceptanceScope({ contractId }) {
+  requireValue(contractId, 'contractId');
+  return `contract:${contractId}|accept:true`;
 }
 
 async function readJsonResponse(response, path) {
