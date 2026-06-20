@@ -38,6 +38,10 @@ const server = http.createServer(async (request, response) => {
     return sendHtml(response, 200, await buildDashboardHtml());
   }
 
+  if (url.pathname === '/network') {
+    return sendHtml(response, 200, await buildNetworkHtml());
+  }
+
   if (url.pathname === '/styles.css') {
     return sendAsset(response, 'text/css; charset=utf-8', readFileSync(join(publicPath, 'styles.css'), 'utf8'));
   }
@@ -320,6 +324,7 @@ const server = http.createServer(async (request, response) => {
     endpoints: [
       '/.well-known/axp.json',
       '/dashboard',
+      '/network',
       '/health',
       '/capabilities',
       '/economics',
@@ -361,6 +366,508 @@ function sendJson(response, status, body) {
     'access-control-allow-methods': 'GET, POST, OPTIONS',
   });
   response.end(`${JSON.stringify(body, null, 2)}\n`);
+}
+
+async function buildNetworkHtml() {
+  const capabilities = getCapabilities();
+  const agents = await listAgents({});
+  const contracts = await listPreparedContracts();
+  const trustEvents = await listTrustEvents({ limit: 30 });
+  const ranking = await getTrustRanking({ limit: 12 });
+  const graph = buildNetworkGraph({
+    agents: agents.agents,
+    contracts: contracts.contracts,
+    events: trustEvents.events,
+    ranking: ranking.agents,
+  });
+  const latestHash = trustEvents.events[0]?.event_hash ?? 'waiting_for_first_event';
+  const storageLabel = capabilities.storage.postgres_enabled ? 'Postgres ledger active' : 'JSON fallback';
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="30">
+    <title>AXP Proof of Trust Network</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020607;
+        --panel: rgba(8, 15, 17, 0.88);
+        --panel-2: rgba(13, 24, 27, 0.82);
+        --line: #263e43;
+        --text: #f6fffb;
+        --muted: #9cb0ae;
+        --mint: #8af7be;
+        --cyan: #83e8ff;
+        --violet: #c8a4ff;
+        --amber: #f5ce67;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 12% 10%, rgba(138, 247, 190, 0.15), transparent 24rem),
+          radial-gradient(circle at 82% 18%, rgba(131, 232, 255, 0.14), transparent 28rem),
+          radial-gradient(circle at 50% 100%, rgba(200, 164, 255, 0.11), transparent 28rem),
+          var(--bg);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      a { color: inherit; text-decoration: none; }
+
+      .shell {
+        width: min(1320px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 30px 0 44px;
+      }
+
+      .topbar, .hero, .metric, .panel {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        backdrop-filter: blur(18px);
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+      }
+
+      .brand { display: flex; align-items: center; gap: 12px; font-weight: 850; }
+      .brand-mark { border: 1px solid #3e7069; color: var(--mint); padding: 8px 10px; }
+      .nav { display: flex; flex-wrap: wrap; gap: 8px; }
+      .nav a, .quick a {
+        border: 1px solid var(--line);
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.03);
+        padding: 9px 11px;
+        font-size: 13px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 18px;
+        padding: 24px;
+        margin-bottom: 16px;
+      }
+
+      h1 { margin: 0 0 10px; font-size: 64px; line-height: 0.98; letter-spacing: 0; }
+      h2 { margin: 0; font-size: 18px; letter-spacing: 0; }
+      p { margin: 0; color: var(--muted); line-height: 1.6; }
+      .eyebrow { color: var(--mint); font-size: 12px; font-weight: 850; text-transform: uppercase; }
+      .hash { color: var(--cyan); font-family: "SFMono-Regular", Consolas, monospace; word-break: break-word; }
+
+      .status {
+        min-width: 260px;
+        border: 1px solid rgba(138, 247, 190, 0.36);
+        background: rgba(138, 247, 190, 0.04);
+        padding: 14px;
+        align-self: stretch;
+      }
+
+      .status strong { display: block; color: var(--mint); margin-bottom: 10px; }
+      .status span { display: block; color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .metric { padding: 16px; min-height: 104px; }
+      .metric span { color: var(--muted); font-size: 12px; font-weight: 850; text-transform: uppercase; }
+      .metric strong { display: block; margin-top: 10px; font-size: 28px; }
+      .metric small { color: var(--muted); }
+
+      .network-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 380px;
+        gap: 16px;
+      }
+
+      .graph-panel {
+        position: relative;
+        min-height: 640px;
+        overflow: hidden;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 640px;
+        background:
+          linear-gradient(135deg, rgba(138, 247, 190, 0.05), transparent 42%),
+          radial-gradient(circle at 65% 30%, rgba(131, 232, 255, 0.08), transparent 22rem),
+          #04090a;
+      }
+
+      .graph-copy {
+        position: absolute;
+        left: 22px;
+        right: 22px;
+        bottom: 22px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 16px;
+        align-items: end;
+        pointer-events: none;
+      }
+
+      .graph-copy h2 { font-size: 32px; margin-bottom: 8px; }
+      .legend { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+      .legend span {
+        border: 1px solid var(--line);
+        background: rgba(8, 15, 17, 0.72);
+        color: var(--muted);
+        padding: 7px 9px;
+        font-size: 12px;
+      }
+
+      .panel { padding: 16px; overflow: hidden; }
+      .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+      .pill {
+        border: 1px solid var(--line);
+        color: var(--muted);
+        padding: 6px 8px;
+        font-size: 12px;
+      }
+      .pill.good { color: var(--mint); border-color: rgba(138, 247, 190, 0.4); }
+
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { border-bottom: 1px solid rgba(38, 62, 67, 0.75); padding: 10px 7px; text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+      code { color: var(--cyan); font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; word-break: break-word; }
+      .score { color: var(--mint); font-weight: 850; }
+      .empty { border: 1px dashed var(--line); color: var(--muted); padding: 14px; }
+
+      .stack { display: grid; gap: 16px; }
+      .quick { display: flex; flex-wrap: wrap; gap: 10px; }
+
+      @media (max-width: 1020px) {
+        .network-grid, .hero { grid-template-columns: 1fr; }
+        .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        h1 { font-size: 46px; }
+      }
+
+      @media (max-width: 560px) {
+        .topbar { flex-direction: column; align-items: flex-start; }
+        .metrics { grid-template-columns: 1fr; }
+        canvas { height: 520px; }
+        .graph-copy { grid-template-columns: 1fr; }
+        .graph-copy h2 { font-size: 24px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="/">
+          <span class="brand-mark">AXP</span>
+          <span>Proof of Trust Network</span>
+        </a>
+        <nav class="nav" aria-label="Network navigation">
+          <a href="/">Home</a>
+          <a href="/dashboard">Dashboard</a>
+          <a href="/trust-ranking">Trust Ranking</a>
+          <a href="/.well-known/axp.json">Manifest</a>
+        </nav>
+      </header>
+
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Live machine-to-machine trust graph</p>
+          <h1>AXP Network</h1>
+          <p>Every Proof of Trust event receives a deterministic SHA-256 event hash. Agents, contracts, settlements, heartbeats, and trust creation become an auditable trust graph that can later be anchored on-chain.</p>
+        </div>
+        <div class="status">
+          <strong>${escapeHtml(storageLabel)}</strong>
+          <span>Latest event hash</span>
+          <code class="hash">${escapeHtml(shortHash(latestHash))}</code>
+          <span>Auto-refresh every 30 seconds</span>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="Network metrics">
+        ${renderMetric('Agents', agents.count, 'economic identities')}
+        ${renderMetric('Contracts', contracts.contracts.length, 'machine obligations')}
+        ${renderMetric('Trust Events', trustEvents.count, 'hashed ledger rows')}
+        ${renderMetric('Graph Links', graph.links.length, 'agent-to-agent edges')}
+      </section>
+
+      <main class="network-grid">
+        <section class="panel graph-panel">
+          <canvas id="trust-network" aria-label="Animated Proof of Trust network"></canvas>
+          <div class="graph-copy">
+            <div>
+              <p class="eyebrow">Proof of Trust in motion</p>
+              <h2>Agents become nodes. Contracts become links. Trust events become hashed pulses.</h2>
+              <p>Hash model: <span class="hash">SHA-256(agent + counterparty + contract + value + timestamp + data)</span></p>
+            </div>
+            <div class="legend">
+              <span>mint: active trust</span>
+              <span>cyan: agent node</span>
+              <span>violet: event pulse</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="stack">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Top Trust Nodes</h2>
+              <span class="pill good">oracle</span>
+            </div>
+            ${renderTable(
+              ['Rank', 'Agent', 'Score'],
+              ranking.agents.slice(0, 7),
+              (agent) => [
+                `#${agent.rank}`,
+                `<code>${escapeHtml(agent.agent_id)}</code><br>${escapeHtml(agent.agent_name ?? '')}`,
+                `<span class="score">${formatNumber(agent.proof_of_trust_score)}</span>`,
+              ],
+              'No ranked agents yet.',
+            )}
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Latest Hashes</h2>
+              <span class="pill">ledger</span>
+            </div>
+            ${renderTable(
+              ['Event', 'Hash'],
+              trustEvents.events.slice(0, 8),
+              (event) => [
+                `${escapeHtml(event.event_type ?? 'event')}<br><code>${escapeHtml(event.agent_id ?? 'n/a')}</code>`,
+                `<code>${escapeHtml(shortHash(event.event_hash))}</code>`,
+              ],
+              'No hashed trust events yet.',
+            )}
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Quick Links</h2>
+              <span class="pill">live APIs</span>
+            </div>
+            <div class="quick">
+              <a href="/dashboard">Dashboard</a>
+              <a href="/trust-ranking">Ranking</a>
+              <a href="/trust-events">Trust Events</a>
+              <a href="/api-usage">API Usage</a>
+            </div>
+          </section>
+        </aside>
+      </main>
+    </div>
+    <script>
+      const graph = ${safeJsonForHtml(graph)};
+      const canvas = document.getElementById('trust-network');
+      const ctx = canvas.getContext('2d');
+      const state = { time: 0, dpr: 1, width: 0, height: 0 };
+
+      function resize() {
+        state.dpr = Math.max(1, window.devicePixelRatio || 1);
+        const rect = canvas.getBoundingClientRect();
+        state.width = rect.width;
+        state.height = rect.height;
+        canvas.width = Math.floor(rect.width * state.dpr);
+        canvas.height = Math.floor(rect.height * state.dpr);
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+        positionNodes();
+      }
+
+      function positionNodes() {
+        const count = Math.max(graph.nodes.length, 1);
+        const cx = state.width / 2;
+        const cy = state.height / 2 - 24;
+        const radius = Math.max(130, Math.min(state.width, state.height) * 0.34);
+        graph.nodes.forEach((node, index) => {
+          const seed = hashNumber(node.id);
+          const angle = (Math.PI * 2 * index / count) + (seed % 80) / 100;
+          const drift = ((seed % 41) - 20) / 100;
+          node.x = cx + Math.cos(angle) * radius * (0.86 + drift);
+          node.y = cy + Math.sin(angle) * radius * (0.86 - drift);
+          node.phase = (seed % 628) / 100;
+        });
+      }
+
+      function hashNumber(text) {
+        let hash = 0;
+        for (let index = 0; index < String(text).length; index += 1) {
+          hash = ((hash << 5) - hash + String(text).charCodeAt(index)) | 0;
+        }
+        return Math.abs(hash);
+      }
+
+      function draw() {
+        state.time += 0.016;
+        ctx.clearRect(0, 0, state.width, state.height);
+        drawGrid();
+        drawLinks();
+        drawEvents();
+        drawNodes();
+        requestAnimationFrame(draw);
+      }
+
+      function drawGrid() {
+        ctx.save();
+        ctx.globalAlpha = 0.12;
+        ctx.strokeStyle = '#8af7be';
+        for (let x = 0; x < state.width; x += 72) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x + Math.sin(state.time + x) * 10, state.height);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function getNode(id) {
+        return graph.nodes.find((node) => node.id === id);
+      }
+
+      function drawLinks() {
+        graph.links.forEach((link, index) => {
+          const from = getNode(link.from);
+          const to = getNode(link.to);
+          if (!from || !to) return;
+          const pulse = (Math.sin(state.time * 2.2 + index) + 1) / 2;
+          ctx.save();
+          ctx.strokeStyle = link.status === 'settled' ? 'rgba(138, 247, 190, 0.44)' : 'rgba(131, 232, 255, 0.28)';
+          ctx.lineWidth = 1 + pulse * 1.5;
+          ctx.beginPath();
+          ctx.moveTo(from.x, from.y);
+          ctx.lineTo(to.x, to.y);
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+
+      function drawEvents() {
+        graph.events.forEach((event, index) => {
+          const node = getNode(event.agent_id);
+          if (!node) return;
+          const age = (state.time * 0.7 + index * 0.17) % 1;
+          const radius = 18 + age * 54;
+          ctx.save();
+          ctx.globalAlpha = 0.38 * (1 - age);
+          ctx.strokeStyle = event.event_type === 'trust_created' ? '#8af7be' : '#c8a4ff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+
+      function drawNodes() {
+        graph.nodes.forEach((node) => {
+          const glow = (Math.sin(state.time * 2 + node.phase) + 1) / 2;
+          const radius = 8 + Math.min(16, Number(node.score || 0) / 20);
+          ctx.save();
+          ctx.shadowColor = node.online ? '#8af7be' : '#83e8ff';
+          ctx.shadowBlur = 14 + glow * 12;
+          ctx.fillStyle = node.online ? '#8af7be' : '#83e8ff';
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = 'rgba(2, 6, 7, 0.95)';
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, Math.max(3, radius - 5), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#dff8f2';
+          ctx.font = '12px Inter, system-ui, sans-serif';
+          ctx.fillText(node.label, node.x + radius + 8, node.y + 4);
+          ctx.restore();
+        });
+      }
+
+      window.addEventListener('resize', resize);
+      resize();
+      draw();
+    </script>
+  </body>
+</html>`;
+}
+
+function buildNetworkGraph({ agents, contracts, events, ranking }) {
+  const rankByAgent = new Map(ranking.map((agent) => [agent.agent_id, agent]));
+  const nodes = new Map();
+  const links = [];
+
+  for (const agent of agents) {
+    const ranked = rankByAgent.get(agent.agent_id);
+    nodes.set(agent.agent_id, {
+      id: agent.agent_id,
+      label: agent.name ?? agent.agent_id,
+      score: ranked?.proof_of_trust_score ?? 0,
+      online: agent.online === true,
+    });
+  }
+
+  for (const contract of contracts) {
+    const provider = contract.quote?.provider_agent_id ?? contract.provider_agent_id;
+    const requester = contract.requester_agent_id ?? contract.quote?.requester_agent_id ?? contract.terms?.requester_agent_id;
+    ensureGraphNode(nodes, provider);
+    ensureGraphNode(nodes, requester);
+    if (provider && requester && provider !== requester) {
+      links.push({
+        from: requester,
+        to: provider,
+        status: contract.status ?? 'prepared',
+        value_usd: contract.quote?.requested_capacity ?? contract.terms?.requested_capacity ?? 0,
+      });
+    }
+  }
+
+  for (const event of events) {
+    ensureGraphNode(nodes, event.agent_id);
+    ensureGraphNode(nodes, event.counterparty_id);
+    if (event.agent_id && event.counterparty_id && event.agent_id !== event.counterparty_id) {
+      links.push({
+        from: event.agent_id,
+        to: event.counterparty_id,
+        status: event.event_type,
+        value_usd: event.value_usd ?? 0,
+      });
+    }
+  }
+
+  return {
+    nodes: [...nodes.values()].slice(0, 36),
+    links: links.slice(0, 80),
+    events: events.slice(0, 18).map((event) => ({
+      event_type: event.event_type,
+      agent_id: event.agent_id,
+      event_hash: event.event_hash,
+    })),
+  };
+}
+
+function ensureGraphNode(nodes, agentId) {
+  if (!agentId || nodes.has(agentId)) {
+    return;
+  }
+
+  nodes.set(agentId, {
+    id: agentId,
+    label: agentId,
+    score: 0,
+    online: false,
+  });
 }
 
 async function buildDashboardHtml() {
@@ -523,6 +1030,7 @@ async function buildDashboardHtml() {
         </a>
         <nav class="nav" aria-label="Dashboard navigation">
           <a href="/">Home</a>
+          <a href="/network">Network</a>
           <a href="/capabilities">Capabilities</a>
           <a href="/trust-ranking">Trust Ranking</a>
           <a href="/.well-known/axp.json">Manifest</a>
@@ -644,6 +1152,7 @@ async function buildDashboardHtml() {
             <span class="pill">API key required for protected JSON endpoints</span>
           </div>
           <div class="quick-links">
+            <a href="/network">Network</a>
             <a href="/capabilities">Capabilities</a>
             <a href="/trust-ranking">Trust Ranking</a>
             <a href="/trust-events">Trust Events</a>
@@ -699,6 +1208,24 @@ function formatNumber(value) {
   }
 
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number);
+}
+
+function shortHash(value) {
+  const text = String(value ?? '');
+  if (text.length <= 24) {
+    return text;
+  }
+
+  return `${text.slice(0, 16)}...${text.slice(-8)}`;
+}
+
+function safeJsonForHtml(value) {
+  return JSON.stringify(value)
+    .replaceAll('<', '\\u003c')
+    .replaceAll('>', '\\u003e')
+    .replaceAll('&', '\\u0026')
+    .replaceAll('\u2028', '\\u2028')
+    .replaceAll('\u2029', '\\u2029');
 }
 
 function escapeHtml(value) {

@@ -317,6 +317,7 @@ Endpoints publicos oficiais:
 ```text
 GET https://registry.axp.network/.well-known/axp.json
 GET https://registry.axp.network/dashboard
+GET https://registry.axp.network/network
 GET https://registry.axp.network/capabilities
 POST https://registry.axp.network/api-keys/register
 GET https://registry.axp.network/api-keys/{key_id}
@@ -435,6 +436,8 @@ GET /api-usage?limit=50
 ```
 
 `/dashboard` mostra status do storage, ultimos agentes, contratos, Trust Events, uso recente da API e ranking por Trust Score sem expor segredos.
+
+`/network` mostra a rede viva de Proof of Trust: agentes como nos, contratos como arestas e Trust Events como pulsos criptograficos. Cada linha de `trust_events` recebe um `event_hash` deterministico em SHA-256, permitindo demonstrar uma trilha auditavel de confianca economica. Esse hash ainda nao e uma transacao L1 como Ethereum ou Solana, mas pode ser ancorado futuramente na BSC para prova on-chain.
 
 Os endpoints JSON de auditoria exigem `X-AXP-API-Key` e expõem o ledger operacional do AXP. Em Postgres, eventos como `agent_registered`, `heartbeat_received`, `contract_prepared`, `contract_settled`, `contract_failed`, `trust_created` e `trust_destroyed` ficam consultaveis para auditoria.
 

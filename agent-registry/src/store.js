@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -391,10 +392,47 @@ function normalizeLimit(value, fallback) {
 }
 
 function formatLedgerRow(row) {
-  return {
+  const formatted = {
     ...row,
     value_usd: row.value_usd === undefined ? undefined : Number(row.value_usd),
   };
+
+  return {
+    ...formatted,
+    event_hash: createLedgerHash(formatted),
+  };
+}
+
+function createLedgerHash(event) {
+  const payload = {
+    id: event.id ?? null,
+    event_type: event.event_type ?? event.usage_type ?? null,
+    agent_id: event.agent_id ?? null,
+    counterparty_id: event.counterparty_id ?? null,
+    contract_id: event.contract_id ?? null,
+    key_id: event.key_id ?? null,
+    path: event.path ?? null,
+    value_usd: event.value_usd ?? null,
+    data: event.data ?? null,
+    created_at: event.created_at ?? null,
+  };
+
+  return `axp_${createHash('sha256').update(stableStringify(payload)).digest('hex')}`;
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  }
+
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(',')}}`;
 }
 
 async function query(text, params = []) {
