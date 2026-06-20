@@ -1,0 +1,43 @@
+{
+  "items": [
+    {
+      "id": "sample-1",
+      "title": "Audit Solana staking program for reentrancy",
+      "body": "Need a security review of our staking program before mainnet. Critical.",
+      "labels": ["security", "bounty", "urgent"],
+      "reward_usd": 5000,
+      "url": "https://example.com/jobs/solana-audit"
+    },
+    {
+      "id": "sample-2",
+      "title": "Research the top 10 autonomous agent frameworks",
+      "body": "Comparative analysis with strengths, weaknesses, and adoption.",
+      "labels": ["research"],
+      "reward_usd": 1200,
+      "url": "https://example.com/jobs/agent-research"
+    },
+    {
+      "id": "sample-3",
+      "title": "Translate documentation to Portuguese and Spanish",
+      "body": "20 pages of product docs, localization needed.",
+      "labels": ["translation", "good first issue"],
+      "url": "https://example.com/jobs/translate-docs"
+    },
+    {
+      "id": "sample-4",
+      "title": "Classify and label 10,000 on-chain transactions",
+      "body": "Dataset labeling for an ML pipeline.",
+      "labels": ["data", "bounty"],
+      "reward_usd": 800,
+      "url": "https://example.com/jobs/label-transactions"
+    },
+    {
+      "id": "sample-5",
+      "title": "Write a hardhat deploy script for the trust anchor contract",
+      "body": "Smart contract deployment tooling on BNB Smart Chain.",
+      "labels": ["smart contract"],
+      "reward_usd": 600,
+      "url": "https://example.com/jobs/hardhat-deploy"
+    }
+  ]
+}

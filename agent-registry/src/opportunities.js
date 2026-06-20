@@ -29,7 +29,9 @@ export function scoreMatch(intent, agent, trustScore) {
   if (!trustOk) {
     blockers.push('insufficient_trust');
   }
-  if (intent.service && serviceStrength === 0 && (!Array.isArray(intent.skills) || intent.skills.length === 0)) {
+  const hasCapabilityRequirement =
+    Boolean(intent.service) || (Array.isArray(intent.skills) && intent.skills.length > 0);
+  if (hasCapabilityRequirement && serviceStrength === 0) {
     blockers.push('no_specialist_match');
   }
 

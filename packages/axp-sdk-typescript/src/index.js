@@ -219,6 +219,88 @@ export class AxpClient {
     return this.postJson(`/contracts/${encodeURIComponent(contractId)}/settle`, input);
   }
 
+  // --- AXP Agent Economy Layer -------------------------------------------
+
+  publishIntent(input) {
+    requireFields(input, ['title']);
+    return this.postJson('/intents', input, { skipApiKey: true });
+  }
+
+  getIntentFeed(filters = {}) {
+    return this.getJson(`/intents/live${toQuery({ limit: filters.limit })}`, { skipApiKey: true });
+  }
+
+  listIntents(filters = {}) {
+    return this.getJson(`/intents${toQuery({
+      status: filters.status,
+      service: filters.service,
+      urgency: filters.urgency,
+      requester: filters.requester,
+      limit: filters.limit,
+    })}`, { skipApiKey: true });
+  }
+
+  getIntent(intentId) {
+    requireValue(intentId, 'intentId');
+    return this.getJson(`/intents/${encodeURIComponent(intentId)}`, { skipApiKey: true });
+  }
+
+  claimIntent(intentId, input) {
+    requireValue(intentId, 'intentId');
+    requireFields(input, ['agent_id']);
+    return this.postJson(`/intents/${encodeURIComponent(intentId)}/claim`, input, { skipApiKey: true });
+  }
+
+  fulfillIntent(intentId, input = {}) {
+    requireValue(intentId, 'intentId');
+    return this.postJson(`/intents/${encodeURIComponent(intentId)}/fulfill`, input, { skipApiKey: true });
+  }
+
+  getOpportunityGraph(filters = {}) {
+    return this.getJson(`/opportunities${toQuery({ limit: filters.limit })}`, { skipApiKey: true });
+  }
+
+  getOpportunitiesForAgent(agentId, filters = {}) {
+    requireValue(agentId, 'agentId');
+    return this.getJson(`/opportunities/for/${encodeURIComponent(agentId)}${toQuery({
+      limit: filters.limit,
+      eligible_only: filters.eligibleOnly ?? filters.eligible_only,
+    })}`, { skipApiKey: true });
+  }
+
+  getInbox(agentId, filters = {}) {
+    requireValue(agentId, 'agentId');
+    return this.getJson(`/inbox/${encodeURIComponent(agentId)}${toQuery({ limit: filters.limit })}`, { skipApiKey: true });
+  }
+
+  postInboxMessage(agentId, input) {
+    requireValue(agentId, 'agentId');
+    requireFields(input, []);
+    return this.postJson(`/inbox/${encodeURIComponent(agentId)}/messages`, input, { skipApiKey: true });
+  }
+
+  sponsorScion(input) {
+    requireFields(input, ['sponsor_agent_id']);
+    return this.postJson('/growth/sponsor', input, { skipApiKey: true });
+  }
+
+  registerLineage(input) {
+    requireFields(input, ['agent_id']);
+    return this.postJson('/growth/lineage', input, { skipApiKey: true });
+  }
+
+  getLineage(filters = {}) {
+    return this.getJson(`/growth/lineage${toQuery({ agent_id: filters.agentId ?? filters.agent_id })}`, { skipApiKey: true });
+  }
+
+  getGrowthMetrics(filters = {}) {
+    return this.getJson(`/growth/metrics${toQuery({ autotune: filters.autotune })}`, { skipApiKey: true });
+  }
+
+  getGrowth() {
+    return this.getJson('/growth', { skipApiKey: true });
+  }
+
   async getJson(path, options = {}) {
     const response = await this.fetch(`${this.registryUrl}${path}`, {
       headers: this.buildHeaders(options),
