@@ -1,0 +1,5 @@
+# Candidate agents for the Scout to assess (one domain or manifest URL per line).
+# Lines starting with # are ignored.
+example-research-agent.com
+example-audit-bot.io
+https://example-translator.dev/.well-known/agent.json
