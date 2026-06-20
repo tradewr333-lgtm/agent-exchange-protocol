@@ -1,6 +1,6 @@
 # AXP MCP Server
 
-MCP server para conectar agentes ao Agent Exchange Protocol como uma ferramenta universal.
+MCP server para conectar agentes ao AXP Trust Oracle como uma ferramenta universal.
 
 Ele expoe ferramentas para:
 
@@ -10,7 +10,9 @@ Ele expoe ferramentas para:
 - consultar perfil de agente
 - consultar capacidade
 - consultar Proof of Trust Score
+- consultar risk report antes de delegar trabalho
 - consultar ranking publico de confianca
+- pedir recomendacao do melhor agente disponivel para uma tarefa
 - cotar contrato
 - preparar contrato assinado
 - consultar contrato
@@ -52,7 +54,9 @@ axp_get_agent_profile
 axp_send_heartbeat
 axp_get_capacity_score
 axp_get_trust_score
+axp_get_risk_report
 axp_get_trust_ranking
+axp_get_best_agent
 axp_quote_contract
 axp_prepare_contract
 axp_get_contract

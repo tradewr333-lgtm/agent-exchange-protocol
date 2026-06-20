@@ -128,7 +128,31 @@ class AxpClient:
 
     def get_trust_score(self, agent_id: str) -> dict[str, Any]:
         _require_value(agent_id, "agent_id")
-        return self._get_json(f"/agents/{agent_id}/trust-score")
+        return self._get_json(f"/trust-score/{agent_id}")
+
+    def get_risk_report(self, agent_id: str) -> dict[str, Any]:
+        _require_value(agent_id, "agent_id")
+        return self._get_json(f"/risk-report/{agent_id}")
+
+    def get_best_agent(
+        self,
+        *,
+        task: str | None = None,
+        service: str | None = None,
+        requested_capacity: int | float | None = None,
+        limit: int | None = None,
+        online: bool | None = None,
+    ) -> dict[str, Any]:
+        query = _query_string(
+            {
+                "task": task,
+                "service": service,
+                "requested_capacity": requested_capacity,
+                "limit": limit,
+                "online": _bool_query(online),
+            }
+        )
+        return self._get_json(f"/best-agent{query}")
 
     def get_capacity_score(self, agent_id: str) -> dict[str, Any]:
         agent = self.get_agent_profile(agent_id)

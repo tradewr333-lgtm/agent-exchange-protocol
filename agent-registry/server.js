@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { registerAgent, updateAgentHeartbeat } from './src/agents.js';
 import { buildAuthMessage } from './src/auth.js';
 import { getEconomicPolicy } from './src/economics.js';
-import { getAgentTrustScore, getTrustRanking } from './src/trust-score.js';
+import { getAgentRiskReport, getAgentTrustScore, getBestAgent, getTrustRanking } from './src/trust-score.js';
 import {
   getPreparedContract,
   listPreparedContracts,
@@ -68,6 +68,23 @@ const server = http.createServer(async (request, response) => {
       service: url.searchParams.get('service') ?? undefined,
       online: parseBooleanParam(url.searchParams.get('online')),
       minScore,
+      limit,
+    }));
+  }
+
+  if (url.pathname === '/best-agent') {
+    const requestedCapacity = url.searchParams.has('requested_capacity')
+      ? Number.parseFloat(url.searchParams.get('requested_capacity'))
+      : undefined;
+    const limit = url.searchParams.has('limit')
+      ? Number.parseInt(url.searchParams.get('limit'), 10)
+      : undefined;
+
+    return sendJson(response, 200, getBestAgent({
+      task: url.searchParams.get('task') ?? undefined,
+      service: url.searchParams.get('service') ?? undefined,
+      online: parseBooleanParam(url.searchParams.get('online')),
+      requestedCapacity,
       limit,
     }));
   }
@@ -137,6 +154,24 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 200, trustScore);
   }
 
+  const trustScoreAliasMatch = url.pathname.match(/^\/trust-score\/([^/]+)$/);
+  if (trustScoreAliasMatch) {
+    const trustScore = getAgentTrustScore(trustScoreAliasMatch[1]);
+    if (!trustScore) {
+      return sendJson(response, 404, { error: 'agent_not_found', agent_id: trustScoreAliasMatch[1] });
+    }
+    return sendJson(response, 200, trustScore);
+  }
+
+  const riskReportMatch = url.pathname.match(/^\/risk-report\/([^/]+)$/);
+  if (riskReportMatch) {
+    const riskReport = getAgentRiskReport(riskReportMatch[1]);
+    if (!riskReport) {
+      return sendJson(response, 404, { error: 'agent_not_found', agent_id: riskReportMatch[1] });
+    }
+    return sendJson(response, 200, riskReport);
+  }
+
   if (request.method === 'POST' && url.pathname === '/contracts/quote') {
     const body = await readJsonBody(request);
     const result = quoteContract(body);
@@ -177,6 +212,9 @@ const server = http.createServer(async (request, response) => {
       '/capabilities',
       '/economics',
       '/trust-ranking',
+      '/trust-score/{agent_id}',
+      '/risk-report/{agent_id}',
+      '/best-agent',
       'POST /auth/message',
       '/agents',
       'POST /agents/register',

@@ -53,12 +53,20 @@ if _HAS_CREWAI:
 
     class GetTrustScoreInput(BaseModel):
         agent_id: str = Field(description="AXP agent id.")
+
+
+    class BestAgentInput(BaseModel):
+        task: str | None = Field(default=None, description="Task or service needed.")
+        service: str | None = Field(default=None, description="Optional service capability filter.")
+        requested_capacity: int | float | None = Field(default=None, description="Minimum free capacity required.")
+        limit: int | None = Field(default=None, description="Maximum number of recommendations.")
 else:
     FindAgentsInput = None
     TrustRankingInput = None
     QuoteContractInput = None
     GetCapacityInput = None
     GetTrustScoreInput = None
+    BestAgentInput = None
 
 
 class _AXPCrewTool(BaseTool):
@@ -172,6 +180,38 @@ class AXPGetTrustScoreTool(_AXPCrewTool):
         return self._json(self.client.get_trust_score(agent_id))
 
 
+class AXPGetRiskReportTool(_AXPCrewTool):
+    name: str = "axp_get_risk_report"
+    description: str = "Get an AXP Trust Oracle risk report before delegating work to an agent."
+    args_schema: Any = GetTrustScoreInput
+
+    def _run(self, agent_id: str, **_: Any) -> str:
+        return self._json(self.client.get_risk_report(agent_id))
+
+
+class AXPGetBestAgentTool(_AXPCrewTool):
+    name: str = "axp_get_best_agent"
+    description: str = "Recommend the best available AXP agent for a task using Proof of Trust."
+    args_schema: Any = BestAgentInput
+
+    def _run(
+        self,
+        task: str | None = None,
+        service: str | None = None,
+        requested_capacity: int | float | None = None,
+        limit: int | None = None,
+        **_: Any,
+    ) -> str:
+        return self._json(
+            self.client.get_best_agent(
+                task=task,
+                service=service,
+                requested_capacity=requested_capacity,
+                limit=limit,
+            )
+        )
+
+
 def get_axp_tools(registry_url: str = "https://registry.axp.network") -> list[_AXPCrewTool]:
     client = AxpClient(registry_url)
     return [
@@ -180,4 +220,6 @@ def get_axp_tools(registry_url: str = "https://registry.axp.network") -> list[_A
         AXPQuoteContractTool(client=client),
         AXPGetCapacityTool(client=client),
         AXPGetTrustScoreTool(client=client),
+        AXPGetRiskReportTool(client=client),
+        AXPGetBestAgentTool(client=client),
     ]

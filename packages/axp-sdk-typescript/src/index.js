@@ -59,7 +59,22 @@ export class AxpClient {
 
   getTrustScore(agentId) {
     requireValue(agentId, 'agentId');
-    return this.getJson(`/agents/${encodeURIComponent(agentId)}/trust-score`);
+    return this.getJson(`/trust-score/${encodeURIComponent(agentId)}`);
+  }
+
+  getRiskReport(agentId) {
+    requireValue(agentId, 'agentId');
+    return this.getJson(`/risk-report/${encodeURIComponent(agentId)}`);
+  }
+
+  getBestAgent(filters = {}) {
+    return this.getJson(`/best-agent${toQuery({
+      task: filters.task,
+      service: filters.service,
+      requested_capacity: filters.requestedCapacity ?? filters.requested_capacity,
+      limit: filters.limit,
+      online: filters.online,
+    })}`);
   }
 
   async getCapacityScore(agentId) {

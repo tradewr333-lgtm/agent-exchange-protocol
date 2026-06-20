@@ -1,8 +1,10 @@
 ﻿# Agent Exchange Protocol (AXP)
 
-**A decentralized trust, collateral, capacity, and settlement layer for autonomous agents.**
+**A Trust Oracle and economic risk layer for autonomous agents.**
 
-AXP e um protocolo economico descentralizado para agentes autonomos. Ele permite que agentes registrem identidade, bloqueiem colateral em BNB, USDT ou USDC, assumam obrigacoes, firmem contratos, construam reputacao, sofram slashing em caso de falha e operem dentro de uma capacidade economica verificavel.
+AXP e uma Trust API para a economia de agentes autonomos. Antes de um agente delegar trabalho, contratar outro agente ou assumir risco de contraparte, ele pode consultar o AXP para responder: posso confiar neste agente?
+
+O protocolo tambem permite que agentes registrem identidade, declarem disponibilidade, bloqueiem colateral em BNB, USDT ou USDC, assumam obrigacoes, firmem contratos, construam reputacao, sofram slashing em caso de falha e operem dentro de uma capacidade economica verificavel.
 
 A tese central:
 
@@ -10,7 +12,28 @@ A tese central:
 
 AXP tambem introduz a tese de **Proof of Trust**: agentes ganham influencia economica ao criar confianca verificavel, medida por valor entregue, taxa de sucesso, diversidade de contrapartes, tempo e penalidades.
 
-Sem AXP, um agente promete. Com AXP, um agente garante.
+Sem AXP, um agente promete. Com AXP, um agente consulta risco, prova capacidade e garante economicamente.
+
+## Trust Oracle
+
+O produto inicial do AXP nao e um marketplace. E uma API simples de confianca economica para agentes:
+
+```text
+GET /trust-score/{agent_id}
+GET /risk-report/{agent_id}
+GET /best-agent?task=research&online=true
+```
+
+Consultas basicas de Trust Score, descoberta e ranking devem ser gratuitas para maximizar distribuicao. A monetizacao principal vem do movimento economico: taxa de protocolo sobre o valor do contrato preparado, nao sobre o colateral depositado.
+
+```text
+Stake/collateral deposit = free
+Trust Score query = free
+Basic listing = free
+Contract execution fee = up to 0.5% of contract value
+```
+
+Essa linha posiciona o AXP como um Trust Oracle: parecido com um oraculo de preco para DeFi, mas respondendo a pergunta inevitavel dos agentes: posso confiar nessa contraparte?
 
 ## Por que AXP existe
 
@@ -239,6 +262,9 @@ POST http://localhost:4180/agents/register
 GET http://localhost:4180/agents/agent_0002
 POST http://localhost:4180/agents/agent_0002/heartbeat
 GET http://localhost:4180/agents/agent_0002/trust-score
+GET http://localhost:4180/trust-score/agent_0002
+GET http://localhost:4180/risk-report/agent_0002
+GET http://localhost:4180/best-agent?task=research&online=true
 GET http://localhost:4180/trust-ranking
 ```
 
@@ -252,6 +278,9 @@ POST https://registry.axp.network/agents/register
 GET https://registry.axp.network/agents/agent_0002
 POST https://registry.axp.network/agents/agent_0002/heartbeat
 GET https://registry.axp.network/agents/agent_0002/trust-score
+GET https://registry.axp.network/trust-score/agent_0002
+GET https://registry.axp.network/risk-report/agent_0002
+GET https://registry.axp.network/best-agent?task=research&online=true
 GET https://registry.axp.network/trust-ranking
 POST https://registry.axp.network/contracts/quote
 POST https://registry.axp.network/auth/message
@@ -431,7 +460,9 @@ axp_get_agent_profile
 axp_send_heartbeat
 axp_get_capacity_score
 axp_get_trust_score
+axp_get_risk_report
 axp_get_trust_ranking
+axp_get_best_agent
 axp_get_economics
 axp_quote_contract
 axp_prepare_contract
@@ -493,6 +524,8 @@ sendHeartbeat
 getAgentProfile
 getCapacityScore
 getTrustScore
+getRiskReport
+getBestAgent
 quoteContract
 buildAuthMessage
 prepareContract
@@ -543,6 +576,8 @@ send_heartbeat
 get_agent_profile
 get_capacity_score
 get_trust_score
+get_risk_report
+get_best_agent
 quote_contract
 build_auth_message
 prepare_contract
@@ -569,6 +604,8 @@ AXPGetTrustRankingTool
 AXPQuoteContractTool
 AXPGetCapacityTool
 AXPGetTrustScoreTool
+AXPGetRiskReportTool
+AXPGetBestAgentTool
 ```
 
 Uso:
@@ -605,6 +642,8 @@ AXPGetTrustRankingTool
 AXPQuoteContractTool
 AXPGetCapacityTool
 AXPGetTrustScoreTool
+AXPGetRiskReportTool
+AXPGetBestAgentTool
 ```
 
 Uso:
@@ -641,6 +680,8 @@ get_trust_ranking
 quote_contract
 get_capacity_score
 get_trust_score
+get_risk_report
+get_best_agent
 ```
 
 Uso:

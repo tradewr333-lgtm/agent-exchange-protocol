@@ -80,6 +80,29 @@ def get_trust_score(agent_id: str, registry_url: str = DEFAULT_REGISTRY_URL) -> 
     return _json(client.get_trust_score(agent_id))
 
 
+def get_risk_report(agent_id: str, registry_url: str = DEFAULT_REGISTRY_URL) -> str:
+    client = AxpClient(registry_url)
+    return _json(client.get_risk_report(agent_id))
+
+
+def get_best_agent(
+    task: str | None = None,
+    service: str | None = None,
+    requested_capacity: int | float | None = None,
+    limit: int | None = None,
+    registry_url: str = DEFAULT_REGISTRY_URL,
+) -> str:
+    client = AxpClient(registry_url)
+    return _json(
+        client.get_best_agent(
+            task=task,
+            service=service,
+            requested_capacity=requested_capacity,
+            limit=limit,
+        )
+    )
+
+
 @dataclass
 class AxpAutoGenTool:
     name: str
@@ -149,6 +172,24 @@ class AxpAutoGenToolkit:
     def get_trust_score(self, agent_id: str) -> str:
         return get_trust_score(agent_id, registry_url=self.registry_url)
 
+    def get_risk_report(self, agent_id: str) -> str:
+        return get_risk_report(agent_id, registry_url=self.registry_url)
+
+    def get_best_agent(
+        self,
+        task: str | None = None,
+        service: str | None = None,
+        requested_capacity: int | float | None = None,
+        limit: int | None = None,
+    ) -> str:
+        return get_best_agent(
+            task=task,
+            service=service,
+            requested_capacity=requested_capacity,
+            limit=limit,
+            registry_url=self.registry_url,
+        )
+
     def get_tools(self) -> list[dict[str, Any]]:
         return [
             AxpAutoGenTool(
@@ -216,6 +257,32 @@ class AxpAutoGenToolkit:
                     "required": ["agent_id"],
                 },
                 function=self.get_trust_score,
+            ).as_dict(),
+            AxpAutoGenTool(
+                name="axp_get_risk_report",
+                description="Get an AXP Trust Oracle risk report before delegating work to an agent.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "agent_id": {"type": "string"},
+                    },
+                    "required": ["agent_id"],
+                },
+                function=self.get_risk_report,
+            ).as_dict(),
+            AxpAutoGenTool(
+                name="axp_get_best_agent",
+                description="Recommend the best available AXP agent for a task using Proof of Trust.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "task": {"type": "string"},
+                        "service": {"type": "string"},
+                        "requested_capacity": {"type": "number"},
+                        "limit": {"type": "number"},
+                    },
+                },
+                function=self.get_best_agent,
             ).as_dict(),
         ]
 

@@ -20,6 +20,15 @@ export interface TrustRankingFilters {
   online?: boolean;
 }
 
+export interface BestAgentFilters {
+  task?: string;
+  service?: string;
+  requestedCapacity?: number;
+  requested_capacity?: number;
+  limit?: number;
+  online?: boolean;
+}
+
 export interface ContractQuoteInput {
   requester_agent_id?: string;
   provider_agent_id: string;
@@ -93,6 +102,8 @@ export declare class AxpClient {
   sendHeartbeat(agentId: string, input: HeartbeatInput): Promise<unknown>;
   getAgentProfile(agentId: string): Promise<any>;
   getTrustScore(agentId: string): Promise<unknown>;
+  getRiskReport(agentId: string): Promise<unknown>;
+  getBestAgent(filters?: BestAgentFilters): Promise<unknown>;
   getCapacityScore(agentId: string): Promise<unknown>;
   quoteContract(input: ContractQuoteInput): Promise<unknown>;
   buildAuthMessage(input: AuthMessageInput): Promise<unknown>;

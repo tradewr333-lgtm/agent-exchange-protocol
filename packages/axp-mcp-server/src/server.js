@@ -142,6 +142,31 @@ const tools = [
     },
   },
   {
+    name: 'axp_get_risk_report',
+    description: 'Get an AXP Trust Oracle risk report for an agent before delegation or contracting.',
+    inputSchema: {
+      type: 'object',
+      required: ['agent_id'],
+      properties: {
+        agent_id: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'axp_get_best_agent',
+    description: 'Recommend the best available AXP agent for a task using Proof of Trust ranking.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: { type: 'string', description: 'Task or service needed, for example research or audit.' },
+        service: { type: 'string', description: 'Service capability filter.' },
+        requested_capacity: { type: 'number', description: 'Minimum free capacity required.' },
+        limit: { type: 'number', description: 'Maximum number of recommendations.' },
+        online: { type: 'boolean', description: 'Optional online status filter. Defaults to true server-side.' },
+      },
+    },
+  },
+  {
     name: 'axp_quote_contract',
     description: 'Quote whether a provider can accept an AXP contract obligation.',
     inputSchema: {
@@ -363,6 +388,17 @@ async function callTool(name, args) {
     case 'axp_get_trust_score':
       requireFields(args, ['agent_id']);
       return axp.getTrustScore(args.agent_id);
+    case 'axp_get_risk_report':
+      requireFields(args, ['agent_id']);
+      return axp.getRiskReport(args.agent_id);
+    case 'axp_get_best_agent':
+      return axp.getBestAgent({
+        task: args.task,
+        service: args.service,
+        requestedCapacity: args.requested_capacity,
+        limit: args.limit,
+        online: args.online,
+      });
     case 'axp_quote_contract':
       requireFields(args, ['provider_agent_id', 'service', 'requested_capacity']);
       return axp.quoteContract({

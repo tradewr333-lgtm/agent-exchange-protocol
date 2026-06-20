@@ -11,6 +11,41 @@ export function getAgentTrustScore(agentId) {
   return calculateAgentTrustScore(agent);
 }
 
+export function getAgentRiskReport(agentId) {
+  const agent = getAgent(agentId);
+  if (!agent) {
+    return null;
+  }
+
+  const score = calculateAgentTrustScore(agent);
+  const capacity = Math.max(0, Number(agent.available_capacity ?? 0));
+  const disputeRate = score.settled_volume_usd > 0
+    ? Math.min(1, (score.disputes_lost + score.slashing_events + score.fraud_flags) / Math.max(1, agent.completed_contracts ?? 1))
+    : 1;
+  const risk = classifyRisk(score, capacity, disputeRate);
+  const recommendedLimit = Math.max(0, Math.min(capacity, score.proof_of_trust_score * riskLimitMultiplier(risk)));
+
+  return {
+    protocol: 'AXP',
+    version: PROOF_OF_TRUST_VERSION,
+    schema: 'axp.risk_report.v0',
+    status: 'experimental',
+    agent_id: agent.agent_id,
+    agent_name: agent.name,
+    risk,
+    confidence: confidenceFromScore(score, agent),
+    recommended_limit_usd: round(recommendedLimit),
+    trust_score: score.proof_of_trust_score,
+    settled_volume_usd: score.settled_volume_usd,
+    success_rate: score.success_rate,
+    dispute_rate: round(disputeRate),
+    online: score.online,
+    capacity_free: round(capacity),
+    insurance: false,
+    oracle_note: 'AXP Trust API is a risk signal, not a guarantee of performance.',
+  };
+}
+
 export function getTrustRanking(filters = {}) {
   const minScore = filters.minScore === undefined ? undefined : Number(filters.minScore);
   const limit = filters.limit === undefined ? undefined : Number(filters.limit);
@@ -63,6 +98,43 @@ export function getTrustRanking(filters = {}) {
   };
 }
 
+export function getBestAgent(filters = {}) {
+  const limit = filters.limit === undefined ? 5 : Number(filters.limit);
+  const requestedCapacity = filters.requestedCapacity === undefined ? undefined : Number(filters.requestedCapacity);
+  const ranking = getTrustRanking({
+    status: filters.status ?? 'active',
+    service: filters.task ?? filters.service,
+    online: filters.online ?? true,
+    minScore: filters.minScore,
+    limit: Number.isFinite(limit) && limit > 0 ? limit : 5,
+  });
+
+  let candidates = ranking.agents;
+  if (Number.isFinite(requestedCapacity) && requestedCapacity > 0) {
+    candidates = candidates.filter((agent) => Number(agent.capacity_free ?? 0) >= requestedCapacity);
+  }
+
+  return {
+    protocol: 'AXP',
+    version: PROOF_OF_TRUST_VERSION,
+    schema: 'axp.best_agent.v0',
+    status: 'experimental',
+    task: filters.task ?? filters.service ?? null,
+    requested_capacity_usd: Number.isFinite(requestedCapacity) ? requestedCapacity : null,
+    selection_method: 'online_active_agents_by_proof_of_trust_score',
+    count: candidates.length,
+    recommended: candidates.map((agent) => ({
+      agent_id: agent.agent_id,
+      agent_name: agent.agent_name,
+      trust_score: agent.proof_of_trust_score,
+      risk: classifyRisk(agent, Number(agent.capacity_free ?? 0), 0),
+      capacity_free: agent.capacity_free,
+      online: agent.online,
+      endpoint: agent.heartbeat?.endpoint ?? null,
+    })),
+  };
+}
+
 export function calculateAgentTrustScore(agent) {
   const metrics = agent.trust_metrics ?? {};
   const settledVolumeUsd = numeric(metrics.settled_volume_usd, 0);
@@ -103,6 +175,9 @@ export function calculateAgentTrustScore(agent) {
     trust_created: round(trustCreated),
     trust_destroyed: round(trustDestroyed),
     settled_volume_usd: round(settledVolumeUsd),
+    stake_usd: round(numeric(agent.collateral_usd, 0)),
+    capacity_free: round(numeric(agent.available_capacity, 0)),
+    contracts_completed: round(numeric(agent.completed_contracts, 0)),
     success_rate: round(successRate),
     counterparty_diversity: round(counterpartyDiversity),
     time_weight: round(timeWeight),
@@ -122,6 +197,41 @@ export function calculateAgentTrustScore(agent) {
       'fraud_flags',
     ],
   };
+}
+
+function classifyRisk(score, capacity, disputeRate) {
+  if (!score.online || capacity <= 0 || score.fraud_flags > 0 || score.slashing_events > 0) {
+    return 'HIGH';
+  }
+
+  if (score.proof_of_trust_score >= 10_000 && score.success_rate >= 0.95 && disputeRate <= 0.02) {
+    return 'LOW';
+  }
+
+  if (score.proof_of_trust_score >= 1_000 && score.success_rate >= 0.8 && disputeRate <= 0.1) {
+    return 'MEDIUM';
+  }
+
+  return 'HIGH';
+}
+
+function riskLimitMultiplier(risk) {
+  if (risk === 'LOW') {
+    return 5;
+  }
+
+  if (risk === 'MEDIUM') {
+    return 1;
+  }
+
+  return 0.1;
+}
+
+function confidenceFromScore(score, agent) {
+  const base = Math.min(98, Math.max(20, 50 + score.success_rate * 30 + Math.log10(Math.max(1, score.settled_volume_usd)) * 6));
+  const onlinePenalty = score.online ? 0 : 20;
+  const historyPenalty = numeric(agent.completed_contracts, 0) > 0 ? 0 : 15;
+  return round(Math.max(0, base - onlinePenalty - historyPenalty));
 }
 
 function fallbackSuccessRate(agent) {
