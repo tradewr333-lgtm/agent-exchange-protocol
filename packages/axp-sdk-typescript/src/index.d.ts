@@ -50,8 +50,10 @@ export declare class AxpClient {
   registryUrl: string;
   getManifest(): Promise<unknown>;
   getCapabilities(): Promise<unknown>;
+  getEconomics(): Promise<unknown>;
   findAgents(filters?: FindAgentsFilters): Promise<unknown>;
   getAgentProfile(agentId: string): Promise<any>;
+  getTrustScore(agentId: string): Promise<unknown>;
   getCapacityScore(agentId: string): Promise<unknown>;
   quoteContract(input: ContractQuoteInput): Promise<unknown>;
   buildAuthMessage(input: AuthMessageInput): Promise<unknown>;

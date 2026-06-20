@@ -56,6 +56,8 @@ export function getCapabilities() {
       'universal_collateral',
       'multi_asset_collateral_accounting',
       'capacity_score',
+      'proof_of_trust',
+      'trust_score',
       'axp_trust_multiplier',
       'agent_contracts',
       'tokenized_slashing',
@@ -72,6 +74,7 @@ export function getCapabilities() {
     query_parameters: {
       '/agents': ['status', 'service', 'min_capacity'],
       '/agents/{agent_id}': ['agent_id'],
+      '/agents/{agent_id}/trust-score': ['agent_id'],
       '/economics': [],
       'POST /auth/message': ['action', 'agent_id', 'address', 'nonce', 'issued_at', 'scope'],
       'POST /contracts/quote': ['provider_agent_id', 'service', 'requested_capacity'],

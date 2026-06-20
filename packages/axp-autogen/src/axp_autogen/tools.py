@@ -57,6 +57,11 @@ def get_capacity_score(agent_id: str, registry_url: str = DEFAULT_REGISTRY_URL) 
     return _json(client.get_capacity_score(agent_id))
 
 
+def get_trust_score(agent_id: str, registry_url: str = DEFAULT_REGISTRY_URL) -> str:
+    client = AxpClient(registry_url)
+    return _json(client.get_trust_score(agent_id))
+
+
 @dataclass
 class AxpAutoGenTool:
     name: str
@@ -108,6 +113,9 @@ class AxpAutoGenToolkit:
     def get_capacity_score(self, agent_id: str) -> str:
         return get_capacity_score(agent_id, registry_url=self.registry_url)
 
+    def get_trust_score(self, agent_id: str) -> str:
+        return get_trust_score(agent_id, registry_url=self.registry_url)
+
     def get_tools(self) -> list[dict[str, Any]]:
         return [
             AxpAutoGenTool(
@@ -149,6 +157,18 @@ class AxpAutoGenToolkit:
                     "required": ["agent_id"],
                 },
                 function=self.get_capacity_score,
+            ).as_dict(),
+            AxpAutoGenTool(
+                name="axp_get_trust_score",
+                description="Get the experimental Proof of Trust score for an AXP agent.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "agent_id": {"type": "string"},
+                    },
+                    "required": ["agent_id"],
+                },
+                function=self.get_trust_score,
             ).as_dict(),
         ]
 

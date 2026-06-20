@@ -42,10 +42,15 @@ if _HAS_LANGCHAIN:
 
     class GetCapacityInput(BaseModel):
         agent_id: str = Field(description="AXP agent id.")
+
+
+    class GetTrustScoreInput(BaseModel):
+        agent_id: str = Field(description="AXP agent id.")
 else:
     FindAgentsInput = None
     QuoteContractInput = None
     GetCapacityInput = None
+    GetTrustScoreInput = None
 
 
 class _AXPBaseTool(BaseTool):
@@ -129,10 +134,20 @@ class AXPGetCapacityTool(_AXPBaseTool):
         return self._json(self.client.get_capacity_score(agent_id))
 
 
+class AXPGetTrustScoreTool(_AXPBaseTool):
+    name: str = "axp_get_trust_score"
+    description: str = "Get the experimental Proof of Trust score for an AXP agent."
+    args_schema: ClassVar[Any] = GetTrustScoreInput
+
+    def _run(self, agent_id: str, **_: Any) -> str:
+        return self._json(self.client.get_trust_score(agent_id))
+
+
 def get_axp_tools(registry_url: str = "https://registry.axp.network") -> list[_AXPBaseTool]:
     client = AxpClient(registry_url)
     return [
         AXPFindAgentsTool(client=client),
         AXPQuoteContractTool(client=client),
         AXPGetCapacityTool(client=client),
+        AXPGetTrustScoreTool(client=client),
     ]

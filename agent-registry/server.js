@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildAuthMessage } from './src/auth.js';
 import { getEconomicPolicy } from './src/economics.js';
+import { getAgentTrustScore } from './src/trust-score.js';
 import {
   getPreparedContract,
   listPreparedContracts,
@@ -95,6 +96,15 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 200, agent);
   }
 
+  const trustScoreMatch = url.pathname.match(/^\/agents\/([^/]+)\/trust-score$/);
+  if (trustScoreMatch) {
+    const trustScore = getAgentTrustScore(trustScoreMatch[1]);
+    if (!trustScore) {
+      return sendJson(response, 404, { error: 'agent_not_found', agent_id: trustScoreMatch[1] });
+    }
+    return sendJson(response, 200, trustScore);
+  }
+
   if (request.method === 'POST' && url.pathname === '/contracts/quote') {
     const body = await readJsonBody(request);
     const result = quoteContract(body);
@@ -137,6 +147,7 @@ const server = http.createServer(async (request, response) => {
       'POST /auth/message',
       '/agents',
       '/agents/{agent_id}',
+      '/agents/{agent_id}/trust-score',
       'POST /contracts/quote',
       'POST /contracts/prepare',
       '/contracts',

@@ -50,6 +50,17 @@ const tools = [
     },
   },
   {
+    name: 'axp_get_trust_score',
+    description: 'Get the experimental Proof of Trust score for an AXP agent.',
+    inputSchema: {
+      type: 'object',
+      required: ['agent_id'],
+      properties: {
+        agent_id: { type: 'string' },
+      },
+    },
+  },
+  {
     name: 'axp_quote_contract',
     description: 'Quote whether a provider can accept an AXP contract obligation.',
     inputSchema: {
@@ -237,6 +248,9 @@ async function callTool(name, args) {
     case 'axp_get_capacity_score':
       requireFields(args, ['agent_id']);
       return axp.getCapacityScore(args.agent_id);
+    case 'axp_get_trust_score':
+      requireFields(args, ['agent_id']);
+      return axp.getTrustScore(args.agent_id);
     case 'axp_quote_contract':
       requireFields(args, ['provider_agent_id', 'service', 'requested_capacity']);
       return axp.quoteContract({

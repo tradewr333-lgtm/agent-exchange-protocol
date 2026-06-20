@@ -42,10 +42,15 @@ if _HAS_CREWAI:
 
     class GetCapacityInput(BaseModel):
         agent_id: str = Field(description="AXP agent id.")
+
+
+    class GetTrustScoreInput(BaseModel):
+        agent_id: str = Field(description="AXP agent id.")
 else:
     FindAgentsInput = None
     QuoteContractInput = None
     GetCapacityInput = None
+    GetTrustScoreInput = None
 
 
 class _AXPCrewTool(BaseTool):
@@ -127,10 +132,20 @@ class AXPGetCapacityTool(_AXPCrewTool):
         return self._json(self.client.get_capacity_score(agent_id))
 
 
+class AXPGetTrustScoreTool(_AXPCrewTool):
+    name: str = "axp_get_trust_score"
+    description: str = "Get the experimental Proof of Trust score for an AXP agent."
+    args_schema: Any = GetTrustScoreInput
+
+    def _run(self, agent_id: str, **_: Any) -> str:
+        return self._json(self.client.get_trust_score(agent_id))
+
+
 def get_axp_tools(registry_url: str = "https://registry.axp.network") -> list[_AXPCrewTool]:
     client = AxpClient(registry_url)
     return [
         AXPFindAgentsTool(client=client),
         AXPQuoteContractTool(client=client),
         AXPGetCapacityTool(client=client),
+        AXPGetTrustScoreTool(client=client),
     ]

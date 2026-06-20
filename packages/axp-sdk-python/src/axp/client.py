@@ -52,6 +52,10 @@ class AxpClient:
         _require_value(agent_id, "agent_id")
         return self._get_json(f"/agents/{agent_id}")
 
+    def get_trust_score(self, agent_id: str) -> dict[str, Any]:
+        _require_value(agent_id, "agent_id")
+        return self._get_json(f"/agents/{agent_id}/trust-score")
+
     def get_capacity_score(self, agent_id: str) -> dict[str, Any]:
         agent = self.get_agent_profile(agent_id)
         return {

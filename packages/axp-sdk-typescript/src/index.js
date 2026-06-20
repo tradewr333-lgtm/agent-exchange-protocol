@@ -35,6 +35,11 @@ export class AxpClient {
     return this.getJson(`/agents/${encodeURIComponent(agentId)}`);
   }
 
+  getTrustScore(agentId) {
+    requireValue(agentId, 'agentId');
+    return this.getJson(`/agents/${encodeURIComponent(agentId)}/trust-score`);
+  }
+
   async getCapacityScore(agentId) {
     const agent = await this.getAgentProfile(agentId);
     return {

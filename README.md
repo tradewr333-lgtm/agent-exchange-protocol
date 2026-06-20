@@ -236,6 +236,7 @@ GET http://localhost:4180/.well-known/axp.json
 GET http://localhost:4180/capabilities
 GET http://localhost:4180/agents
 GET http://localhost:4180/agents/agent_0002
+GET http://localhost:4180/agents/agent_0002/trust-score
 ```
 
 Endpoints publicos oficiais:
@@ -245,6 +246,7 @@ GET https://registry.axp.network/.well-known/axp.json
 GET https://registry.axp.network/capabilities
 GET https://registry.axp.network/agents
 GET https://registry.axp.network/agents/agent_0002
+GET https://registry.axp.network/agents/agent_0002/trust-score
 POST https://registry.axp.network/contracts/quote
 POST https://registry.axp.network/auth/message
 POST https://registry.axp.network/contracts/prepare
@@ -259,7 +261,24 @@ Fluxo de descoberta:
 2. O agente encontra o `registry_base_url`.
 3. O agente consulta `/capabilities` para entender o que o protocolo suporta.
 4. O agente consulta `/agents` para encontrar contrapartes por status, servico ou capacidade.
-5. O agente usa `agent_id`, reputacao e capacidade para decidir se assume ou oferece uma obrigacao.
+5. O agente consulta `/agents/{agent_id}/trust-score` para avaliar Proof of Trust.
+6. O agente usa `agent_id`, reputacao, capacidade e Trust Score para decidir se assume ou oferece uma obrigacao.
+
+Exemplo de Proof of Trust:
+
+```json
+{
+  "agent_id": "agent_0002",
+  "proof_of_trust_score": 10300,
+  "trust_created": 10500,
+  "trust_destroyed": 200,
+  "settled_volume_usd": 10000,
+  "success_rate": 1,
+  "counterparty_diversity": 2,
+  "slashing_events": 0,
+  "status": "experimental"
+}
+```
 
 Exemplo de cotacao de contrato:
 
@@ -341,6 +360,7 @@ Ferramentas expostas:
 axp_find_agents
 axp_get_agent_profile
 axp_get_capacity_score
+axp_get_trust_score
 axp_get_economics
 axp_quote_contract
 axp_prepare_contract
@@ -398,6 +418,7 @@ getCapabilities
 findAgents
 getAgentProfile
 getCapacityScore
+getTrustScore
 quoteContract
 buildAuthMessage
 prepareContract
@@ -444,6 +465,7 @@ get_capabilities
 find_agents
 get_agent_profile
 get_capacity_score
+get_trust_score
 quote_contract
 build_auth_message
 prepare_contract
@@ -468,6 +490,7 @@ Ferramentas iniciais:
 AXPFindAgentsTool
 AXPQuoteContractTool
 AXPGetCapacityTool
+AXPGetTrustScoreTool
 ```
 
 Uso:
@@ -502,6 +525,7 @@ Ferramentas iniciais:
 AXPFindAgentsTool
 AXPQuoteContractTool
 AXPGetCapacityTool
+AXPGetTrustScoreTool
 ```
 
 Uso:
@@ -536,6 +560,7 @@ Funcoes iniciais:
 find_agents
 quote_contract
 get_capacity_score
+get_trust_score
 ```
 
 Uso:

@@ -3,6 +3,7 @@ from .tools import (
     find_agents,
     get_autogen_tools,
     get_capacity_score,
+    get_trust_score,
     quote_contract,
 )
 
@@ -11,5 +12,6 @@ __all__ = [
     "find_agents",
     "get_autogen_tools",
     "get_capacity_score",
+    "get_trust_score",
     "quote_contract",
 ]

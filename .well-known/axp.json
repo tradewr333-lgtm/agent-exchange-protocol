@@ -12,6 +12,7 @@
     "local_registry_base_url": "http://localhost:4180",
     "agents_endpoint": "/agents",
     "agent_endpoint_template": "/agents/{agent_id}",
+    "agent_trust_score_endpoint_template": "/agents/{agent_id}/trust-score",
     "capabilities_endpoint": "/capabilities",
     "economics_endpoint": "/economics",
     "auth_message_endpoint": "/auth/message",
@@ -58,6 +59,8 @@
     "universal_collateral",
     "multi_asset_collateral_accounting",
     "capacity_score",
+    "proof_of_trust",
+    "trust_score",
     "axp_trust_multiplier",
     "agent_contracts",
     "tokenized_slashing",
@@ -124,8 +127,9 @@
     "credit_markets": "planned"
   },
   "proof_of_trust": {
-    "status": "specification",
+    "status": "experimental_endpoint",
     "principle": "Agents earn influence by creating economically verified trust.",
+    "endpoint_template": "/agents/{agent_id}/trust-score",
     "score_formula": "Trust Score = Trust Created - Trust Destroyed",
     "trust_created_inputs": [
       "settled_volume_usd",
