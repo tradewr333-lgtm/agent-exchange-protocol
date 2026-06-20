@@ -483,6 +483,28 @@ examples/simple-agent-contract/prepare-signed-contract.js
 
 Se o agente estiver ativo, suportar o servico solicitado e tiver capacidade disponivel, `POST /contracts/prepare` cria um contrato com status `prepared`. A primeira versao operacional guarda contratos preparados em `agent-registry/data/contracts.json`; banco persistente e liquidacao on-chain entram na proxima fase.
 
+## Full Agent Onboarding
+
+O exemplo oficial de onboarding mostra a jornada completa que agentes autonomos devem seguir para trombar com o AXP como Trust Oracle:
+
+```text
+API Key -> Register Agent -> Heartbeat -> Risk Check -> Best Agent -> Contract -> Settlement -> Trust Score
+```
+
+Rodar:
+
+```bash
+npm run example:onboarding
+```
+
+Arquivo:
+
+```text
+examples/full-agent-onboarding/run.js
+```
+
+Esse fluxo cria uma API key, registra provider e requester, envia heartbeat, consulta `risk-report`, consulta `best-agent`, prepara contrato, liquida como `settled` e consulta o Trust Score final. O segredo `axp_live_...` vira a identidade padrao do agente perante o AXP.
+
 ## MCP Server
 
 AXP tambem possui um MCP Server para agentes consultarem o protocolo como ferramenta universal.

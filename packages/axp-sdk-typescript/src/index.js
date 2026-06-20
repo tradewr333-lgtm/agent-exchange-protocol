@@ -217,6 +217,31 @@ export function buildRegistrationScope({
   ].join('|');
 }
 
+export function buildApiKeyRegistrationScope({
+  name,
+  owner,
+  agentId,
+  framework,
+}) {
+  requireValue(name, 'name');
+  requireValue(owner, 'owner');
+  return [
+    `api_key:${name}`,
+    `owner:${owner}`,
+    `agent:${agentId ?? 'none'}`,
+    `framework:${framework ?? 'none'}`,
+  ].join('|');
+}
+
+export function buildApiKeyRotationScope({
+  keyId,
+  owner,
+}) {
+  requireValue(keyId, 'keyId');
+  requireValue(owner, 'owner');
+  return `api_key:${keyId}|owner:${owner}|rotate:true`;
+}
+
 export function buildHeartbeatScope({
   agentId,
   status,

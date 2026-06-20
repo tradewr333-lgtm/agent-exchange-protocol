@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { recordAgentContractOutcome } from './agents.js';
 import { verifyAgentAuth } from './auth.js';
 import { calculateProtocolFee, getAgentEconomicProfile } from './economics.js';
 import { getAgent } from './registry.js';
@@ -204,10 +205,29 @@ export async function settleContract(contractId, payload = {}) {
     )),
   });
 
+  const trustUpdate = recordAgentContractOutcome({
+    agentId: contract.quote.provider_agent_id,
+    outcome,
+    volumeUsd: Number(contract.quote.requested_capacity),
+    counterpartyId: contract.quote.requester_agent_id,
+  });
+
   return {
     ok: true,
     status: 200,
-    contract: updatedContract,
+    contract: {
+      ...updatedContract,
+      trust_update: trustUpdate.ok
+        ? {
+            agent_id: trustUpdate.agent.agent_id,
+            completed_contracts: trustUpdate.agent.completed_contracts,
+            failed_contracts: trustUpdate.agent.failed_contracts,
+            settled_volume_usd: trustUpdate.agent.trust_metrics.settled_volume_usd,
+            failed_volume_usd: trustUpdate.agent.trust_metrics.failed_volume_usd,
+            success_rate: trustUpdate.agent.trust_metrics.success_rate,
+          }
+        : trustUpdate,
+    },
   };
 }
 

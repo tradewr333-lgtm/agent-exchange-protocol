@@ -145,6 +145,16 @@ export declare function buildRegistrationScope(input: {
   };
   manifestUrl?: string;
 }): string;
+export declare function buildApiKeyRegistrationScope(input: {
+  name: string;
+  owner: string;
+  agentId?: string;
+  framework?: string;
+}): string;
+export declare function buildApiKeyRotationScope(input: {
+  keyId: string;
+  owner: string;
+}): string;
 export declare function buildHeartbeatScope(input: {
   agentId: string;
   status: 'active' | 'paused' | 'offline';

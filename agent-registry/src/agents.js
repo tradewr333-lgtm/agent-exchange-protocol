@@ -145,6 +145,60 @@ export function buildHeartbeatScope(agentId, payload) {
   ].join('|');
 }
 
+export function recordAgentContractOutcome({ agentId, outcome, volumeUsd, counterpartyId }) {
+  const registry = loadRegistry();
+  const agent = registry.agents.find((item) => item.agent_id === agentId);
+  if (!agent) {
+    return { ok: false, status: 404, error: 'agent_not_found', agent_id: agentId };
+  }
+
+  const completedContracts = Number(agent.completed_contracts ?? 0) + (outcome === 'settled' ? 1 : 0);
+  const failedContracts = Number(agent.failed_contracts ?? 0) + (outcome === 'failed' ? 1 : 0);
+  const totalContracts = completedContracts + failedContracts;
+  const trustMetrics = agent.trust_metrics ?? {};
+  const counterparties = new Set(Array.isArray(agent.counterparties) ? agent.counterparties : []);
+  if (counterpartyId) {
+    counterparties.add(counterpartyId);
+  }
+
+  const updatedAgent = {
+    ...agent,
+    completed_contracts: completedContracts,
+    failed_contracts: failedContracts,
+    failure_rate: totalContracts > 0 ? round(failedContracts / totalContracts) : 0,
+    counterparties: [...counterparties],
+    trust_metrics: {
+      ...trustMetrics,
+      settled_volume_usd: round(Number(trustMetrics.settled_volume_usd ?? 0) + (outcome === 'settled' ? volumeUsd : 0)),
+      failed_volume_usd: round(Number(trustMetrics.failed_volume_usd ?? 0) + (outcome === 'failed' ? volumeUsd : 0)),
+      success_rate: totalContracts > 0 ? round(completedContracts / totalContracts) : 0,
+      counterparty_diversity: counterparties.size,
+      time_weight: Math.max(1, Number(trustMetrics.time_weight ?? 1)),
+      disputes_lost: Number(trustMetrics.disputes_lost ?? 0),
+      late_delivery_penalties: Number(trustMetrics.late_delivery_penalties ?? 0),
+      slashing_events: Number(trustMetrics.slashing_events ?? 0) + (outcome === 'failed' ? 1 : 0),
+      fraud_flags: Number(trustMetrics.fraud_flags ?? 0),
+    },
+  };
+
+  const updatedRegistry = saveRegistry({
+    ...registry,
+    agents: registry.agents.map((item) => (item.agent_id === agentId ? updatedAgent : item)),
+  });
+
+  return {
+    ok: true,
+    status: 200,
+    agent: updatedAgent,
+    registry: {
+      schema: updatedRegistry.schema,
+      network: updatedRegistry.network,
+      updated_at: updatedRegistry.updated_at,
+      count: updatedRegistry.agents.length,
+    },
+  };
+}
+
 function createRegisteredAgent(payload, authResult, scope) {
   const collateral = normalizeCollateral(payload.collateral);
   const now = new Date().toISOString();
