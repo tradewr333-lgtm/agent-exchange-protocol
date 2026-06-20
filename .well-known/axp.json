@@ -13,6 +13,7 @@
     "agents_endpoint": "/agents",
     "agent_register_endpoint": "/agents/register",
     "agent_endpoint_template": "/agents/{agent_id}",
+    "agent_heartbeat_endpoint_template": "/agents/{agent_id}/heartbeat",
     "agent_trust_score_endpoint_template": "/agents/{agent_id}/trust-score",
     "capabilities_endpoint": "/capabilities",
     "economics_endpoint": "/economics",
@@ -58,6 +59,7 @@
   "capabilities": [
     "agent_identity",
     "agent_registration",
+    "agent_heartbeat",
     "reputation_staking",
     "universal_collateral",
     "multi_asset_collateral_accounting",
@@ -71,6 +73,7 @@
     "protocol_fee_ceiling",
     "agent_discovery",
     "registry_query",
+    "agent_liveness",
     "contract_quote",
     "contract_prepare",
     "contract_lookup",
@@ -82,11 +85,13 @@
     "type": "evm_personal_sign",
     "required_for": [
       "POST /agents/register",
+      "POST /agents/{agent_id}/heartbeat",
       "POST /contracts/prepare",
       "POST /contracts/{contract_id}/settle"
     ],
     "message_endpoint": "/auth/message",
     "register_scope_template": "agent:{agent_id}|operator:{operator}|services:{comma_separated_services}|collateral:{asset}:{amount}|manifest:{manifest_url_or_none}",
+    "heartbeat_scope_template": "agent:{agent_id}|status:{active_paused_or_offline}|available:{true_or_false}|load:{current_load}|capacity:{available_capacity}|endpoint:{endpoint_or_none}",
     "prepare_scope_template": "provider:{provider_agent_id}|requester:{requester_agent_id_or_none}|service:{service}|capacity:{requested_capacity}",
     "settlement_scope_template": "contract:{contract_id}|outcome:{settled_or_failed}",
     "signature_window_seconds": 600

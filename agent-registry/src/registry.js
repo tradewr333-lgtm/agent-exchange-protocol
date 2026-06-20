@@ -30,6 +30,10 @@ export function listAgents(filters = {}) {
     agents = agents.filter((agent) => agent.available_capacity >= filters.minCapacity);
   }
 
+  if (filters.online !== undefined) {
+    agents = agents.filter((agent) => agent.online === filters.online);
+  }
+
   return {
     schema: registry.schema,
     network: registry.network,
@@ -53,6 +57,7 @@ export function getCapabilities() {
     capabilities: [
       'agent_identity',
       'agent_registration',
+      'agent_heartbeat',
       'reputation_staking',
       'universal_collateral',
       'multi_asset_collateral_accounting',
@@ -74,9 +79,10 @@ export function getCapabilities() {
       'agent_operator_signature_auth',
     ],
     query_parameters: {
-      '/agents': ['status', 'service', 'min_capacity'],
+      '/agents': ['status', 'service', 'min_capacity', 'online'],
       'POST /agents/register': ['agent_id', 'name', 'operator', 'services', 'collateral', 'auth'],
       '/agents/{agent_id}': ['agent_id'],
+      'POST /agents/{agent_id}/heartbeat': ['status', 'available', 'current_load', 'available_capacity', 'endpoint', 'auth'],
       '/agents/{agent_id}/trust-score': ['agent_id'],
       '/economics': [],
       '/trust-ranking': ['status', 'service', 'min_score', 'limit'],
@@ -92,8 +98,12 @@ export function getCapabilities() {
 
 function withEconomicProfile(agent) {
   const economicProfile = getAgentEconomicProfile(agent);
+  const heartbeat = agent.heartbeat ?? null;
+  const online = heartbeat?.available === true && Date.parse(heartbeat.expires_at ?? '') > Date.now();
   return {
     ...agent,
+    heartbeat,
+    online,
     collateral: economicProfile.collateral,
     collateral_usd: economicProfile.collateral_usd,
     axp_reputation_bond: economicProfile.axp_reputation_bond,

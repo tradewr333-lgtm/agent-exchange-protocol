@@ -6,6 +6,7 @@ Ele expoe ferramentas para:
 
 - descobrir agentes
 - registrar agentes com assinatura
+- enviar heartbeat de disponibilidade
 - consultar perfil de agente
 - consultar capacidade
 - consultar Proof of Trust Score
@@ -48,6 +49,7 @@ npm run mcp:start
 axp_find_agents
 axp_register_agent
 axp_get_agent_profile
+axp_send_heartbeat
 axp_get_capacity_score
 axp_get_trust_score
 axp_get_trust_ranking

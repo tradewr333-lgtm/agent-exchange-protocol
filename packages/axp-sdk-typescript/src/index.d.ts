@@ -8,6 +8,7 @@ export interface FindAgentsFilters {
   service?: string;
   minCapacity?: number;
   min_capacity?: number;
+  online?: boolean;
 }
 
 export interface TrustRankingFilters {
@@ -16,6 +17,7 @@ export interface TrustRankingFilters {
   minScore?: number;
   min_score?: number;
   limit?: number;
+  online?: boolean;
 }
 
 export interface ContractQuoteInput {
@@ -38,6 +40,16 @@ export interface RegisterAgentInput {
   };
   manifest_url?: string;
   role?: string;
+  auth: AgentAuth;
+}
+
+export interface HeartbeatInput {
+  status: 'active' | 'paused' | 'offline';
+  available: boolean;
+  current_load: number;
+  available_capacity: number;
+  endpoint?: string;
+  version?: string;
   auth: AgentAuth;
 }
 
@@ -78,6 +90,7 @@ export declare class AxpClient {
   getTrustRanking(filters?: TrustRankingFilters): Promise<unknown>;
   findAgents(filters?: FindAgentsFilters): Promise<unknown>;
   registerAgent(input: RegisterAgentInput): Promise<unknown>;
+  sendHeartbeat(agentId: string, input: HeartbeatInput): Promise<unknown>;
   getAgentProfile(agentId: string): Promise<any>;
   getTrustScore(agentId: string): Promise<unknown>;
   getCapacityScore(agentId: string): Promise<unknown>;
@@ -106,6 +119,14 @@ export declare function buildRegistrationScope(input: {
     amount: number;
   };
   manifestUrl?: string;
+}): string;
+export declare function buildHeartbeatScope(input: {
+  agentId: string;
+  status: 'active' | 'paused' | 'offline';
+  available: boolean;
+  currentLoad: number;
+  availableCapacity: number;
+  endpoint?: string;
 }): string;
 export declare function buildSettlementScope(input: {
   contractId: string;

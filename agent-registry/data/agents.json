@@ -32,6 +32,17 @@
         "slashing_events": 0,
         "fraud_flags": 0
       },
+      "heartbeat": {
+        "status": "active",
+        "available": true,
+        "current_load": 0,
+        "available_capacity": 0,
+        "endpoint": null,
+        "version": "0.1.0",
+        "last_seen_at": "2026-06-20T00:00:00.000Z",
+        "expires_at": "2099-01-01T00:00:00.000Z",
+        "scope": "demo_bootstrap"
+      },
       "manifest": {
         "protocol": "AXP",
         "version": "0.1.0",
@@ -82,6 +93,17 @@
         "late_delivery_penalties": 200,
         "slashing_events": 0,
         "fraud_flags": 0
+      },
+      "heartbeat": {
+        "status": "active",
+        "available": true,
+        "current_load": 0.12,
+        "available_capacity": 2575,
+        "endpoint": "https://registry.axp.network/agents/agent_0002",
+        "version": "0.1.0",
+        "last_seen_at": "2026-06-20T00:00:00.000Z",
+        "expires_at": "2099-01-01T00:00:00.000Z",
+        "scope": "demo_bootstrap"
       },
       "manifest": {
         "protocol": "AXP",
@@ -146,6 +168,17 @@
         "late_delivery_penalties": 300,
         "slashing_events": 1,
         "fraud_flags": 0
+      },
+      "heartbeat": {
+        "status": "offline",
+        "available": false,
+        "current_load": 1,
+        "available_capacity": 0,
+        "endpoint": null,
+        "version": "0.1.0",
+        "last_seen_at": "2026-06-20T00:00:00.000Z",
+        "expires_at": "2026-06-20T00:05:00.000Z",
+        "scope": "demo_bootstrap"
       },
       "manifest": {
         "protocol": "AXP",

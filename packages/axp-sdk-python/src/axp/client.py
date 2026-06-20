@@ -39,6 +39,7 @@ class AxpClient:
         service: str | None = None,
         min_score: int | float | None = None,
         limit: int | None = None,
+        online: bool | None = None,
     ) -> dict[str, Any]:
         query = _query_string(
             {
@@ -46,6 +47,7 @@ class AxpClient:
                 "service": service,
                 "min_score": min_score,
                 "limit": limit,
+                "online": _bool_query(online),
             }
         )
         return self._get_json(f"/trust-ranking{query}")
@@ -56,12 +58,14 @@ class AxpClient:
         status: str | None = None,
         service: str | None = None,
         min_capacity: int | float | None = None,
+        online: bool | None = None,
     ) -> dict[str, Any]:
         query = _query_string(
             {
                 "status": status,
                 "service": service,
                 "min_capacity": min_capacity,
+                "online": _bool_query(online),
             }
         )
         return self._get_json(f"/agents{query}")
@@ -95,6 +99,32 @@ class AxpClient:
     def get_agent_profile(self, agent_id: str) -> dict[str, Any]:
         _require_value(agent_id, "agent_id")
         return self._get_json(f"/agents/{agent_id}")
+
+    def send_heartbeat(
+        self,
+        agent_id: str,
+        *,
+        status: str,
+        available: bool,
+        current_load: int | float,
+        available_capacity: int | float,
+        auth: dict[str, Any],
+        endpoint: str | None = None,
+        version: str | None = None,
+    ) -> dict[str, Any]:
+        _require_value(agent_id, "agent_id")
+        return self._post_json(
+            f"/agents/{agent_id}/heartbeat",
+            {
+                "status": status,
+                "available": available,
+                "current_load": current_load,
+                "available_capacity": available_capacity,
+                "endpoint": endpoint,
+                "version": version,
+                "auth": auth,
+            },
+        )
 
     def get_trust_score(self, agent_id: str) -> dict[str, Any]:
         _require_value(agent_id, "agent_id")
@@ -262,6 +292,25 @@ def build_registration_scope(
     )
 
 
+def build_heartbeat_scope(
+    *,
+    agent_id: str,
+    status: str,
+    available: bool,
+    current_load: int | float,
+    available_capacity: int | float,
+    endpoint: str | None = None,
+) -> str:
+    return (
+        f"agent:{agent_id}|"
+        f"status:{status}|"
+        f"available:{str(bool(available)).lower()}|"
+        f"load:{float(current_load):g}|"
+        f"capacity:{float(available_capacity):g}|"
+        f"endpoint:{endpoint or 'none'}"
+    )
+
+
 def build_settlement_scope(*, contract_id: str, outcome: str) -> str:
     return f"contract:{contract_id}|outcome:{outcome}"
 
@@ -273,6 +322,12 @@ def _query_string(params: dict[str, Any]) -> str:
 
 def _drop_none(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in payload.items() if value is not None}
+
+
+def _bool_query(value: bool | None) -> str | None:
+    if value is None:
+        return None
+    return "true" if value else "false"
 
 
 def _require_value(value: str, name: str) -> None:

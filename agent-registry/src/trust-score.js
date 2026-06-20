@@ -17,6 +17,7 @@ export function getTrustRanking(filters = {}) {
   let rankedAgents = listAgents({
     status: filters.status,
     service: filters.service,
+    online: filters.online,
   }).agents.map(calculateAgentTrustScore);
 
   if (Number.isFinite(minScore)) {
@@ -54,6 +55,7 @@ export function getTrustRanking(filters = {}) {
     filters: {
       status: filters.status ?? null,
       service: filters.service ?? null,
+      online: filters.online ?? null,
       min_score: Number.isFinite(minScore) ? minScore : null,
       limit: Number.isFinite(limit) && limit > 0 ? limit : null,
     },
@@ -87,6 +89,16 @@ export function calculateAgentTrustScore(agent) {
     agent_id: agent.agent_id,
     agent_name: agent.name,
     status: 'experimental',
+    online: Boolean(agent.online),
+    heartbeat: agent.heartbeat
+      ? {
+          available: agent.heartbeat.available,
+          current_load: agent.heartbeat.current_load,
+          endpoint: agent.heartbeat.endpoint,
+          last_seen_at: agent.heartbeat.last_seen_at,
+          expires_at: agent.heartbeat.expires_at,
+        }
+      : null,
     proof_of_trust_score: round(trustCreated - trustDestroyed),
     trust_created: round(trustCreated),
     trust_destroyed: round(trustDestroyed),

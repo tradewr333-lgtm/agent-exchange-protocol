@@ -2,7 +2,7 @@ import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { registerAgent } from './src/agents.js';
+import { registerAgent, updateAgentHeartbeat } from './src/agents.js';
 import { buildAuthMessage } from './src/auth.js';
 import { getEconomicPolicy } from './src/economics.js';
 import { getAgentTrustScore, getTrustRanking } from './src/trust-score.js';
@@ -66,6 +66,7 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 200, getTrustRanking({
       status: url.searchParams.get('status') ?? undefined,
       service: url.searchParams.get('service') ?? undefined,
+      online: parseBooleanParam(url.searchParams.get('online')),
       minScore,
       limit,
     }));
@@ -101,6 +102,7 @@ const server = http.createServer(async (request, response) => {
       status: url.searchParams.get('status') ?? undefined,
       service: url.searchParams.get('service') ?? undefined,
       minCapacity,
+      online: parseBooleanParam(url.searchParams.get('online')),
     }));
   }
 
@@ -117,6 +119,13 @@ const server = http.createServer(async (request, response) => {
       return sendJson(response, 404, { error: 'agent_not_found', agent_id: agentMatch[1] });
     }
     return sendJson(response, 200, agent);
+  }
+
+  const heartbeatMatch = url.pathname.match(/^\/agents\/([^/]+)\/heartbeat$/);
+  if (request.method === 'POST' && heartbeatMatch) {
+    const body = await readJsonBody(request);
+    const result = await updateAgentHeartbeat(heartbeatMatch[1], body);
+    return sendJson(response, result.status, result.ok ? result.agent : result);
   }
 
   const trustScoreMatch = url.pathname.match(/^\/agents\/([^/]+)\/trust-score$/);
@@ -172,6 +181,7 @@ const server = http.createServer(async (request, response) => {
       '/agents',
       'POST /agents/register',
       '/agents/{agent_id}',
+      'POST /agents/{agent_id}/heartbeat',
       '/agents/{agent_id}/trust-score',
       'POST /contracts/quote',
       'POST /contracts/prepare',
@@ -194,6 +204,22 @@ function sendJson(response, status, body) {
     'access-control-allow-methods': 'GET, POST, OPTIONS',
   });
   response.end(`${JSON.stringify(body, null, 2)}\n`);
+}
+
+function parseBooleanParam(value) {
+  if (value === null || value === undefined || value === '') {
+    return undefined;
+  }
+
+  if (value === 'true') {
+    return true;
+  }
+
+  if (value === 'false') {
+    return false;
+  }
+
+  return undefined;
 }
 
 function sendHtml(response, status, body) {

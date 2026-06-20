@@ -9,6 +9,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const registryPath = join(currentDir, '..', 'data', 'agents.json');
 const AGENT_ID_PATTERN = /^[a-zA-Z0-9_-]{3,64}$/;
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+const HEARTBEAT_WINDOW_MS = 5 * 60 * 1000;
 
 export async function registerAgent(payload = {}) {
   const validation = validateRegistrationPayload(payload);
@@ -70,6 +71,80 @@ export function buildRegistrationScope(payload) {
   ].join('|');
 }
 
+export async function updateAgentHeartbeat(agentId, payload = {}) {
+  const validation = validateHeartbeatPayload(payload);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  const registry = loadRegistry();
+  const agent = registry.agents.find((item) => item.agent_id === agentId);
+  if (!agent) {
+    return { ok: false, status: 404, error: 'agent_not_found', agent_id: agentId };
+  }
+
+  const scope = buildHeartbeatScope(agentId, payload);
+  const authResult = await verifyOperatorAuth({
+    action: 'agents.heartbeat',
+    agentId,
+    operator: agent?.manifest?.onchain?.operator,
+    auth: payload.auth,
+    scope,
+  });
+  if (!authResult.ok) {
+    return authResult;
+  }
+
+  const now = new Date().toISOString();
+  const updatedAgent = {
+    ...agent,
+    status: payload.status,
+    available_capacity: round(payload.available_capacity ?? agent.available_capacity ?? 0),
+    heartbeat: {
+      status: payload.status,
+      available: Boolean(payload.available),
+      current_load: round(payload.current_load),
+      available_capacity: round(payload.available_capacity),
+      endpoint: payload.endpoint ?? null,
+      version: payload.version ?? null,
+      last_seen_at: now,
+      expires_at: new Date(Date.now() + HEARTBEAT_WINDOW_MS).toISOString(),
+      signer: authResult.signer,
+      nonce: authResult.auth.nonce,
+      issued_at: authResult.auth.issued_at,
+      scope,
+    },
+  };
+
+  const updatedRegistry = saveRegistry({
+    ...registry,
+    agents: registry.agents.map((item) => (item.agent_id === agentId ? updatedAgent : item)),
+  });
+
+  return {
+    ok: true,
+    status: 200,
+    agent: updatedAgent,
+    registry: {
+      schema: updatedRegistry.schema,
+      network: updatedRegistry.network,
+      updated_at: updatedRegistry.updated_at,
+      count: updatedRegistry.agents.length,
+    },
+  };
+}
+
+export function buildHeartbeatScope(agentId, payload) {
+  return [
+    `agent:${agentId}`,
+    `status:${payload.status}`,
+    `available:${Boolean(payload.available)}`,
+    `load:${Number(payload.current_load)}`,
+    `capacity:${Number(payload.available_capacity)}`,
+    `endpoint:${payload.endpoint ?? 'none'}`,
+  ].join('|');
+}
+
 function createRegisteredAgent(payload, authResult, scope) {
   const collateral = normalizeCollateral(payload.collateral);
   const now = new Date().toISOString();
@@ -115,6 +190,20 @@ function createRegisteredAgent(payload, authResult, scope) {
       fraud_flags: 0,
     },
     registered_at: now,
+    heartbeat: {
+      status: 'active',
+      available: true,
+      current_load: 0,
+      available_capacity: collateral.usdValue,
+      endpoint: payload.endpoint ?? null,
+      version: payload.version ?? null,
+      last_seen_at: now,
+      expires_at: new Date(Date.now() + HEARTBEAT_WINDOW_MS).toISOString(),
+      signer: authResult.signer,
+      nonce: authResult.auth.nonce,
+      issued_at: authResult.auth.issued_at,
+      scope: 'registration_bootstrap',
+    },
     registration: {
       method: 'api_signed_operator',
       action: 'agents.register',
@@ -167,6 +256,40 @@ function validateRegistrationPayload(payload) {
     normalizeCollateral(payload.collateral);
   } catch (error) {
     return { ok: false, status: 400, error: error.message };
+  }
+
+  return { ok: true };
+}
+
+function validateHeartbeatPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return { ok: false, status: 400, error: 'invalid_json_body' };
+  }
+
+  if (!['active', 'paused', 'offline'].includes(payload.status)) {
+    return { ok: false, status: 400, error: 'status_must_be_active_paused_or_offline' };
+  }
+
+  if (typeof payload.available !== 'boolean') {
+    return { ok: false, status: 400, error: 'available_must_be_boolean' };
+  }
+
+  const currentLoad = Number(payload.current_load);
+  if (!Number.isFinite(currentLoad) || currentLoad < 0 || currentLoad > 1) {
+    return { ok: false, status: 400, error: 'current_load_must_be_between_0_and_1' };
+  }
+
+  const availableCapacity = Number(payload.available_capacity);
+  if (!Number.isFinite(availableCapacity) || availableCapacity < 0) {
+    return { ok: false, status: 400, error: 'available_capacity_must_be_non_negative' };
+  }
+
+  if (payload.endpoint !== undefined && typeof payload.endpoint !== 'string') {
+    return { ok: false, status: 400, error: 'endpoint_invalid' };
+  }
+
+  if (payload.version !== undefined && typeof payload.version !== 'string') {
+    return { ok: false, status: 400, error: 'version_invalid' };
   }
 
   return { ok: true };

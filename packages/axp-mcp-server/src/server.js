@@ -25,6 +25,7 @@ const tools = [
         service: { type: 'string', description: 'Optional service capability filter.' },
         min_score: { type: 'number', description: 'Minimum Proof of Trust score.' },
         limit: { type: 'number', description: 'Maximum number of ranked agents to return.' },
+        online: { type: 'boolean', description: 'Optional online status filter.' },
       },
     },
   },
@@ -37,6 +38,7 @@ const tools = [
         status: { type: 'string', description: 'Agent status, for example active.' },
         service: { type: 'string', description: 'Required service, for example research.' },
         min_capacity: { type: 'number', description: 'Minimum available capacity.' },
+        online: { type: 'boolean', description: 'Optional online status filter.' },
       },
     },
   },
@@ -86,6 +88,34 @@ const tools = [
       required: ['agent_id'],
       properties: {
         agent_id: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'axp_send_heartbeat',
+    description: 'Send a signed heartbeat update for an AXP agent.',
+    inputSchema: {
+      type: 'object',
+      required: ['agent_id', 'status', 'available', 'current_load', 'available_capacity', 'auth'],
+      properties: {
+        agent_id: { type: 'string' },
+        status: { type: 'string', enum: ['active', 'paused', 'offline'] },
+        available: { type: 'boolean' },
+        current_load: { type: 'number' },
+        available_capacity: { type: 'number' },
+        endpoint: { type: 'string' },
+        version: { type: 'string' },
+        auth: {
+          type: 'object',
+          required: ['agent_id', 'address', 'nonce', 'issued_at', 'signature'],
+          properties: {
+            agent_id: { type: 'string' },
+            address: { type: 'string' },
+            nonce: { type: 'string' },
+            issued_at: { type: 'string' },
+            signature: { type: 'string' },
+          },
+        },
       },
     },
   },
@@ -293,12 +323,14 @@ async function callTool(name, args) {
         service: args.service,
         minScore: args.min_score,
         limit: args.limit,
+        online: args.online,
       });
     case 'axp_find_agents':
       return axp.findAgents({
         status: args.status,
         service: args.service,
         minCapacity: args.min_capacity,
+        online: args.online,
       });
     case 'axp_register_agent':
       requireFields(args, ['agent_id', 'name', 'operator', 'services', 'collateral', 'auth']);
@@ -309,6 +341,17 @@ async function callTool(name, args) {
         services: args.services,
         collateral: args.collateral,
         manifest_url: args.manifest_url,
+        auth: args.auth,
+      });
+    case 'axp_send_heartbeat':
+      requireFields(args, ['agent_id', 'status', 'available', 'current_load', 'available_capacity', 'auth']);
+      return axp.sendHeartbeat(args.agent_id, {
+        status: args.status,
+        available: args.available,
+        current_load: args.current_load,
+        available_capacity: args.available_capacity,
+        endpoint: args.endpoint,
+        version: args.version,
         auth: args.auth,
       });
     case 'axp_get_agent_profile':

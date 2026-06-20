@@ -28,6 +28,7 @@ export class AxpClient {
       service: filters.service,
       min_score: filters.minScore ?? filters.min_score,
       limit: filters.limit,
+      online: filters.online,
     })}`);
   }
 
@@ -36,12 +37,19 @@ export class AxpClient {
       status: filters.status,
       service: filters.service,
       min_capacity: filters.minCapacity ?? filters.min_capacity,
+      online: filters.online,
     })}`);
   }
 
   registerAgent(input) {
     requireFields(input, ['agent_id', 'name', 'operator', 'services', 'collateral', 'auth']);
     return this.postJson('/agents/register', input);
+  }
+
+  sendHeartbeat(agentId, input) {
+    requireValue(agentId, 'agentId');
+    requireFields(input, ['status', 'available', 'current_load', 'available_capacity', 'auth']);
+    return this.postJson(`/agents/${encodeURIComponent(agentId)}/heartbeat`, input);
   }
 
   getAgentProfile(agentId) {
@@ -162,6 +170,25 @@ export function buildRegistrationScope({
     `services:${services.join(',')}`,
     `collateral:${asset}:${amount}`,
     `manifest:${manifestUrl ?? 'none'}`,
+  ].join('|');
+}
+
+export function buildHeartbeatScope({
+  agentId,
+  status,
+  available,
+  currentLoad,
+  availableCapacity,
+  endpoint,
+}) {
+  requireValue(agentId, 'agentId');
+  return [
+    `agent:${agentId}`,
+    `status:${status}`,
+    `available:${Boolean(available)}`,
+    `load:${Number(currentLoad)}`,
+    `capacity:${Number(availableCapacity)}`,
+    `endpoint:${endpoint ?? 'none'}`,
   ].join('|');
 }
 
