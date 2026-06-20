@@ -761,6 +761,7 @@ async function buildNetworkHtml() {
   });
   const latestHash = trustEvents.events[0]?.event_hash ?? 'waiting_for_first_event';
   const storageLabel = capabilities.storage.postgres_enabled ? 'Postgres ledger active' : 'JSON fallback';
+  const agentGdp = calculateAgentGdp({ contracts: contracts.contracts, events: trustEvents.events });
 
   return `<!doctype html>
 <html lang="en">
@@ -868,6 +869,13 @@ async function buildNetworkHtml() {
       .metric span { color: var(--muted); font-size: 12px; font-weight: 850; text-transform: uppercase; }
       .metric strong { display: block; margin-top: 10px; font-size: 28px; }
       .metric small { color: var(--muted); }
+      .metric.gdp {
+        border-color: rgba(138, 247, 190, 0.52);
+        background:
+          linear-gradient(135deg, rgba(138, 247, 190, 0.16), rgba(131, 232, 255, 0.05)),
+          var(--panel);
+      }
+      .metric.gdp strong { color: var(--mint); font-size: 32px; }
 
       .network-grid {
         display: grid;
@@ -916,6 +924,144 @@ async function buildNetworkHtml() {
         font-size: 12px;
       }
 
+      .trust-core {
+        position: absolute;
+        inset: 50% auto auto 50%;
+        transform: translate(-50%, -50%);
+        width: 172px;
+        height: 172px;
+        border: 1px solid rgba(138, 247, 190, 0.42);
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        background:
+          radial-gradient(circle, rgba(138, 247, 190, 0.34), rgba(131, 232, 255, 0.08) 42%, rgba(4, 9, 10, 0.78) 72%);
+        box-shadow:
+          0 0 52px rgba(138, 247, 190, 0.24),
+          inset 0 0 36px rgba(131, 232, 255, 0.16);
+        animation: corePulse 3.8s ease-in-out infinite;
+        pointer-events: none;
+      }
+      .trust-core strong { display: block; font-size: 14px; color: var(--mint); text-transform: uppercase; }
+      .trust-core span { display: block; margin-top: 8px; color: var(--text); font-size: 24px; font-weight: 900; }
+
+      @keyframes corePulse {
+        0%, 100% { box-shadow: 0 0 42px rgba(138, 247, 190, 0.18), inset 0 0 28px rgba(131, 232, 255, 0.12); }
+        50% { box-shadow: 0 0 86px rgba(138, 247, 190, 0.42), inset 0 0 52px rgba(131, 232, 255, 0.24); }
+      }
+
+      .living-strip {
+        display: grid;
+        grid-template-columns: 1.05fr 1fr 1fr;
+        gap: 16px;
+        margin: 16px 0;
+      }
+
+      .mini-visual {
+        min-height: 220px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .world-map {
+        position: relative;
+        min-height: 170px;
+        border: 1px solid rgba(38, 62, 67, 0.75);
+        background:
+          radial-gradient(circle at 25% 42%, rgba(138, 247, 190, 0.15), transparent 5rem),
+          radial-gradient(circle at 68% 38%, rgba(131, 232, 255, 0.12), transparent 7rem),
+          linear-gradient(135deg, rgba(255, 255, 255, 0.025), transparent);
+      }
+      .city {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--mint);
+        box-shadow: 0 0 18px var(--mint);
+      }
+      .city span {
+        position: absolute;
+        left: 12px;
+        top: -5px;
+        white-space: nowrap;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .route {
+        position: absolute;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+        transform-origin: left center;
+        opacity: 0.62;
+        animation: routePulse 3s linear infinite;
+      }
+      @keyframes routePulse {
+        from { filter: brightness(0.6); opacity: 0.18; }
+        50% { filter: brightness(1.8); opacity: 0.88; }
+        to { filter: brightness(0.6); opacity: 0.18; }
+      }
+
+      .dna-row {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .dna-card {
+        min-height: 108px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.025);
+        padding: 10px;
+      }
+      .dna-symbol {
+        height: 56px;
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 3px;
+        align-items: center;
+      }
+      .dna-bit {
+        border-radius: 999px;
+        background: var(--cyan);
+        box-shadow: 0 0 12px rgba(131, 232, 255, 0.35);
+      }
+      .dna-card code { display: block; margin-top: 8px; }
+
+      .weather-field {
+        position: relative;
+        min-height: 150px;
+        border: 1px solid rgba(38, 62, 67, 0.75);
+        background:
+          radial-gradient(circle at 25% 60%, rgba(138, 247, 190, 0.28), transparent 4rem),
+          radial-gradient(circle at 72% 34%, rgba(200, 164, 255, 0.22), transparent 5rem),
+          radial-gradient(circle at 52% 72%, rgba(131, 232, 255, 0.20), transparent 5rem);
+        animation: weatherDrift 7s ease-in-out infinite alternate;
+      }
+      @keyframes weatherDrift {
+        from { filter: hue-rotate(0deg) brightness(0.9); }
+        to { filter: hue-rotate(24deg) brightness(1.18); }
+      }
+
+      .hash-rain {
+        height: 170px;
+        overflow: hidden;
+        border: 1px solid rgba(38, 62, 67, 0.75);
+        background: rgba(0, 0, 0, 0.25);
+        position: relative;
+      }
+      .hash-rain code {
+        position: absolute;
+        left: var(--x);
+        top: -24px;
+        color: rgba(138, 247, 190, 0.85);
+        animation: hashFall var(--speed) linear infinite;
+        animation-delay: var(--delay);
+      }
+      @keyframes hashFall {
+        to { transform: translateY(210px); opacity: 0.08; }
+      }
+
       .panel { padding: 16px; overflow: hidden; }
       .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
       .pill {
@@ -938,6 +1084,7 @@ async function buildNetworkHtml() {
 
       @media (max-width: 1020px) {
         .network-grid, .hero { grid-template-columns: 1fr; }
+        .living-strip { grid-template-columns: 1fr; }
         .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         h1 { font-size: 46px; }
       }
@@ -983,6 +1130,11 @@ async function buildNetworkHtml() {
       </section>
 
       <section class="metrics" aria-label="Network metrics">
+        <article class="metric gdp">
+          <span>Global Agent GDP</span>
+          <strong id="agent-gdp" data-base="${agentGdp}">${formatUsd(agentGdp)}</strong>
+          <small>settled and simulated economic flow</small>
+        </article>
         ${renderMetric('Agents', agents.count, 'economic identities')}
         ${renderMetric('Contracts', contracts.contracts.length, 'machine obligations')}
         ${renderMetric('Trust Events', trustEvents.count, 'hashed ledger rows')}
@@ -990,9 +1142,44 @@ async function buildNetworkHtml() {
         ${renderMetric('Graph Links', graph.links.length, 'agent-to-agent edges')}
       </section>
 
+      <section class="living-strip" aria-label="Living Proof of Trust organism">
+        <article class="panel mini-visual">
+          <div class="panel-head">
+            <h2>Living Trust Map</h2>
+            <span class="pill good">global routes</span>
+          </div>
+          <div class="world-map" aria-label="Global agent activity map">
+            ${renderTrustCities()}
+            ${renderTrustRoutes()}
+          </div>
+        </article>
+        <article class="panel mini-visual">
+          <div class="panel-head">
+            <h2>Trust DNA</h2>
+            <span class="pill">agent signatures</span>
+          </div>
+          <div class="dna-row">
+            ${renderAgentDna(ranking.agents.slice(0, 5))}
+          </div>
+        </article>
+        <article class="panel mini-visual">
+          <div class="panel-head">
+            <h2>Trust Weather</h2>
+            <span class="pill">activity storms</span>
+          </div>
+          <div class="weather-field"></div>
+        </article>
+      </section>
+
       <main class="network-grid">
         <section class="panel graph-panel">
           <canvas id="trust-network" aria-label="Animated Proof of Trust network"></canvas>
+          <div class="trust-core">
+            <div>
+              <strong>AXP Trust Core</strong>
+              <span>${formatNumber(Math.max(trustEvents.count, Math.round(agentGdp)))}</span>
+            </div>
+          </div>
           <div class="graph-copy">
             <div>
               <p class="eyebrow">Proof of Trust in motion</p>
@@ -1027,18 +1214,12 @@ async function buildNetworkHtml() {
 
           <section class="panel">
             <div class="panel-head">
-              <h2>Latest Hashes</h2>
-              <span class="pill">ledger</span>
+              <h2>Living Ledger</h2>
+              <span class="pill">hash rain</span>
             </div>
-            ${renderTable(
-              ['Event', 'Hash'],
-              trustEvents.events.slice(0, 8),
-              (event) => [
-                `${escapeHtml(event.event_type ?? 'event')}<br><code>${escapeHtml(event.agent_id ?? 'n/a')}</code>`,
-                `<code>${escapeHtml(shortHash(event.event_hash))}</code>`,
-              ],
-              'No hashed trust events yet.',
-            )}
+            <div class="hash-rain">
+              ${renderHashRain(trustEvents.events.slice(0, 14))}
+            </div>
           </section>
 
           <section class="panel">
@@ -1061,6 +1242,7 @@ async function buildNetworkHtml() {
       const canvas = document.getElementById('trust-network');
       const ctx = canvas.getContext('2d');
       const state = { time: 0, dpr: 1, width: 0, height: 0 };
+      const gdpCounter = document.getElementById('agent-gdp');
 
       function resize() {
         state.dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -1100,11 +1282,21 @@ async function buildNetworkHtml() {
         state.time += 0.016;
         ctx.clearRect(0, 0, state.width, state.height);
         drawGrid();
+        drawConstellationFields();
         drawLinks();
         drawEvents();
         drawNodes();
         requestAnimationFrame(draw);
       }
+
+      function animateGdp() {
+        if (!gdpCounter) return;
+        const base = Number(gdpCounter.dataset.base || 0);
+        const live = base + Math.max(0, graph.links.length) * 0.017 * Math.floor(performance.now() / 1000);
+        gdpCounter.textContent = live.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+      }
+
+      setInterval(animateGdp, 1000);
 
       function drawGrid() {
         ctx.save();
@@ -1139,6 +1331,36 @@ async function buildNetworkHtml() {
 
       function getNode(id) {
         return graph.nodes.find((node) => node.id === id);
+      }
+
+      function drawConstellationFields() {
+        const clusters = new Map();
+        for (const node of graph.nodes) {
+          const key = node.cluster || 'General';
+          if (!clusters.has(key)) clusters.set(key, []);
+          clusters.get(key).push(node);
+        }
+        let index = 0;
+        for (const [cluster, nodes] of clusters.entries()) {
+          if (!nodes.length) continue;
+          const cx = nodes.reduce((sum, node) => sum + node.x, 0) / nodes.length;
+          const cy = nodes.reduce((sum, node) => sum + node.y, 0) / nodes.length;
+          const orbit = 54 + nodes.length * 11;
+          const pulse = (Math.sin(state.time * 1.3 + index) + 1) / 2;
+          ctx.save();
+          ctx.globalAlpha = 0.08 + pulse * 0.08;
+          ctx.strokeStyle = cluster === 'Security' ? '#8af7be' : cluster === 'Research' ? '#83e8ff' : '#c8a4ff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, orbit * 1.35, orbit, state.time * 0.04 + index, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 0.42;
+          ctx.fillStyle = '#9cb0ae';
+          ctx.font = '11px Inter, system-ui, sans-serif';
+          ctx.fillText(cluster + ' Cluster', cx - orbit, cy - orbit - 8);
+          ctx.restore();
+          index += 1;
+        }
       }
 
       function drawLinks() {
@@ -1203,7 +1425,15 @@ async function buildNetworkHtml() {
         graph.nodes.forEach((node) => {
           const glow = (Math.sin(state.time * 2 + node.phase) + 1) / 2;
           const radius = 8 + Math.min(16, Number(node.score || 0) / 20);
+          const gravity = Math.min(88, 24 + Number(node.score || 0) * 0.65);
           ctx.save();
+          const halo = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, gravity);
+          halo.addColorStop(0, node.online ? 'rgba(138, 247, 190, 0.18)' : 'rgba(131, 232, 255, 0.14)');
+          halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = halo;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, gravity, 0, Math.PI * 2);
+          ctx.fill();
           ctx.shadowColor = node.online ? '#8af7be' : '#83e8ff';
           ctx.shadowBlur = 14 + glow * 12;
           ctx.strokeStyle = node.online ? '#8af7be' : '#83e8ff';
@@ -1250,6 +1480,8 @@ function buildNetworkGraph({ agents, contracts, events, ranking }) {
       label: agent.name ?? agent.agent_id,
       score: ranked?.proof_of_trust_score ?? 0,
       online: agent.online === true,
+      cluster: inferAgentCluster(agent.services),
+      dna: buildAgentDna(agent, ranked),
     });
   }
 
@@ -1302,7 +1534,122 @@ function ensureGraphNode(nodes, agentId) {
     label: agentId,
     score: 0,
     online: false,
+    cluster: 'Unknown',
+    dna: buildDnaBits(agentId),
   });
+}
+
+function inferAgentCluster(services) {
+  const values = Array.isArray(services) ? services.map((service) => String(service).toLowerCase()) : [];
+  if (values.some((service) => service.includes('audit') || service.includes('security') || service.includes('verify'))) {
+    return 'Security';
+  }
+  if (values.some((service) => service.includes('research') || service.includes('analysis'))) {
+    return 'Research';
+  }
+  if (values.some((service) => service.includes('trade') || service.includes('market') || service.includes('settlement'))) {
+    return 'Trading';
+  }
+  if (values.some((service) => service.includes('task') || service.includes('delivery'))) {
+    return 'Execution';
+  }
+  return 'General';
+}
+
+function buildAgentDna(agent, ranked) {
+  const seed = [
+    agent.agent_id,
+    agent.name,
+    agent.collateral?.asset,
+    agent.collateral?.amount,
+    ranked?.proof_of_trust_score,
+    agent.available_capacity,
+    agent.registered_at,
+  ].join('|');
+  return buildDnaBits(seed);
+}
+
+function buildDnaBits(seed) {
+  const text = String(seed ?? 'axp');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Array.from({ length: 21 }, (_, index) => {
+    const value = (hash >>> (index % 24)) & 7;
+    return 22 + value * 8;
+  });
+}
+
+function calculateAgentGdp({ contracts, events }) {
+  const contractVolume = contracts.reduce((sum, contract) => {
+    const value = Number(contract.quote?.requested_capacity ?? contract.terms?.requested_capacity ?? contract.escrow?.payment_amount_usd ?? 0);
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0);
+  const eventVolume = events.reduce((sum, event) => {
+    const value = Number(event.value_usd ?? 0);
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0);
+  return Math.max(0, contractVolume + eventVolume);
+}
+
+function renderTrustCities() {
+  const cities = [
+    ['Sao Paulo', 22, 64],
+    ['New York', 31, 39],
+    ['London', 48, 33],
+    ['Madrid', 44, 47],
+    ['Dubai', 61, 55],
+    ['Singapore', 77, 68],
+  ];
+  return cities.map(([name, x, y]) => (
+    `<span class="city" style="left:${x}%;top:${y}%"><span>${escapeHtml(name)}</span></span>`
+  )).join('');
+}
+
+function renderTrustRoutes() {
+  const routes = [
+    [22, 64, 31, 39, 0],
+    [31, 39, 48, 33, 0.8],
+    [48, 33, 61, 55, 1.6],
+    [61, 55, 77, 68, 2.4],
+    [44, 47, 77, 68, 3.2],
+  ];
+  return routes.map(([x1, y1, x2, y2, delay]) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    return `<span class="route" style="left:${x1}%;top:${y1}%;width:${length}%;transform:rotate(${angle}deg);animation-delay:${delay}s"></span>`;
+  }).join('');
+}
+
+function renderAgentDna(agents) {
+  const source = agents.length > 0 ? agents : [{ agent_id: 'axp_genesis_agent', proof_of_trust_score: 0 }];
+  return source.slice(0, 5).map((agent) => {
+    const dna = buildDnaBits(`${agent.agent_id}|${agent.proof_of_trust_score}|${agent.settled_volume_usd}`);
+    const bits = dna.slice(0, 14).map((height, index) => {
+      const color = index % 3 === 0 ? 'var(--mint)' : index % 3 === 1 ? 'var(--cyan)' : 'var(--violet)';
+      return `<span class="dna-bit" style="height:${height}px;background:${color}"></span>`;
+    }).join('');
+    return `<div class="dna-card"><div class="dna-symbol">${bits}</div><code>${escapeHtml(shortAgentId(agent.agent_id))}</code></div>`;
+  }).join('');
+}
+
+function renderHashRain(events) {
+  const source = events.length > 0 ? events : [{ event_hash: 'waiting_for_first_trust_event', event_type: 'genesis' }];
+  return source.map((event, index) => {
+    const x = 4 + (index * 13) % 88;
+    const speed = 4 + (index % 5);
+    const delay = -1 * (index % 7);
+    return `<code style="--x:${x}%;--speed:${speed}s;--delay:${delay}s">${escapeHtml(event.event_type ?? 'event')} ${escapeHtml(shortHash(event.event_hash))}</code>`;
+  }).join('');
+}
+
+function shortAgentId(agentId) {
+  const text = String(agentId ?? 'agent');
+  return text.length > 18 ? `${text.slice(0, 10)}...${text.slice(-5)}` : text;
 }
 
 async function buildDashboardHtml() {
@@ -1645,6 +1992,20 @@ function formatNumber(value) {
   }
 
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number);
+}
+
+function formatUsd(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return '$0.00';
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(number);
 }
 
 function shortHash(value) {
