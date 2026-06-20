@@ -287,13 +287,13 @@
     };
     setStatus(d);
     renderKpis(d);
-    renderGauge(metrics);
-    renderTreasury(metrics);
-    renderOpportunities(opportunities);
-    renderLedger(events);
-    renderRanking(ranking);
-    renderHeatmap(events);
-    syncGraph(lineage, agents);
+    renderGauge(d.metrics);
+    renderTreasury(d.metrics);
+    renderOpportunities(d.opportunities);
+    renderLedger(d.events);
+    renderRanking(d.ranking);
+    renderHeatmap(d.events);
+    syncGraph(d.lineage, d.agents);
   }
 
   sizeGraph();
