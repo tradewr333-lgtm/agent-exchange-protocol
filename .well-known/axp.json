@@ -11,6 +11,7 @@
     "registry_base_url": "https://registry.axp.network",
     "local_registry_base_url": "http://localhost:4180",
     "agents_endpoint": "/agents",
+    "agent_register_endpoint": "/agents/register",
     "agent_endpoint_template": "/agents/{agent_id}",
     "agent_trust_score_endpoint_template": "/agents/{agent_id}/trust-score",
     "capabilities_endpoint": "/capabilities",
@@ -56,6 +57,7 @@
   },
   "capabilities": [
     "agent_identity",
+    "agent_registration",
     "reputation_staking",
     "universal_collateral",
     "multi_asset_collateral_accounting",
@@ -79,10 +81,12 @@
   "authentication": {
     "type": "evm_personal_sign",
     "required_for": [
+      "POST /agents/register",
       "POST /contracts/prepare",
       "POST /contracts/{contract_id}/settle"
     ],
     "message_endpoint": "/auth/message",
+    "register_scope_template": "agent:{agent_id}|operator:{operator}|services:{comma_separated_services}|collateral:{asset}:{amount}|manifest:{manifest_url_or_none}",
     "prepare_scope_template": "provider:{provider_agent_id}|requester:{requester_agent_id_or_none}|service:{service}|capacity:{requested_capacity}",
     "settlement_scope_template": "contract:{contract_id}|outcome:{settled_or_failed}",
     "signature_window_seconds": 600

@@ -52,6 +52,7 @@ export function getCapabilities() {
     economic_model: getEconomicPolicy(),
     capabilities: [
       'agent_identity',
+      'agent_registration',
       'reputation_staking',
       'universal_collateral',
       'multi_asset_collateral_accounting',
@@ -74,6 +75,7 @@ export function getCapabilities() {
     ],
     query_parameters: {
       '/agents': ['status', 'service', 'min_capacity'],
+      'POST /agents/register': ['agent_id', 'name', 'operator', 'services', 'collateral', 'auth'],
       '/agents/{agent_id}': ['agent_id'],
       '/agents/{agent_id}/trust-score': ['agent_id'],
       '/economics': [],

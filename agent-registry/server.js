@@ -2,6 +2,7 @@ import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { registerAgent } from './src/agents.js';
 import { buildAuthMessage } from './src/auth.js';
 import { getEconomicPolicy } from './src/economics.js';
 import { getAgentTrustScore, getTrustRanking } from './src/trust-score.js';
@@ -103,6 +104,12 @@ const server = http.createServer(async (request, response) => {
     }));
   }
 
+  if (request.method === 'POST' && url.pathname === '/agents/register') {
+    const body = await readJsonBody(request);
+    const result = await registerAgent(body);
+    return sendJson(response, result.status, result.ok ? result.agent : result);
+  }
+
   const agentMatch = url.pathname.match(/^\/agents\/([^/]+)$/);
   if (agentMatch) {
     const agent = getAgent(agentMatch[1]);
@@ -163,6 +170,7 @@ const server = http.createServer(async (request, response) => {
       '/trust-ranking',
       'POST /auth/message',
       '/agents',
+      'POST /agents/register',
       '/agents/{agent_id}',
       '/agents/{agent_id}/trust-score',
       'POST /contracts/quote',

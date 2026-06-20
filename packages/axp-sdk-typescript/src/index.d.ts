@@ -25,6 +25,22 @@ export interface ContractQuoteInput {
   requested_capacity: number;
 }
 
+export interface RegisterAgentInput {
+  agent_id: string;
+  name: string;
+  operator: string;
+  services: string[];
+  collateral: {
+    asset?: 'BNB' | 'USDT' | 'USDC';
+    symbol?: 'BNB' | 'USDT' | 'USDC';
+    amount: number;
+    usd_value?: number;
+  };
+  manifest_url?: string;
+  role?: string;
+  auth: AgentAuth;
+}
+
 export interface AgentAuth {
   agent_id: string;
   address: string;
@@ -61,6 +77,7 @@ export declare class AxpClient {
   getEconomics(): Promise<unknown>;
   getTrustRanking(filters?: TrustRankingFilters): Promise<unknown>;
   findAgents(filters?: FindAgentsFilters): Promise<unknown>;
+  registerAgent(input: RegisterAgentInput): Promise<unknown>;
   getAgentProfile(agentId: string): Promise<any>;
   getTrustScore(agentId: string): Promise<unknown>;
   getCapacityScore(agentId: string): Promise<unknown>;
@@ -78,6 +95,17 @@ export declare function buildPrepareScope(input: {
   requesterAgentId?: string;
   service: string;
   requestedCapacity: number;
+}): string;
+export declare function buildRegistrationScope(input: {
+  agentId: string;
+  operator: string;
+  services: string[];
+  collateral: {
+    asset?: string;
+    symbol?: string;
+    amount: number;
+  };
+  manifestUrl?: string;
 }): string;
 export declare function buildSettlementScope(input: {
   contractId: string;

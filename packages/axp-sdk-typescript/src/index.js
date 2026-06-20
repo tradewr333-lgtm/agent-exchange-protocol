@@ -39,6 +39,11 @@ export class AxpClient {
     })}`);
   }
 
+  registerAgent(input) {
+    requireFields(input, ['agent_id', 'name', 'operator', 'services', 'collateral', 'auth']);
+    return this.postJson('/agents/register', input);
+  }
+
   getAgentProfile(agentId) {
     requireValue(agentId, 'agentId');
     return this.getJson(`/agents/${encodeURIComponent(agentId)}`);
@@ -130,6 +135,33 @@ export function buildPrepareScope({
     `requester:${requesterAgentId ?? 'none'}`,
     `service:${service}`,
     `capacity:${Number(requestedCapacity)}`,
+  ].join('|');
+}
+
+export function buildRegistrationScope({
+  agentId,
+  operator,
+  services,
+  collateral,
+  manifestUrl,
+}) {
+  requireValue(agentId, 'agentId');
+  requireValue(operator, 'operator');
+  if (!Array.isArray(services) || services.length === 0) {
+    throw new Error('services are required');
+  }
+  if (!collateral || typeof collateral !== 'object') {
+    throw new Error('collateral is required');
+  }
+
+  const asset = String(collateral.asset ?? collateral.symbol ?? '').toUpperCase();
+  const amount = Number(collateral.amount);
+  return [
+    `agent:${agentId}`,
+    `operator:${operator}`,
+    `services:${services.join(',')}`,
+    `collateral:${asset}:${amount}`,
+    `manifest:${manifestUrl ?? 'none'}`,
   ].join('|');
 }
 

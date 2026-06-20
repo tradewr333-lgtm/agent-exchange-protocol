@@ -41,6 +41,44 @@ const tools = [
     },
   },
   {
+    name: 'axp_register_agent',
+    description: 'Register a new AXP agent with operator wallet authorization.',
+    inputSchema: {
+      type: 'object',
+      required: ['agent_id', 'name', 'operator', 'services', 'collateral', 'auth'],
+      properties: {
+        agent_id: { type: 'string' },
+        name: { type: 'string' },
+        operator: { type: 'string' },
+        services: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        collateral: {
+          type: 'object',
+          required: ['asset', 'amount'],
+          properties: {
+            asset: { type: 'string', enum: ['BNB', 'USDT', 'USDC'] },
+            amount: { type: 'number' },
+            usd_value: { type: 'number' },
+          },
+        },
+        manifest_url: { type: 'string' },
+        auth: {
+          type: 'object',
+          required: ['agent_id', 'address', 'nonce', 'issued_at', 'signature'],
+          properties: {
+            agent_id: { type: 'string' },
+            address: { type: 'string' },
+            nonce: { type: 'string' },
+            issued_at: { type: 'string' },
+            signature: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+  {
     name: 'axp_get_agent_profile',
     description: 'Get an AXP agent profile by agent_id.',
     inputSchema: {
@@ -261,6 +299,17 @@ async function callTool(name, args) {
         status: args.status,
         service: args.service,
         minCapacity: args.min_capacity,
+      });
+    case 'axp_register_agent':
+      requireFields(args, ['agent_id', 'name', 'operator', 'services', 'collateral', 'auth']);
+      return axp.registerAgent({
+        agent_id: args.agent_id,
+        name: args.name,
+        operator: args.operator,
+        services: args.services,
+        collateral: args.collateral,
+        manifest_url: args.manifest_url,
+        auth: args.auth,
       });
     case 'axp_get_agent_profile':
       requireFields(args, ['agent_id']);

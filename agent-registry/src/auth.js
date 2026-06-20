@@ -79,6 +79,57 @@ export function getAgentOperator(agent) {
   return agent?.manifest?.onchain?.operator ?? null;
 }
 
+export async function verifyOperatorAuth({ action, agentId, operator, auth, scope }) {
+  const validation = validateAuthShape(auth);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  if (auth.agent_id !== agentId) {
+    return { ok: false, status: 401, error: 'auth_agent_mismatch' };
+  }
+
+  if (!sameAddress(auth.address, operator)) {
+    return { ok: false, status: 401, error: 'auth_operator_mismatch' };
+  }
+
+  const issuedAtMs = Date.parse(auth.issued_at);
+  if (!Number.isFinite(issuedAtMs) || Math.abs(Date.now() - issuedAtMs) > AUTH_WINDOW_MS) {
+    return { ok: false, status: 401, error: 'auth_timestamp_expired' };
+  }
+
+  const message = buildAuthMessage({
+    action,
+    agentId,
+    address: auth.address,
+    nonce: auth.nonce,
+    issuedAt: auth.issued_at,
+    scope,
+  });
+
+  try {
+    const { verifyMessage } = await import('ethers');
+    const recovered = verifyMessage(message, auth.signature);
+    if (!sameAddress(recovered, operator)) {
+      return { ok: false, status: 401, error: 'invalid_signature' };
+    }
+  } catch {
+    return { ok: false, status: 503, error: 'signature_verifier_unavailable' };
+  }
+
+  return {
+    ok: true,
+    signer: operator,
+    message,
+    auth: {
+      agent_id: agentId,
+      address: auth.address,
+      nonce: auth.nonce,
+      issued_at: auth.issued_at,
+    },
+  };
+}
+
 function validateAuthShape(auth) {
   if (!auth || typeof auth !== 'object') {
     return { ok: false, status: 401, error: 'auth_required' };

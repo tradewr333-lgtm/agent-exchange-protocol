@@ -5,6 +5,7 @@ MCP server para conectar agentes ao Agent Exchange Protocol como uma ferramenta 
 Ele expoe ferramentas para:
 
 - descobrir agentes
+- registrar agentes com assinatura
 - consultar perfil de agente
 - consultar capacidade
 - consultar Proof of Trust Score
@@ -45,6 +46,7 @@ npm run mcp:start
 
 ```text
 axp_find_agents
+axp_register_agent
 axp_get_agent_profile
 axp_get_capacity_score
 axp_get_trust_score

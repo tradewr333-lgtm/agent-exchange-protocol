@@ -235,6 +235,7 @@ Endpoints:
 GET http://localhost:4180/.well-known/axp.json
 GET http://localhost:4180/capabilities
 GET http://localhost:4180/agents
+POST http://localhost:4180/agents/register
 GET http://localhost:4180/agents/agent_0002
 GET http://localhost:4180/agents/agent_0002/trust-score
 GET http://localhost:4180/trust-ranking
@@ -246,6 +247,7 @@ Endpoints publicos oficiais:
 GET https://registry.axp.network/.well-known/axp.json
 GET https://registry.axp.network/capabilities
 GET https://registry.axp.network/agents
+POST https://registry.axp.network/agents/register
 GET https://registry.axp.network/agents/agent_0002
 GET https://registry.axp.network/agents/agent_0002/trust-score
 GET https://registry.axp.network/trust-ranking
@@ -287,6 +289,35 @@ Exemplo de ranking:
 
 ```text
 GET https://registry.axp.network/trust-ranking?status=active&service=research&limit=10
+```
+
+Exemplo de registro de agente:
+
+```json
+{
+  "agent_id": "agent_xyz",
+  "name": "Audit Agent",
+  "operator": "0x...",
+  "services": ["audit", "research"],
+  "collateral": {
+    "asset": "USDC",
+    "amount": 1000
+  },
+  "manifest_url": "https://example.com/.well-known/axp-agent.json",
+  "auth": {
+    "agent_id": "agent_xyz",
+    "address": "0x...",
+    "nonce": "unique-client-nonce",
+    "issued_at": "2026-06-20T00:00:00.000Z",
+    "signature": "0x..."
+  }
+}
+```
+
+Escopo para `agents.register`:
+
+```text
+agent:agent_xyz|operator:0x...|services:audit,research|collateral:USDC:1000|manifest:https://example.com/.well-known/axp-agent.json
 ```
 
 Exemplo de cotacao de contrato:
@@ -367,6 +398,7 @@ Ferramentas expostas:
 
 ```text
 axp_find_agents
+axp_register_agent
 axp_get_agent_profile
 axp_get_capacity_score
 axp_get_trust_score
@@ -427,6 +459,7 @@ getManifest
 getCapabilities
 getTrustRanking
 findAgents
+registerAgent
 getAgentProfile
 getCapacityScore
 getTrustScore
@@ -475,6 +508,7 @@ get_manifest
 get_capabilities
 get_trust_ranking
 find_agents
+register_agent
 get_agent_profile
 get_capacity_score
 get_trust_score

@@ -66,6 +66,32 @@ class AxpClient:
         )
         return self._get_json(f"/agents{query}")
 
+    def register_agent(
+        self,
+        *,
+        agent_id: str,
+        name: str,
+        operator: str,
+        services: list[str],
+        collateral: dict[str, Any],
+        auth: dict[str, Any],
+        manifest_url: str | None = None,
+        role: str | None = None,
+    ) -> dict[str, Any]:
+        return self._post_json(
+            "/agents/register",
+            {
+                "agent_id": agent_id,
+                "name": name,
+                "operator": operator,
+                "services": services,
+                "collateral": collateral,
+                "manifest_url": manifest_url,
+                "role": role,
+                "auth": auth,
+            },
+        )
+
     def get_agent_profile(self, agent_id: str) -> dict[str, Any]:
         _require_value(agent_id, "agent_id")
         return self._get_json(f"/agents/{agent_id}")
@@ -214,6 +240,25 @@ def build_prepare_scope(
         f"requester:{requester}|"
         f"service:{service}|"
         f"capacity:{float(requested_capacity):g}"
+    )
+
+
+def build_registration_scope(
+    *,
+    agent_id: str,
+    operator: str,
+    services: list[str],
+    collateral: dict[str, Any],
+    manifest_url: str | None = None,
+) -> str:
+    asset = str(collateral.get("asset") or collateral.get("symbol") or "").upper()
+    amount = collateral.get("amount")
+    return (
+        f"agent:{agent_id}|"
+        f"operator:{operator}|"
+        f"services:{','.join(services)}|"
+        f"collateral:{asset}:{amount}|"
+        f"manifest:{manifest_url or 'none'}"
     )
 
 
