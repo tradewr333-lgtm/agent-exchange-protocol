@@ -302,6 +302,21 @@ const tools = [
         provider_agent_id: { type: 'string' },
         service: { type: 'string' },
         requested_capacity: { type: 'number' },
+        handshake_mode: { type: 'string', enum: ['advisory', 'enforced'], description: 'advisory saves risk and continues; enforced rejects if AXP Handshake fails.' },
+        trust_policy: {
+          type: 'object',
+          properties: {
+            minimum_score: { type: 'number' },
+            minimum_stake_usd: { type: 'number' },
+            minimum_capacity_usd: { type: 'number' },
+            require_online: { type: 'boolean' },
+            insurance_required: { type: 'boolean' },
+            allowed_risk: {
+              type: 'array',
+              items: { type: 'string' },
+            },
+          },
+        },
         auth: {
           type: 'object',
           required: ['agent_id', 'address', 'nonce', 'issued_at', 'signature'],
@@ -584,6 +599,8 @@ async function callTool(name, args) {
         provider_agent_id: args.provider_agent_id,
         service: args.service,
         requested_capacity: args.requested_capacity,
+        handshake_mode: args.handshake_mode,
+        trust_policy: args.trust_policy,
         auth: args.auth,
       });
     case 'axp_get_contract':

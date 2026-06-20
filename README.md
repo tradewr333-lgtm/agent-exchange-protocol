@@ -420,6 +420,36 @@ GET https://registry.axp.network/contracts/{contract_id}
 POST https://registry.axp.network/contracts/{contract_id}/settle
 ```
 
+Handshake automatico no preparo de contratos:
+
+`POST /contracts/prepare` executa o AXP Handshake automaticamente antes de criar o contrato. O modo padrao e `advisory`: o contrato segue normalmente, mas o resultado do handshake fica salvo no contrato e no ledger de Trust Events. Isso cria habito de verificacao sem bloquear a adocao.
+
+Para agentes, empresas ou frameworks que exigem politica forte, use `handshake_mode: "enforced"`. Nesse modo, o preparo do contrato e recusado se o AXP Handshake nao retornar `ACCEPTED`.
+
+Exemplo:
+
+```json
+{
+  "requester_agent_id": "agent_0001",
+  "provider_agent_id": "agent_0002",
+  "service": "research",
+  "requested_capacity": 100,
+  "handshake_mode": "advisory",
+  "trust_policy": {
+    "minimum_score": 85,
+    "require_online": true,
+    "allowed_risk": ["LOW", "MEDIUM"]
+  },
+  "auth": {
+    "agent_id": "agent_0002",
+    "address": "0x...",
+    "nonce": "...",
+    "issued_at": "...",
+    "signature": "0x..."
+  }
+}
+```
+
 Fluxo de descoberta:
 
 1. O agente le `/.well-known/axp.json`.

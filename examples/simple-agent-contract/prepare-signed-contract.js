@@ -8,6 +8,7 @@ const requesterAgentId = process.env.AXP_REQUESTER_AGENT_ID ?? 'agent_0001';
 const providerAgentId = process.env.AXP_PROVIDER_AGENT_ID ?? 'agent_0002';
 const service = process.env.AXP_SERVICE ?? 'research';
 const requestedCapacity = Number(process.env.AXP_REQUESTED_CAPACITY ?? '100');
+const handshakeMode = process.env.AXP_HANDSHAKE_MODE ?? 'advisory';
 
 const privateKey = getPrivateKey();
 
@@ -41,6 +42,11 @@ const preparedContract = await postJson('/contracts/prepare', {
   provider_agent_id: providerAgentId,
   service,
   requested_capacity: requestedCapacity,
+  handshake_mode: handshakeMode,
+  trust_policy: {
+    require_online: false,
+    allowed_risk: ['LOW', 'MEDIUM'],
+  },
   auth: {
     agent_id: providerAgentId,
     address: wallet.address,
@@ -58,6 +64,8 @@ console.log(JSON.stringify({
   status: preparedContract.status,
   provider_agent_id: preparedContract.quote.provider_agent_id,
   requested_capacity: preparedContract.quote.requested_capacity,
+  handshake_mode: preparedContract.handshake?.mode,
+  handshake: preparedContract.handshake?.result?.handshake,
   lookup_url: `${registryBaseUrl}/contracts/${preparedContract.contract_id}`,
 }, null, 2));
 

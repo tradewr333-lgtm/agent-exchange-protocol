@@ -125,6 +125,9 @@ export interface RegisterApiKeyInput {
 
 export interface PrepareContractInput extends ContractQuoteInput {
   auth: AgentAuth;
+  handshake_mode?: 'advisory' | 'enforced';
+  trust_policy?: HandshakePolicy;
+  policy?: HandshakePolicy;
 }
 
 export interface AuthMessageInput {

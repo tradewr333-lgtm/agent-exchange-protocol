@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { recordAgentContractOutcome } from './agents.js';
 import { verifyAgentAuth } from './auth.js';
 import { calculateProtocolFee, getAgentEconomicProfile } from './economics.js';
+import { performAxpHandshake } from './passport.js';
 import { getAgent } from './registry.js';
 import {
   appendSettlementEvent,
@@ -87,6 +88,37 @@ export async function prepareContract(payload = {}) {
     };
   }
 
+  const handshakeMode = normalizeHandshakeMode(payload.handshake_mode ?? payload.trust_mode);
+  const handshakeResult = await performAxpHandshake({
+    requester_agent_id: payload.requester_agent_id,
+    counterparty_agent_id: payload.provider_agent_id,
+    policy: payload.trust_policy ?? payload.policy,
+  });
+
+  if (handshakeMode === 'enforced' && handshakeResult.handshake !== 'ACCEPTED') {
+    await appendTrustEvent({
+      event_type: 'handshake_rejected',
+      agent_id: quote.provider_agent_id,
+      counterparty_id: quote.requester_agent_id,
+      contract_id: null,
+      value_usd: quote.requested_capacity,
+      data: {
+        mode: handshakeMode,
+        quote_id: quote.quote_id,
+        handshake: handshakeResult,
+      },
+    });
+
+    return {
+      ok: false,
+      status: 409,
+      error: 'handshake_policy_rejected',
+      mode: handshakeMode,
+      quote,
+      handshake: handshakeResult,
+    };
+  }
+
   const authResult = await verifyAgentAuth({
     action: 'contracts.prepare',
     agentId: payload.provider_agent_id,
@@ -106,6 +138,12 @@ export async function prepareContract(payload = {}) {
     prepared_at: new Date().toISOString(),
     expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     quote,
+    handshake: {
+      mode: handshakeMode,
+      advisory: handshakeMode === 'advisory',
+      enforced: handshakeMode === 'enforced',
+      result: handshakeResult,
+    },
     authorization: {
       action: 'contracts.prepare',
       agent_id: authResult.auth.agent_id,
@@ -143,6 +181,19 @@ export async function prepareContract(payload = {}) {
     contract_id: contract.contract_id,
     value_usd: quote.requested_capacity,
     data: contract,
+  });
+  await appendTrustEvent({
+    event_type: handshakeResult.handshake === 'ACCEPTED' ? 'handshake_accepted' : 'handshake_rejected',
+    agent_id: quote.provider_agent_id,
+    counterparty_id: quote.requester_agent_id,
+    contract_id: contract.contract_id,
+    value_usd: quote.requested_capacity,
+    data: {
+      mode: handshakeMode,
+      advisory: handshakeMode === 'advisory',
+      enforced: handshakeMode === 'enforced',
+      handshake: handshakeResult,
+    },
   });
 
   return {
@@ -288,6 +339,15 @@ function validateContractPayload(payload) {
   }
 
   return { ok: true };
+}
+
+function normalizeHandshakeMode(value) {
+  const mode = String(value ?? 'advisory').toLowerCase();
+  if (mode === 'enforced') {
+    return 'enforced';
+  }
+
+  return 'advisory';
 }
 
 function buildPrepareScope(payload) {

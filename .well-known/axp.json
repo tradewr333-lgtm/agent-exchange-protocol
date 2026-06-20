@@ -91,6 +91,8 @@
     "agent_passport",
     "agent_passport_score",
     "axp_handshake_protocol",
+    "contract_prepare_advisory_handshake",
+    "contract_prepare_enforced_handshake",
     "agent_trust_firewall",
     "scout_agent_blueprint",
     "trust_event_ledger",
@@ -189,6 +191,15 @@
     "register_scope_template": "agent:{agent_id}|operator:{operator}|services:{comma_separated_services}|collateral:{asset}:{amount}|manifest:{manifest_url_or_none}",
     "heartbeat_scope_template": "agent:{agent_id}|status:{active_paused_or_offline}|available:{true_or_false}|load:{current_load}|capacity:{available_capacity}|endpoint:{endpoint_or_none}",
     "prepare_scope_template": "provider:{provider_agent_id}|requester:{requester_agent_id_or_none}|service:{service}|capacity:{requested_capacity}",
+    "contract_prepare_handshake": {
+      "default_mode": "advisory",
+      "modes": {
+        "advisory": "Contract preparation continues, but AXP saves the handshake risk result inside the contract and trust ledger.",
+        "enforced": "Contract preparation is rejected unless AXP Handshake returns ACCEPTED."
+      },
+      "policy_field": "trust_policy",
+      "mode_field": "handshake_mode"
+    },
     "settlement_scope_template": "contract:{contract_id}|outcome:{settled_or_failed}",
     "signature_window_seconds": 600
   },

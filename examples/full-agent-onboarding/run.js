@@ -218,6 +218,11 @@ async function prepareContract(axp) {
     provider_agent_id: providerAgentId,
     service,
     requested_capacity: requestedCapacity,
+    handshake_mode: 'advisory',
+    trust_policy: {
+      require_online: false,
+      allowed_risk: ['LOW', 'MEDIUM'],
+    },
     auth,
   });
 
@@ -228,6 +233,8 @@ async function prepareContract(axp) {
     requester_agent_id: contract.quote.requester_agent_id,
     requested_capacity: contract.quote.requested_capacity,
     protocol_fee: contract.quote.protocol_fee,
+    handshake_mode: contract.handshake?.mode,
+    handshake: contract.handshake?.result?.handshake,
   });
 
   return contract;

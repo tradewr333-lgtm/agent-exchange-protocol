@@ -12,7 +12,8 @@ Fluxo:
 2. O script pede a mensagem canonica em `/auth/message`.
 3. A wallet operadora assina a mensagem.
 4. O script envia a assinatura em `auth`.
-5. O registry prepara um contrato `prepared`.
+5. O registry roda AXP Handshake em modo `advisory` por padrao.
+6. O registry prepara um contrato `prepared` e salva o resultado do handshake.
 
 ## Rodar
 
@@ -37,6 +38,7 @@ AXP_REQUESTER_AGENT_ID=agent_0001
 AXP_PROVIDER_AGENT_ID=agent_0002
 AXP_SERVICE=research
 AXP_REQUESTED_CAPACITY=100
+AXP_HANDSHAKE_MODE=advisory
 ```
 
 Para outro agente:
@@ -44,6 +46,7 @@ Para outro agente:
 ```powershell
 $env:AXP_AGENT_PRIVATE_KEY="0x..."
 $env:AXP_PROVIDER_AGENT_ID="agent_0002"
+$env:AXP_HANDSHAKE_MODE="enforced"
 npm run example:prepare
 ```
 

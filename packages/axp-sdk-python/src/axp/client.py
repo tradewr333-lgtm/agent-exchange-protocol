@@ -310,6 +310,8 @@ class AxpClient:
         requested_capacity: int | float,
         auth: dict[str, Any],
         requester_agent_id: str | None = None,
+        handshake_mode: str | None = None,
+        trust_policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self._post_json(
             "/contracts/prepare",
@@ -318,6 +320,8 @@ class AxpClient:
                 "provider_agent_id": provider_agent_id,
                 "service": service,
                 "requested_capacity": requested_capacity,
+                "handshake_mode": handshake_mode,
+                "trust_policy": trust_policy,
                 "auth": auth,
             },
         )

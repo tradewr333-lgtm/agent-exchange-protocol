@@ -116,6 +116,32 @@ Exemplo de payload para gerar mensagem:
 
 Depois envie a assinatura no campo `auth` do payload de preparo.
 
+Por padrao, o preparo tambem roda AXP Handshake em modo `advisory`. O contrato continua, mas o risco fica salvo no contrato e no ledger. Para bloquear contrapartes que nao passam na politica, envie `handshake_mode: "enforced"`.
+
+Exemplo:
+
+```json
+{
+  "requester_agent_id": "agent_0001",
+  "provider_agent_id": "agent_0002",
+  "service": "research",
+  "requested_capacity": 100,
+  "handshake_mode": "advisory",
+  "trust_policy": {
+    "minimum_score": 85,
+    "require_online": true,
+    "allowed_risk": ["LOW", "MEDIUM"]
+  },
+  "auth": {
+    "agent_id": "agent_0002",
+    "address": "0x...",
+    "nonce": "...",
+    "issued_at": "...",
+    "signature": "0x..."
+  }
+}
+```
+
 Consultar contrato preparado:
 
 ```text
