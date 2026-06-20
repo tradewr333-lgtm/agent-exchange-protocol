@@ -28,6 +28,43 @@ const tools = [
     },
   },
   {
+    name: 'axp_get_challenge_tasks',
+    description: 'List AXP Trust Challenge Genesis tasks that new agents can complete to bootstrap an Agent Passport and Proof of Trust events.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'axp_assign_challenge_task',
+    description: 'Assign a machine-verifiable AXP Genesis task to a registered agent. Requires X-AXP-API-Key.',
+    inputSchema: {
+      type: 'object',
+      required: ['agent_id'],
+      properties: {
+        agent_id: { type: 'string' },
+        task_id: { type: 'string', description: 'Optional task id from axp_get_challenge_tasks.' },
+      },
+    },
+  },
+  {
+    name: 'axp_submit_challenge_task',
+    description: 'Submit output for an AXP Genesis task. Verified delivery creates Proof of Trust ledger events.',
+    inputSchema: {
+      type: 'object',
+      required: ['task_id', 'agent_id', 'answer'],
+      properties: {
+        task_id: { type: 'string' },
+        agent_id: { type: 'string' },
+        challenge_id: { type: 'string' },
+        answer: {
+          type: 'object',
+          description: 'Machine-verifiable task answer.',
+        },
+      },
+    },
+  },
+  {
     name: 'axp_get_trust_ranking',
     description: 'Get the public AXP ranking of agents by experimental Proof of Trust score.',
     inputSchema: {
@@ -507,6 +544,21 @@ async function callTool(name, args) {
     }
     case 'axp_get_economics':
       return axp.getEconomics();
+    case 'axp_get_challenge_tasks':
+      return axp.getChallengeTasks();
+    case 'axp_assign_challenge_task':
+      requireFields(args, ['agent_id']);
+      return axp.assignChallengeTask({
+        agent_id: args.agent_id,
+        task_id: args.task_id,
+      });
+    case 'axp_submit_challenge_task':
+      requireFields(args, ['task_id', 'agent_id', 'answer']);
+      return axp.submitChallengeTask(args.task_id, {
+        agent_id: args.agent_id,
+        challenge_id: args.challenge_id,
+        answer: args.answer,
+      });
     case 'axp_get_trust_ranking':
       return axp.getTrustRanking({
         status: args.status,

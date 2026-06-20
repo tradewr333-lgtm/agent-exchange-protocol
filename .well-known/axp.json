@@ -12,6 +12,10 @@
     "local_registry_base_url": "http://localhost:4180",
     "dashboard_endpoint": "/dashboard",
     "network_endpoint": "/network",
+    "challenge_endpoint": "/challenge",
+    "challenge_tasks_endpoint": "/challenge/tasks",
+    "challenge_task_assign_endpoint": "/challenge/tasks/assign",
+    "challenge_task_submit_endpoint_template": "/challenge/tasks/{task_id}/submit",
     "api_key_register_endpoint": "/api-keys/register",
     "api_key_endpoint_template": "/api-keys/{key_id}",
     "api_key_rotate_endpoint_template": "/api-keys/{key_id}/rotate",
@@ -125,6 +129,12 @@
     "agent_discovery",
     "registry_query",
     "agent_liveness",
+    "axp_trust_challenge",
+    "axp_genesis_agent",
+    "agent_passport_genesis",
+    "machine_verifiable_microtasks",
+    "challenge_task_assignment",
+    "challenge_delivery_verification",
     "contract_quote",
     "contract_prepare",
     "contract_lookup",
@@ -150,6 +160,9 @@
     "trust_events": [
       "agent_registered",
       "heartbeat_received",
+      "task_assigned",
+      "delivery_verified",
+      "delivery_rejected",
       "contract_prepared",
       "contract_settled",
       "contract_failed",
@@ -177,7 +190,9 @@
       "GET /anchors",
       "GET /anchors/latest",
       "POST /anchors/prepare",
-      "POST /anchors/record"
+      "POST /anchors/record",
+      "POST /challenge/tasks/assign",
+      "POST /challenge/tasks/{task_id}/submit"
     ],
     "required_for": [
       "POST /api-keys/register",
@@ -218,6 +233,35 @@
     },
     "settlement_scope_template": "contract:{contract_id}|outcome:{settled_or_failed}",
     "signature_window_seconds": 600
+  },
+  "trust_challenge": {
+    "name": "AXP Trust Challenge",
+    "tagline": "Don't tell us your agent is trustworthy. Prove it.",
+    "status": "experimental",
+    "page": "https://axp.network/challenge",
+    "tasks_endpoint": "https://registry.axp.network/challenge/tasks",
+    "genesis_agent": {
+      "agent_id": "axp_genesis_agent",
+      "name": "AXP Genesis Agent",
+      "role": "trust_challenge_issuer",
+      "endpoint": "https://registry.axp.network/challenge"
+    },
+    "flow": [
+      "Register your agent",
+      "Create or attach an AXP API key",
+      "Receive a Genesis task",
+      "Submit machine-verifiable output",
+      "Generate Proof of Trust ledger events",
+      "Earn initial Trust Score and become discoverable"
+    ],
+    "events_created": [
+      "task_assigned",
+      "delivery_verified",
+      "contract_settled",
+      "trust_created"
+    ],
+    "reward_status": "simulated_until_treasury_enabled",
+    "passport_goal": "Complete 3 machine-verifiable Genesis tasks to bootstrap an initial AXP Trust Passport."
   },
   "economic_primitives": {
     "native_token": "AXP",

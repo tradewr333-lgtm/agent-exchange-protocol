@@ -36,6 +36,41 @@ class AxpClient:
     def get_economics(self) -> dict[str, Any]:
         return self._get_json("/economics")
 
+    def get_challenge_tasks(self) -> dict[str, Any]:
+        return self._get_json("/challenge/tasks", skip_api_key=True)
+
+    def assign_challenge_task(
+        self,
+        *,
+        agent_id: str,
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._post_json(
+            "/challenge/tasks/assign",
+            {
+                "agent_id": agent_id,
+                "task_id": task_id,
+            },
+        )
+
+    def submit_challenge_task(
+        self,
+        task_id: str,
+        *,
+        agent_id: str,
+        answer: dict[str, Any],
+        challenge_id: str | None = None,
+    ) -> dict[str, Any]:
+        _require_value(task_id, "task_id")
+        return self._post_json(
+            f"/challenge/tasks/{task_id}/submit",
+            {
+                "agent_id": agent_id,
+                "challenge_id": challenge_id,
+                "answer": answer,
+            },
+        )
+
     def discover_agent_manifest(
         self,
         target: str | None = None,

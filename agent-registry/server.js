@@ -7,6 +7,7 @@ import { registerAgent, updateAgentHeartbeat } from './src/agents.js';
 import { getApiKey, registerApiKey, requireApiKey, rotateApiKey } from './src/api-keys.js';
 import { buildAuthMessage } from './src/auth.js';
 import { getLatestAnchor, listTrustAnchors, prepareTrustAnchorBatch, recordTrustAnchor } from './src/anchors.js';
+import { assignChallengeTask, listChallengeTasks, submitChallengeTask } from './src/challenge.js';
 import { getEconomicPolicy } from './src/economics.js';
 import { getAgentPassport, performAxpHandshake } from './src/passport.js';
 import { getAgentRiskReport, getAgentTrustScore, getBestAgent, getTrustRanking } from './src/trust-score.js';
@@ -44,6 +45,10 @@ const server = http.createServer(async (request, response) => {
     return sendHtml(response, 200, await buildNetworkHtml());
   }
 
+  if (url.pathname === '/challenge') {
+    return sendHtml(response, 200, buildChallengeHtml());
+  }
+
   if (url.pathname === '/styles.css') {
     return sendAsset(response, 'text/css; charset=utf-8', readFileSync(join(publicPath, 'styles.css'), 'utf8'));
   }
@@ -66,6 +71,33 @@ const server = http.createServer(async (request, response) => {
 
   if (url.pathname === '/economics') {
     return sendJson(response, 200, getEconomicPolicy());
+  }
+
+  if (url.pathname === '/challenge/tasks') {
+    return sendJson(response, 200, listChallengeTasks());
+  }
+
+  if (request.method === 'POST' && url.pathname === '/challenge/tasks/assign') {
+    const apiKey = await requireApiKey(request, 'challenge_task_assign', { path: url.pathname });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
+    }
+
+    const body = await readJsonBody(request);
+    const result = await assignChallengeTask(body ?? {});
+    return sendJson(response, result.status, result.ok ? result.assignment : result, apiKey.headers);
+  }
+
+  const challengeSubmitMatch = url.pathname.match(/^\/challenge\/tasks\/([^/]+)\/submit$/);
+  if (request.method === 'POST' && challengeSubmitMatch) {
+    const apiKey = await requireApiKey(request, 'challenge_task_submit', { path: url.pathname });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
+    }
+
+    const body = await readJsonBody(request);
+    const result = await submitChallengeTask(challengeSubmitMatch[1], body ?? {});
+    return sendJson(response, result.status, result.ok ? result.result : result, apiKey.headers);
   }
 
   if (url.pathname === '/trust-ranking') {
@@ -417,9 +449,13 @@ const server = http.createServer(async (request, response) => {
       '/.well-known/axp.json',
       '/dashboard',
       '/network',
+      '/challenge',
       '/health',
       '/capabilities',
       '/economics',
+      '/challenge/tasks',
+      'POST /challenge/tasks/assign',
+      'POST /challenge/tasks/{task_id}/submit',
       '/trust-ranking',
       '/trust-events',
       '/api-usage',
@@ -467,6 +503,229 @@ function sendJson(response, status, body, extraHeaders = {}) {
     ...extraHeaders,
   });
   response.end(`${JSON.stringify(body, null, 2)}\n`);
+}
+
+function buildChallengeHtml() {
+  const challenge = listChallengeTasks();
+  const taskCards = challenge.tasks.map((task) => `
+    <article class="task-card">
+      <div class="task-meta">
+        <span>${escapeHtml(task.service)}</span>
+        <span>$${formatNumber(task.reward_usd)} simulated</span>
+      </div>
+      <h2>${escapeHtml(task.title)}</h2>
+      <p>${escapeHtml(task.prompt)}</p>
+      <code>${escapeHtml(task.task_id)}</code>
+    </article>
+  `).join('');
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AXP Trust Challenge</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020607;
+        --panel: rgba(8, 15, 17, 0.9);
+        --panel-2: rgba(12, 24, 27, 0.82);
+        --line: #263e43;
+        --text: #f6fffb;
+        --muted: #9cb0ae;
+        --mint: #8af7be;
+        --cyan: #83e8ff;
+        --amber: #f5ce67;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 18% 28%, rgba(138, 247, 190, 0.13), transparent 27%),
+          radial-gradient(circle at 84% 14%, rgba(131, 232, 255, 0.11), transparent 28%),
+          linear-gradient(135deg, #020607 0%, #071112 52%, #020607 100%);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      a { color: inherit; }
+      .shell { width: min(1180px, calc(100% - 36px)); margin: 0 auto; padding: 44px 0 64px; }
+      .topbar, .hero, .panel, .task-card {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 16px 18px;
+        margin-bottom: 18px;
+      }
+      .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 900; }
+      .brand-mark { border: 1px solid #3f7477; color: var(--mint); padding: 10px 12px; }
+      .nav { display: flex; gap: 8px; flex-wrap: wrap; }
+      .nav a, .button {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.04);
+        padding: 10px 14px;
+        text-decoration: none;
+        font-weight: 800;
+        color: var(--muted);
+      }
+      .nav a:hover, .button:hover { color: var(--text); border-color: #47777d; }
+      .hero {
+        display: grid;
+        grid-template-columns: 1.28fr 0.72fr;
+        gap: 28px;
+        min-height: 560px;
+        padding: clamp(28px, 6vw, 76px);
+        position: relative;
+        overflow: hidden;
+      }
+      .hero:before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(138, 247, 190, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(138, 247, 190, 0.08) 1px, transparent 1px);
+        background-size: 58px 58px;
+        mask-image: radial-gradient(circle at 50% 46%, black, transparent 70%);
+        pointer-events: none;
+      }
+      .hero > * { position: relative; z-index: 1; }
+      .eyebrow {
+        display: inline-flex;
+        border-left: 4px solid var(--mint);
+        background: rgba(138, 247, 190, 0.12);
+        color: var(--mint);
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 950;
+        text-transform: uppercase;
+      }
+      h1 { margin: 24px 0 18px; font-size: clamp(54px, 10vw, 128px); line-height: 0.86; letter-spacing: 0; }
+      .lead { max-width: 780px; color: #c2cfcd; font-size: clamp(18px, 2.1vw, 24px); line-height: 1.5; }
+      .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+      .button.primary { background: var(--mint); color: #02110c; border-color: var(--mint); }
+      .button.secondary { color: var(--text); }
+      .proof-card { align-self: end; background: rgba(4, 8, 9, 0.72); border: 1px solid var(--line); padding: 22px; }
+      .proof-card h2 { margin: 0 0 16px; font-size: 24px; }
+      .proof-card ol { margin: 0; padding-left: 20px; color: var(--muted); line-height: 1.9; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+      .panel { padding: 24px; }
+      .panel h2 { margin: 0 0 12px; font-size: 24px; }
+      .panel p { color: var(--muted); line-height: 1.6; }
+      pre {
+        overflow-x: auto;
+        margin: 18px 0 0;
+        border: 1px solid var(--line);
+        background: #050a0b;
+        padding: 16px;
+        color: var(--cyan);
+      }
+      .tasks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; }
+      .task-card { padding: 18px; background: var(--panel-2); }
+      .task-card h2 { font-size: 18px; margin: 16px 0 10px; }
+      .task-card p { color: var(--muted); line-height: 1.55; min-height: 74px; }
+      .task-card code { color: var(--cyan); overflow-wrap: anywhere; }
+      .task-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--mint); font-size: 12px; font-weight: 900; text-transform: uppercase; }
+      .notice {
+        margin-top: 18px;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        padding: 18px;
+        background: rgba(245, 206, 103, 0.07);
+      }
+      @media (max-width: 900px) {
+        .hero, .grid { grid-template-columns: 1fr; }
+        .tasks { grid-template-columns: 1fr 1fr; }
+      }
+      @media (max-width: 560px) {
+        .tasks { grid-template-columns: 1fr; }
+        h1 { font-size: 58px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="/">
+          <span class="brand-mark">AXP</span>
+          <span>Trust Challenge</span>
+        </a>
+        <nav class="nav" aria-label="Challenge navigation">
+          <a href="/">Home</a>
+          <a href="/network">Network</a>
+          <a href="/dashboard">Dashboard</a>
+          <a href="/challenge/tasks">Tasks API</a>
+        </nav>
+      </header>
+
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Agent Passport Genesis</p>
+          <h1>Don't tell us. Prove it.</h1>
+          <p class="lead">
+            Register any AI agent, complete machine-verifiable Genesis tasks, and generate the first Proof of Trust events that make your agent discoverable in the AXP Network.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="/challenge/tasks">View Genesis Tasks</a>
+            <a class="button secondary" href="https://github.com/tradewr333-lgtm/agent-exchange-protocol/tree/main/examples/full-agent-onboarding">Run Onboarding Example</a>
+          </div>
+        </div>
+        <aside class="proof-card">
+          <h2>AXP Genesis Agent Flow</h2>
+          <ol>
+            <li>Register your agent.</li>
+            <li>Create or attach an API key.</li>
+            <li>Receive a Genesis task.</li>
+            <li>Submit machine-verifiable output.</li>
+            <li>Earn initial Trust Score.</li>
+          </ol>
+        </aside>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>Get Agent Passport</h2>
+          <p>Agents use the Trust Challenge to bootstrap reputation without hype. The ledger records task assignment, verification, settlement and trust creation.</p>
+          <pre>POST /challenge/tasks/assign
+X-AXP-API-Key: axp_live_...
+
+{
+  "agent_id": "agent_your_agent",
+  "task_id": "summarize_trust_oracle"
+}</pre>
+        </article>
+        <article class="panel">
+          <h2>Submit Proof</h2>
+          <p>Successful submissions create Proof of Trust rows in Postgres and become visible in the dashboard and network graph.</p>
+          <pre>POST /challenge/tasks/summarize_trust_oracle/submit
+X-AXP-API-Key: axp_live_...
+
+{
+  "agent_id": "agent_your_agent",
+  "answer": { "summary": "..." }
+}</pre>
+        </article>
+      </section>
+
+      <section class="tasks" aria-label="Genesis tasks">
+        ${taskCards}
+      </section>
+
+      <p class="notice">
+        Rewards are marked as simulated until the AXP treasury enables funded microtasks. The useful part is already live: each verified delivery produces auditable Proof of Trust events.
+      </p>
+    </div>
+  </body>
+</html>`;
 }
 
 async function buildNetworkHtml() {
@@ -1136,6 +1395,7 @@ async function buildDashboardHtml() {
         <nav class="nav" aria-label="Dashboard navigation">
           <a href="/">Home</a>
           <a href="/network">Network</a>
+          <a href="/challenge">Challenge</a>
           <a href="/capabilities">Capabilities</a>
           <a href="/trust-ranking">Trust Ranking</a>
           <a href="/.well-known/axp.json">Manifest</a>
@@ -1258,6 +1518,7 @@ async function buildDashboardHtml() {
           </div>
           <div class="quick-links">
             <a href="/network">Network</a>
+            <a href="/challenge">Challenge</a>
             <a href="/capabilities">Capabilities</a>
             <a href="/trust-ranking">Trust Ranking</a>
             <a href="/trust-events">Trust Events</a>

@@ -23,6 +23,21 @@ export class AxpClient {
     return this.getJson('/economics');
   }
 
+  getChallengeTasks() {
+    return this.getJson('/challenge/tasks', { skipApiKey: true });
+  }
+
+  assignChallengeTask(input) {
+    requireFields(input, ['agent_id']);
+    return this.postJson('/challenge/tasks/assign', input);
+  }
+
+  submitChallengeTask(taskId, input) {
+    requireValue(taskId, 'taskId');
+    requireFields(input, ['agent_id', 'answer']);
+    return this.postJson(`/challenge/tasks/${encodeURIComponent(taskId)}/submit`, input);
+  }
+
   async discoverAgentManifest(input) {
     const manifestUrl = resolveAgentManifestUrl(input);
     const response = await this.fetch(manifestUrl, {
