@@ -16,6 +16,8 @@
     "api_key_rotate_endpoint_template": "/api-keys/{key_id}/rotate",
     "agents_endpoint": "/agents",
     "agent_register_endpoint": "/agents/register",
+    "agent_manifest_standard": "/.well-known/agent.json",
+    "agent_manifest_verify_endpoint": "/agents/verify-manifest",
     "agent_endpoint_template": "/agents/{agent_id}",
     "agent_heartbeat_endpoint_template": "/agents/{agent_id}/heartbeat",
     "agent_trust_score_endpoint_template": "/agents/{agent_id}/trust-score",
@@ -75,6 +77,8 @@
     "api_key_rotation",
     "postgres_persistence",
     "json_fallback_storage",
+    "agent_manifest_discovery",
+    "agent_manifest_verification",
     "trust_event_ledger",
     "trust_event_query",
     "api_usage_query",
@@ -283,6 +287,7 @@
     "protocol_spec": "specs/protocol-spec.md",
     "economic_model": "specs/economic-model.md",
     "proof_of_trust": "specs/proof-of-trust.md",
+    "agent_manifest": "specs/agent-manifest.md",
     "roadmap": "ROADMAP.md"
   }
 }

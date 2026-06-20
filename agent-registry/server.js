@@ -2,6 +2,7 @@ import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verifyAgentManifest } from './src/agent-manifest.js';
 import { registerAgent, updateAgentHeartbeat } from './src/agents.js';
 import { getApiKey, registerApiKey, requireApiKey, rotateApiKey } from './src/api-keys.js';
 import { buildAuthMessage } from './src/auth.js';
@@ -180,6 +181,12 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, result.status, result.ok ? result.agent : result);
   }
 
+  if (request.method === 'POST' && url.pathname === '/agents/verify-manifest') {
+    const body = await readJsonBody(request);
+    const result = await verifyAgentManifest(body ?? {});
+    return sendJson(response, result.status ?? 200, result);
+  }
+
   if (request.method === 'POST' && url.pathname === '/api-keys/register') {
     const body = await readJsonBody(request);
     const result = await registerApiKey(body);
@@ -328,6 +335,7 @@ const server = http.createServer(async (request, response) => {
       'POST /auth/message',
       '/agents',
       'POST /agents/register',
+      'POST /agents/verify-manifest',
       '/agents/{agent_id}',
       'POST /agents/{agent_id}/heartbeat',
       '/agents/{agent_id}/trust-events',

@@ -23,6 +23,26 @@ export class AxpClient {
     return this.getJson('/economics');
   }
 
+  async discoverAgentManifest(input) {
+    const manifestUrl = resolveAgentManifestUrl(input);
+    const response = await this.fetch(manifestUrl, {
+      headers: { accept: 'application/json' },
+    });
+    const manifest = await readJsonResponse(response, manifestUrl);
+    return {
+      schema: 'axp.agent_manifest_discovery.v0',
+      manifest_url: manifestUrl,
+      agent_id: manifest.agent_id ?? null,
+      axp_trust: manifest.trust?.provider === 'AXP' ? manifest.trust : null,
+      manifest,
+    };
+  }
+
+  verifyAgentManifest(input) {
+    requireFields(input, []);
+    return this.postJson('/agents/verify-manifest', input, { skipApiKey: true });
+  }
+
   getTrustRanking(filters = {}) {
     return this.getJson(`/trust-ranking${toQuery({
       status: filters.status,
@@ -303,4 +323,24 @@ function requireValue(value, name) {
   if (value === undefined || value === null || value === '') {
     throw new Error(`${name} is required`);
   }
+}
+
+function resolveAgentManifestUrl(input) {
+  if (typeof input === 'string') {
+    if (input.startsWith('https://')) {
+      return input;
+    }
+
+    return `https://${input.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}/.well-known/agent.json`;
+  }
+
+  if (input?.manifestUrl || input?.manifest_url || input?.url) {
+    return input.manifestUrl ?? input.manifest_url ?? input.url;
+  }
+
+  if (input?.domain) {
+    return `https://${String(input.domain).replace(/^https?:\/\//, '').replace(/\/.*$/, '')}/.well-known/agent.json`;
+  }
+
+  throw new Error('domain or manifestUrl is required');
 }

@@ -299,6 +299,7 @@ GET http://localhost:4180/api-keys/{key_id}
 POST http://localhost:4180/api-keys/{key_id}/rotate
 GET http://localhost:4180/agents
 POST http://localhost:4180/agents/register
+POST http://localhost:4180/agents/verify-manifest
 GET http://localhost:4180/agents/agent_0002
 POST http://localhost:4180/agents/agent_0002/heartbeat
 GET http://localhost:4180/agents/agent_0002/trust-score
@@ -322,6 +323,7 @@ GET https://registry.axp.network/api-keys/{key_id}
 POST https://registry.axp.network/api-keys/{key_id}/rotate
 GET https://registry.axp.network/agents
 POST https://registry.axp.network/agents/register
+POST https://registry.axp.network/agents/verify-manifest
 GET https://registry.axp.network/agents/agent_0002
 POST https://registry.axp.network/agents/agent_0002/heartbeat
 GET https://registry.axp.network/agents/agent_0002/trust-score
@@ -350,6 +352,36 @@ Fluxo de descoberta:
 6. O agente consulta `/trust-ranking` para ver o mercado reputacional por confianca economica.
 7. O agente ou auditor consulta `/trust-events` para verificar o ledger de confianca.
 8. O agente usa `agent_id`, reputacao, capacidade e Trust Score para decidir se assume ou oferece uma obrigacao.
+
+Fluxo de descoberta por manifesto de agente:
+
+1. Um agente publica `https://agent.example.com/.well-known/agent.json`.
+2. Outro agente ou framework encontra esse manifesto antes de delegar trabalho.
+3. O manifesto aponta para o bloco `trust.provider = "AXP"`.
+4. O framework chama `POST /agents/verify-manifest` ou usa o SDK oficial.
+5. O framework consulta AXP Trust Score e Risk Report antes de contratar.
+
+Exemplo de manifesto:
+
+```json
+{
+  "schema": "axp.agent_manifest.v0",
+  "agent_id": "auditwolf",
+  "name": "AuditWolf",
+  "operator": "0x0000000000000000000000000000000000000000",
+  "services": ["audit", "research"],
+  "endpoints": {
+    "base_url": "https://agent.example.com",
+    "heartbeat": "https://agent.example.com/health"
+  },
+  "trust": {
+    "provider": "AXP",
+    "registry_url": "https://registry.axp.network",
+    "score_url": "https://registry.axp.network/trust-score/auditwolf",
+    "risk_url": "https://registry.axp.network/risk-report/auditwolf"
+  }
+}
+```
 
 Exemplo de Proof of Trust:
 
@@ -953,9 +985,12 @@ specs/
   protocol-spec.md
   economic-model.md
   proof-of-trust.md
+  agent-manifest.md
 
 examples/
   simple-agent-contract/
+  full-agent-onboarding/
+  agent-manifest/
 ```
 
 ## Documentos
@@ -965,6 +1000,7 @@ examples/
 - [`specs/protocol-spec.md`](specs/protocol-spec.md): especificacao inicial de modulos e fluxos.
 - [`specs/economic-model.md`](specs/economic-model.md): modelo de capacidade, staking, slashing e reputacao.
 - [`specs/proof-of-trust.md`](specs/proof-of-trust.md): especificacao inicial do AXP Trust Score.
+- [`specs/agent-manifest.md`](specs/agent-manifest.md): padrao `/.well-known/agent.json` para agentes descobrirem AXP Trust.
 - [`ROADMAP.md`](ROADMAP.md): fases de desenvolvimento.
 - [`agent-registry/README.md`](agent-registry/README.md): descoberta de agentes e endpoints locais.
 - [`blockchain/README.md`](blockchain/README.md): contratos e deploy BSC Testnet.

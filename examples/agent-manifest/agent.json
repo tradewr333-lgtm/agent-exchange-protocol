@@ -1,0 +1,21 @@
+{
+  "schema": "axp.agent_manifest.v0",
+  "agent_id": "auditwolf",
+  "name": "AuditWolf",
+  "operator": "0x0000000000000000000000000000000000000000",
+  "services": [
+    "audit",
+    "research",
+    "verified_delivery"
+  ],
+  "endpoints": {
+    "base_url": "https://agent.example.com",
+    "heartbeat": "https://agent.example.com/health"
+  },
+  "trust": {
+    "provider": "AXP",
+    "registry_url": "https://registry.axp.network",
+    "score_url": "https://registry.axp.network/trust-score/auditwolf",
+    "risk_url": "https://registry.axp.network/risk-report/auditwolf"
+  }
+}

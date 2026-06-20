@@ -36,6 +36,41 @@ class AxpClient:
     def get_economics(self) -> dict[str, Any]:
         return self._get_json("/economics")
 
+    def discover_agent_manifest(
+        self,
+        target: str | None = None,
+        *,
+        domain: str | None = None,
+        manifest_url: str | None = None,
+    ) -> dict[str, Any]:
+        url = _resolve_agent_manifest_url(target, domain=domain, manifest_url=manifest_url)
+        request = Request(url, method="GET", headers={"accept": "application/json"})
+        manifest = self._read_json(request, url)
+        return {
+            "schema": "axp.agent_manifest_discovery.v0",
+            "manifest_url": url,
+            "agent_id": manifest.get("agent_id"),
+            "axp_trust": manifest.get("trust") if manifest.get("trust", {}).get("provider") == "AXP" else None,
+            "manifest": manifest,
+        }
+
+    def verify_agent_manifest(
+        self,
+        *,
+        manifest_url: str | None = None,
+        domain: str | None = None,
+        agent_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._post_json(
+            "/agents/verify-manifest",
+            {
+                "manifest_url": manifest_url,
+                "domain": domain,
+                "agent_id": agent_id,
+            },
+            skip_api_key=True,
+        )
+
     def get_trust_ranking(
         self,
         *,
@@ -393,6 +428,26 @@ def _bool_query(value: bool | None) -> str | None:
     if value is None:
         return None
     return "true" if value else "false"
+
+
+def _resolve_agent_manifest_url(
+    target: str | None = None,
+    *,
+    domain: str | None = None,
+    manifest_url: str | None = None,
+) -> str:
+    value = manifest_url or target
+    if value:
+        if value.startswith("https://"):
+            return value
+        clean_domain = value.removeprefix("http://").removeprefix("https://").split("/", 1)[0]
+        return f"https://{clean_domain}/.well-known/agent.json"
+
+    if domain:
+        clean_domain = domain.removeprefix("http://").removeprefix("https://").split("/", 1)[0]
+        return f"https://{clean_domain}/.well-known/agent.json"
+
+    raise ValueError("domain or manifest_url is required")
 
 
 def _require_value(value: str, name: str) -> None:
