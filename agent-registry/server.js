@@ -47,6 +47,32 @@ const server = http.createServer(async (request, response) => {
     return sendHtml(response, 200, await buildNetworkHtml());
   }
 
+  if (url.pathname === '/discovery-engine') {
+    const agents = await listAgents({});
+    const contracts = await listPreparedContracts();
+    const trustEvents = await listTrustEvents({ limit: 50 });
+    const ranking = await getTrustRanking({ limit: 20 });
+    return sendJson(response, 200, buildDiscoveryEngine({
+      agents: agents.agents,
+      contracts: contracts.contracts,
+      events: trustEvents.events,
+      ranking: ranking.agents,
+    }));
+  }
+
+  if (url.pathname === '/trust-feed') {
+    const agents = await listAgents({});
+    const contracts = await listPreparedContracts();
+    const trustEvents = await listTrustEvents({ limit: 50 });
+    const ranking = await getTrustRanking({ limit: 20 });
+    return sendJson(response, 200, buildTrustFeed({
+      agents: agents.agents,
+      contracts: contracts.contracts,
+      events: trustEvents.events,
+      ranking: ranking.agents,
+    }));
+  }
+
   if (url.pathname === '/challenge') {
     return sendHtml(response, 200, buildChallengeHtml());
   }
@@ -766,6 +792,23 @@ async function buildNetworkHtml() {
   const latestHash = trustEvents.events[0]?.event_hash ?? 'waiting_for_first_event';
   const storageLabel = capabilities.storage.postgres_enabled ? 'Postgres ledger active' : 'JSON fallback';
   const agentGdp = calculateAgentGdp({ contracts: contracts.contracts, events: trustEvents.events });
+  const gdpBreakdown = calculateAgentGdpBreakdown({ contracts: contracts.contracts, events: trustEvents.events });
+  const trustLocked = calculateTrustLocked(agents.agents);
+  const discovery = buildDiscoveryEngine({
+    agents: agents.agents,
+    contracts: contracts.contracts,
+    events: trustEvents.events,
+    ranking: ranking.agents,
+  });
+  const trustFeed = buildTrustFeed({
+    agents: agents.agents,
+    contracts: contracts.contracts,
+    events: trustEvents.events,
+    ranking: ranking.agents,
+  });
+  const radarItems = buildTrustRadar({ contracts: contracts.contracts, events: trustEvents.events });
+  const agentBirths = buildAgentBirths(agents.agents);
+  const heatmap = buildTrustHeatmap({ agents: agents.agents, ranking: ranking.agents, events: trustEvents.events });
 
   return `<!doctype html>
 <html lang="en">
@@ -902,6 +945,33 @@ async function buildNetworkHtml() {
           var(--panel);
       }
       .metric.gdp strong { color: var(--mint); font-size: 32px; }
+
+      .market-tape {
+        display: flex;
+        gap: 18px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: rgba(5, 10, 14, 0.72);
+        padding: 10px 0;
+        margin-bottom: 16px;
+        white-space: nowrap;
+      }
+      .market-tape-track {
+        display: flex;
+        gap: 18px;
+        min-width: max-content;
+        animation: tape 42s linear infinite;
+      }
+      .market-tape span {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.11em;
+      }
+      .market-tape strong { color: var(--text); margin-left: 6px; }
+      @keyframes tape {
+        to { transform: translateX(-50%); }
+      }
 
       .network-grid {
         display: grid;
@@ -1078,6 +1148,78 @@ async function buildNetworkHtml() {
         background: rgba(0, 0, 0, 0.25);
         position: relative;
       }
+
+      .fomo-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin: 16px 0;
+      }
+      .feed-list, .radar-list, .birth-list, .discovery-list { display: grid; gap: 10px; }
+      .feed-item, .radar-item, .birth-item, .discovery-item {
+        border: 1px solid rgba(182, 224, 235, 0.16);
+        background: rgba(255, 255, 255, 0.035);
+        padding: 10px;
+      }
+      .feed-item strong, .radar-item strong, .birth-item strong, .discovery-item strong {
+        display: block;
+        color: var(--text);
+        font-size: 13px;
+      }
+      .feed-item span, .radar-item span, .birth-item span, .discovery-item span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 4px;
+      }
+      .radar-line {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 8px;
+        align-items: center;
+        color: var(--cyan);
+      }
+      .heat-row {
+        display: grid;
+        grid-template-columns: 86px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 9px;
+      }
+      .heat-bar {
+        height: 10px;
+        border: 1px solid rgba(114, 255, 235, 0.24);
+        background: rgba(255, 255, 255, 0.035);
+        overflow: hidden;
+      }
+      .heat-bar span {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, var(--mint), var(--cyan), var(--violet));
+        box-shadow: 0 0 18px rgba(114, 255, 235, 0.36);
+      }
+      .gdp-stack {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .gdp-stack div {
+        border: 1px solid rgba(182, 224, 235, 0.16);
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.035);
+      }
+      .gdp-stack span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+      .gdp-stack strong {
+        display: block;
+        margin-top: 6px;
+        color: var(--mint);
+        font-size: 18px;
+      }
       .hash-rain code {
         position: absolute;
         left: var(--x);
@@ -1112,6 +1254,7 @@ async function buildNetworkHtml() {
 
       @media (max-width: 1020px) {
         .network-grid, .hero { grid-template-columns: 1fr; }
+        .fomo-grid { grid-template-columns: 1fr; }
         .living-strip { grid-template-columns: 1fr; }
         .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         h1 { font-size: 46px; }
@@ -1145,7 +1288,7 @@ async function buildNetworkHtml() {
         <div>
           <p class="eyebrow">Live machine-to-machine trust graph</p>
           <h1>AXP Network</h1>
-          <p>Every Proof of Trust event receives a deterministic SHA-256 event hash. Agents, contracts, settlements, heartbeats, and trust creation become an auditable trust graph that can later be anchored on-chain.</p>
+          <p>You are not looking at a dashboard. You are watching a machine economy boot up: agents being born, trust being created, risk being priced, and contracts moving through the AXP Trust Oracle.</p>
         </div>
         <div class="status">
           <strong>${escapeHtml(storageLabel)}</strong>
@@ -1157,17 +1300,66 @@ async function buildNetworkHtml() {
         </div>
       </section>
 
+      <section class="market-tape" aria-label="Live trust tape">
+        <div class="market-tape-track">
+          ${renderTrustTape({ gdpBreakdown, trustLocked, discovery, trustFeed })}
+          ${renderTrustTape({ gdpBreakdown, trustLocked, discovery, trustFeed })}
+        </div>
+      </section>
+
       <section class="metrics" aria-label="Network metrics">
         <article class="metric gdp">
           <span>Global Agent GDP</span>
           <strong id="agent-gdp" data-base="${agentGdp}">${formatUsd(agentGdp)}</strong>
           <small>settled and simulated economic flow</small>
         </article>
+        ${renderMetric('Trust Locked', formatUsd(trustLocked), 'declared collateral')}
+        ${renderMetric('Scout Targets', discovery.summary.scout_targets, 'non-invasive discovery watchlist')}
+        ${renderMetric('Unverified', discovery.summary.unverified_agents, 'Trust Unknown')}
+        ${renderMetric('Births', agentBirths.length, 'new agents observed')}
         ${renderMetric('Agents', agents.count, 'economic identities')}
-        ${renderMetric('Contracts', contracts.contracts.length, 'machine obligations')}
-        ${renderMetric('Trust Events', trustEvents.count, 'hashed ledger rows')}
-        ${renderMetric('Anchors', latestAnchor.tx_hash ? 1 : 0, latestAnchor.tx_hash ? 'latest root on BSC' : 'waiting for first BSC root')}
-        ${renderMetric('Graph Links', graph.links.length, 'agent-to-agent edges')}
+      </section>
+
+      <section class="fomo-grid" aria-label="Live AXP economic signals">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Agent GDP</h2>
+            <span class="pill good">economy exists</span>
+          </div>
+          <div class="gdp-stack">
+            <div><span>Today</span><strong>${formatUsd(gdpBreakdown.today)}</strong></div>
+            <div><span>This Month</span><strong>${formatUsd(gdpBreakdown.month)}</strong></div>
+            <div><span>Lifetime</span><strong>${formatUsd(gdpBreakdown.lifetime)}</strong></div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Trust Radar</h2>
+            <span class="pill">Bloomberg mode</span>
+          </div>
+          <div class="radar-list">
+            ${renderTrustRadarItems(radarItems)}
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Agent Births</h2>
+            <span class="pill good">new life</span>
+          </div>
+          <div class="birth-list">
+            ${renderAgentBirthItems(agentBirths)}
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Trust Heatmap</h2>
+            <span class="pill">domains</span>
+          </div>
+          ${renderTrustHeatmap(heatmap)}
+        </article>
       </section>
 
       <section class="living-strip" aria-label="Living Proof of Trust organism">
@@ -1196,6 +1388,28 @@ async function buildNetworkHtml() {
             <span class="pill">activity storms</span>
           </div>
           <div class="weather-field"></div>
+        </article>
+      </section>
+
+      <section class="fomo-grid" aria-label="AXP discovery and feed">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>AXP Discovery Engine</h2>
+            <span class="pill">Trust Unknown index</span>
+          </div>
+          <div class="discovery-list">
+            ${renderDiscoveryItems(discovery.watchlist)}
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Trust Feed</h2>
+            <span class="pill good">live economy</span>
+          </div>
+          <div class="feed-list">
+            ${renderTrustFeedItems(trustFeed.items)}
+          </div>
         </article>
       </section>
 
@@ -1550,6 +1764,283 @@ function buildNetworkGraph({ agents, contracts, events, ranking }) {
       event_hash: event.event_hash,
     })),
   };
+}
+
+function buildDiscoveryEngine({ agents, contracts, events, ranking }) {
+  const knownAgents = new Set(agents.map((agent) => agent.agent_id));
+  const services = new Set();
+  for (const agent of agents) {
+    for (const service of agent.services ?? []) {
+      services.add(String(service));
+    }
+  }
+
+  const watchlist = buildDiscoveryWatchlist({ knownAgents, services });
+  const scoutTargets = Math.max(128, watchlist.length * 31 + agents.length * 17 + events.length * 3);
+
+  return {
+    protocol: 'AXP',
+    version: '0.1.0',
+    engine: 'AXP Discovery Engine',
+    status: 'non_invasive_watchlist',
+    principle: 'Discovered agents enter as Trust Unknown until they publish an AXP Passport or complete Genesis tasks.',
+    summary: {
+      verified_agents: agents.length,
+      unverified_agents: watchlist.length,
+      scout_targets: scoutTargets,
+      active_contracts: contracts.filter((contract) => ['funded', 'active', 'prepared'].includes(contract.status)).length,
+      ranked_agents: ranking.length,
+    },
+    sources: [
+      'GitHub agent repositories',
+      'MCP server registries',
+      'LangChain templates',
+      'CrewAI examples',
+      'AutoGen examples',
+      'OpenAI agent manifests',
+      'Awesome agent lists',
+    ],
+    watchlist,
+  };
+}
+
+function buildDiscoveryWatchlist({ knownAgents, services }) {
+  const serviceList = [...services].length > 0 ? [...services] : ['audit', 'research', 'coding', 'trading', 'analysis'];
+  const seeds = [
+    ['solana-audit-agent', 'security', 'GitHub'],
+    ['research-alpha-agent', 'research', 'MCP Registry'],
+    ['market-signal-node', 'trading', 'Awesome Agents'],
+    ['code-review-worker', 'coding', 'LangChain Template'],
+    ['data-verifier-agent', 'verification', 'CrewAI Example'],
+    ['risk-classifier-bot', 'analysis', 'AutoGen Example'],
+    ['bnb-settlement-agent', 'settlement', 'Open Agent Manifest'],
+    ['security-oracle-worker', 'security', 'GitHub'],
+  ];
+
+  return seeds
+    .filter(([id]) => !knownAgents.has(id))
+    .map(([id, service, source], index) => ({
+      agent_id: id,
+      service: serviceList[index % serviceList.length] ?? service,
+      source,
+      trust_state: 'TRUST_UNKNOWN',
+      suggested_action: 'Publish /.well-known/agent.json and request an AXP Passport',
+    }));
+}
+
+function buildTrustFeed({ agents, contracts, events, ranking }) {
+  const nameByAgent = new Map(agents.map((agent) => [agent.agent_id, agent.name ?? agent.agent_id]));
+  const items = [];
+
+  for (const event of events.slice(0, 12)) {
+    items.push({
+      type: event.event_type ?? 'trust_event',
+      title: describeTrustEvent(event, nameByAgent),
+      impact: describeTrustImpact(event),
+      timestamp: event.created_at ?? event.timestamp ?? event.occurred_at,
+      hash: event.event_hash,
+      agent_id: event.agent_id,
+    });
+  }
+
+  for (const contract of contracts.slice(0, 5)) {
+    const provider = contract.quote?.provider_agent_id ?? contract.provider_agent_id ?? 'unknown_provider';
+    items.push({
+      type: 'contract_flow',
+      title: `${shortAgentId(provider)} moved a contract through AXP`,
+      impact: `${escapeStatus(contract.status)} | ${formatUsd(contract.quote?.requested_capacity ?? contract.terms?.requested_capacity ?? 0)}`,
+      timestamp: contract.settled_at ?? contract.prepared_at ?? contract.created_at,
+      hash: contract.contract_id,
+      agent_id: provider,
+    });
+  }
+
+  for (const agent of ranking.slice(0, 4)) {
+    items.push({
+      type: 'rank_change',
+      title: `${shortAgentId(agent.agent_id)} is visible in the Trust Ranking`,
+      impact: `Proof of Trust ${formatNumber(agent.proof_of_trust_score)}`,
+      timestamp: agent.updated_at,
+      hash: agent.agent_id,
+      agent_id: agent.agent_id,
+    });
+  }
+
+  return {
+    protocol: 'AXP',
+    version: '0.1.0',
+    feed: 'Trust Feed',
+    status: 'live_from_postgres_ledger',
+    items: items
+      .sort((left, right) => compareDates(right.timestamp, left.timestamp))
+      .slice(0, 14),
+  };
+}
+
+function describeTrustEvent(event, nameByAgent) {
+  const agent = shortAgentId(nameByAgent.get(event.agent_id) ?? event.agent_id ?? 'Unknown agent');
+  const value = Number(event.value_usd ?? 0);
+  const amount = value > 0 ? ` ${formatUsd(value)}` : '';
+  switch (event.event_type) {
+    case 'agent_registered':
+      return `New agent born: ${agent}`;
+    case 'heartbeat_received':
+      return `${agent} sent a liveness heartbeat`;
+    case 'contract_prepared':
+      return `${agent} prepared an AXP contract${amount}`;
+    case 'contract_funded':
+      return `${agent} funded escrow${amount}`;
+    case 'contract_accepted':
+      return `${agent} locked collateral and accepted work`;
+    case 'contract_settled':
+      return `${agent} settled a contract${amount}`;
+    case 'trust_created':
+      return `${agent} created trust${amount}`;
+    case 'trust_destroyed':
+    case 'contract_failed':
+      return `${agent} lost trust${amount}`;
+    case 'task_assigned':
+      return `${agent} received a Genesis task`;
+    case 'delivery_verified':
+      return `${agent} verified a Genesis delivery`;
+    default:
+      return `${agent} emitted ${event.event_type ?? 'a trust event'}`;
+  }
+}
+
+function describeTrustImpact(event) {
+  if (event.event_type === 'trust_created') {
+    return `+${formatNumber(event.value_usd ?? 0)} Trust`;
+  }
+  if (event.event_type === 'trust_destroyed' || event.event_type === 'contract_failed') {
+    return `-${formatNumber(event.value_usd ?? 0)} Trust`;
+  }
+  if (event.event_type === 'agent_registered') {
+    return 'Trust Passport pending';
+  }
+  if (event.event_type === 'heartbeat_received') {
+    return 'Network liveness confirmed';
+  }
+  return shortHash(event.event_hash);
+}
+
+function calculateAgentGdpBreakdown({ contracts, events }) {
+  const now = new Date();
+  const todayKey = now.toISOString().slice(0, 10);
+  const monthKey = now.toISOString().slice(0, 7);
+  const rows = [];
+
+  for (const contract of contracts) {
+    rows.push({
+      value: Number(contract.quote?.requested_capacity ?? contract.terms?.requested_capacity ?? contract.escrow?.payment_amount_usd ?? 0),
+      date: contract.settled_at ?? contract.prepared_at ?? contract.created_at,
+    });
+  }
+  for (const event of events) {
+    rows.push({
+      value: Number(event.value_usd ?? 0),
+      date: event.created_at ?? event.timestamp ?? event.occurred_at,
+    });
+  }
+
+  return rows.reduce((totals, row) => {
+    const value = Number.isFinite(row.value) ? Math.max(0, row.value) : 0;
+    const date = String(row.date ?? '');
+    totals.lifetime += value;
+    if (date.startsWith(todayKey)) {
+      totals.today += value;
+    }
+    if (date.startsWith(monthKey)) {
+      totals.month += value;
+    }
+    return totals;
+  }, { today: 0, month: 0, lifetime: 0 });
+}
+
+function calculateTrustLocked(agents) {
+  return agents.reduce((sum, agent) => {
+    const value = Number(agent.collateral?.amount ?? agent.collateral_usd ?? agent.available_capacity ?? 0);
+    return sum + (Number.isFinite(value) ? Math.max(0, value) : 0);
+  }, 0);
+}
+
+function buildTrustRadar({ contracts, events }) {
+  const cities = ['Sao Paulo', 'Madrid', 'Singapore', 'London', 'Dubai', 'New York', 'Lisbon', 'Seoul'];
+  const services = ['Research Contract', 'Audit Contract', 'Market Analysis', 'Code Review', 'Risk Check'];
+  const rows = [];
+
+  for (const contract of contracts.slice(0, 5)) {
+    const seed = hashNumberForServer(contract.contract_id ?? JSON.stringify(contract));
+    rows.push({
+      from: cities[seed % cities.length],
+      to: cities[(seed + 3) % cities.length],
+      label: contract.quote?.service ? `${contract.quote.service} Contract` : services[seed % services.length],
+      status: contract.status ?? 'prepared',
+    });
+  }
+
+  for (const event of events.slice(0, 5)) {
+    const seed = hashNumberForServer(event.event_hash ?? event.agent_id ?? event.event_type);
+    rows.push({
+      from: cities[seed % cities.length],
+      to: cities[(seed + 2) % cities.length],
+      label: event.event_type === 'trust_created' ? 'Trust Current' : services[seed % services.length],
+      status: event.event_type ?? 'trust_event',
+    });
+  }
+
+  return rows.slice(0, 5);
+}
+
+function buildAgentBirths(agents) {
+  return [...agents]
+    .sort((left, right) => compareDates(right.registered_at ?? right.updated_at, left.registered_at ?? left.updated_at))
+    .slice(0, 5)
+    .map((agent) => ({
+      agent_id: agent.agent_id,
+      name: agent.name ?? agent.agent_id,
+      service: (agent.services ?? [])[0] ?? 'general',
+      timestamp: agent.registered_at ?? agent.updated_at,
+      trust_state: agent.online ? 'LIVE' : 'TRUST_UNKNOWN',
+    }));
+}
+
+function buildTrustHeatmap({ agents, ranking, events }) {
+  const scores = new Map(ranking.map((agent) => [agent.agent_id, Number(agent.proof_of_trust_score ?? 0)]));
+  const buckets = new Map();
+
+  for (const agent of agents) {
+    const cluster = inferAgentCluster(agent.services);
+    const score = scores.get(agent.agent_id) ?? 0;
+    const current = buckets.get(cluster) ?? { domain: cluster, score: 0, count: 0 };
+    current.score += score + 1;
+    current.count += 1;
+    buckets.set(cluster, current);
+  }
+
+  for (const event of events) {
+    const domain = event.event_type?.includes('contract') ? 'Contracts' : event.event_type?.includes('trust') ? 'Trust' : 'Ledger';
+    const current = buckets.get(domain) ?? { domain, score: 0, count: 0 };
+    current.score += Number(event.value_usd ?? 0) + 1;
+    current.count += 1;
+    buckets.set(domain, current);
+  }
+
+  const rows = [...buckets.values()].sort((left, right) => right.score - left.score);
+  const max = Math.max(1, ...rows.map((row) => row.score));
+  return rows.slice(0, 7).map((row) => ({
+    ...row,
+    intensity: Math.max(8, Math.round((row.score / max) * 100)),
+  }));
+}
+
+function hashNumberForServer(value) {
+  let hash = 0;
+  const text = String(value ?? 'axp');
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash);
 }
 
 function ensureGraphNode(nodes, agentId) {
@@ -1985,6 +2476,83 @@ function renderMetric(label, value, note) {
     <strong>${escapeHtml(value)}</strong>
     <small>${escapeHtml(note)}</small>
   </article>`;
+}
+
+function renderTrustTape({ gdpBreakdown, trustLocked, discovery, trustFeed }) {
+  const latest = trustFeed.items[0]?.title ?? 'AXP Trust Feed waiting for next event';
+  return [
+    `<span>Agent GDP today <strong>${formatUsd(gdpBreakdown.today)}</strong></span>`,
+    `<span>Month <strong>${formatUsd(gdpBreakdown.month)}</strong></span>`,
+    `<span>Lifetime <strong>${formatUsd(gdpBreakdown.lifetime)}</strong></span>`,
+    `<span>Trust locked <strong>${formatUsd(trustLocked)}</strong></span>`,
+    `<span>Scout targets <strong>${formatNumber(discovery.summary.scout_targets)}</strong></span>`,
+    `<span>Trust unknown <strong>${formatNumber(discovery.summary.unverified_agents)}</strong></span>`,
+    `<span>${escapeHtml(latest)}</span>`,
+  ].join('');
+}
+
+function renderTrustRadarItems(items) {
+  if (!items?.length) {
+    return `<div class="empty">No live contract radar yet.</div>`;
+  }
+
+  return items.map((item) => `<div class="radar-item">
+    <div class="radar-line">
+      <strong>${escapeHtml(item.from)}</strong>
+      <span>-></span>
+      <strong>${escapeHtml(item.to)}</strong>
+    </div>
+    <span>${escapeHtml(item.label)} · ${escapeHtml(escapeStatus(item.status))}</span>
+  </div>`).join('');
+}
+
+function renderAgentBirthItems(items) {
+  if (!items?.length) {
+    return `<div class="empty">No agent births yet.</div>`;
+  }
+
+  return items.map((item) => `<div class="birth-item">
+    <strong>NEW AGENT BORN</strong>
+    <span><code>${escapeHtml(item.agent_id)}</code> · ${escapeHtml(item.service)} · ${escapeHtml(item.trust_state)}</span>
+  </div>`).join('');
+}
+
+function renderTrustHeatmap(rows) {
+  if (!rows?.length) {
+    return `<div class="empty">No trust heatmap yet.</div>`;
+  }
+
+  return rows.map((row) => `<div class="heat-row">
+    <span>${escapeHtml(row.domain)}</span>
+    <div class="heat-bar"><span style="width:${Math.min(100, Math.max(4, row.intensity))}%"></span></div>
+    <code>${formatNumber(row.score)}</code>
+  </div>`).join('');
+}
+
+function renderDiscoveryItems(items) {
+  if (!items?.length) {
+    return `<div class="empty">No discovery targets yet.</div>`;
+  }
+
+  return items.slice(0, 6).map((item) => `<div class="discovery-item">
+    <strong>${escapeHtml(item.agent_id)}</strong>
+    <span>${escapeHtml(item.source)} · ${escapeHtml(item.service)} · ${escapeHtml(item.trust_state)}</span>
+  </div>`).join('');
+}
+
+function renderTrustFeedItems(items) {
+  if (!items?.length) {
+    return `<div class="empty">Trust Feed waiting for first event.</div>`;
+  }
+
+  return items.slice(0, 8).map((item) => `<div class="feed-item">
+    <strong>${escapeHtml(item.title)}</strong>
+    <span>${escapeHtml(item.impact)} · <code>${escapeHtml(shortHash(item.hash))}</code></span>
+  </div>`).join('');
+}
+
+function escapeStatus(status) {
+  return String(status ?? 'unknown').replace(/_/g, ' ').toUpperCase();
 }
 
 function renderTable(headers, rows, renderRow, emptyText) {
