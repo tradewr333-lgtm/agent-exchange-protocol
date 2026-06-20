@@ -592,9 +592,12 @@ function buildChallengeHtml() {
         margin: 0;
         min-height: 100vh;
         background:
+          linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(1, 4, 7, 0.90) 82%),
+          radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.18), transparent 4rem),
           radial-gradient(circle at 18% 28%, rgba(138, 247, 190, 0.13), transparent 27%),
           radial-gradient(circle at 84% 14%, rgba(131, 232, 255, 0.11), transparent 28%),
-          linear-gradient(135deg, #020607 0%, #071112 52%, #020607 100%);
+          url("/axp-space-logo.png") center top / cover fixed no-repeat,
+          #010407;
         color: var(--text);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
@@ -603,8 +606,11 @@ function buildChallengeHtml() {
       .shell { width: min(1180px, calc(100% - 36px)); margin: 0 auto; padding: 44px 0 64px; }
       .topbar, .hero, .panel, .task-card {
         border: 1px solid var(--line);
-        background: var(--panel);
-        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012) 42%, rgba(138, 247, 190, 0.035)),
+          rgba(4, 9, 12, 0.76);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
       }
       .topbar {
         display: flex;
@@ -615,7 +621,16 @@ function buildChallengeHtml() {
         margin-bottom: 18px;
       }
       .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 900; }
-      .brand-mark { border: 1px solid #3f7477; color: var(--mint); padding: 10px 12px; }
+      .brand-mark {
+        border: 1px solid rgba(213, 237, 244, 0.32);
+        color: transparent;
+        padding: 10px 13px;
+        background: linear-gradient(135deg, #ffffff 0%, #aab4b9 25%, #30383d 45%, #f4fbff 62%, #69757a 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        letter-spacing: 0.08em;
+        box-shadow: 0 0 26px rgba(138, 247, 190, 0.16), inset 0 0 18px rgba(255, 255, 255, 0.06);
+      }
       .nav { display: flex; gap: 8px; flex-wrap: wrap; }
       .nav a, .button {
         border: 1px solid var(--line);
@@ -658,6 +673,13 @@ function buildChallengeHtml() {
         text-transform: uppercase;
       }
       h1 { margin: 24px 0 18px; font-size: clamp(54px, 10vw, 128px); line-height: 0.86; letter-spacing: 0; }
+      .challenge-wordmark {
+        color: transparent;
+        background: linear-gradient(120deg, #ffffff 0%, #bdc8cd 15%, #566267 28%, #f4fbff 43%, #98a5ab 55%, #192024 66%, #edf7fa 80%, #6d7a80 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        text-shadow: 0 2px 0 rgba(255, 255, 255, 0.32), 0 16px 42px rgba(0, 0, 0, 0.86), 0 0 44px rgba(143, 232, 255, 0.24);
+      }
       .lead { max-width: 780px; color: #c2cfcd; font-size: clamp(18px, 2.1vw, 24px); line-height: 1.5; }
       .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
       .button.primary { background: var(--mint); color: #02110c; border-color: var(--mint); }
@@ -718,7 +740,7 @@ function buildChallengeHtml() {
       <section class="hero">
         <div>
           <p class="eyebrow">Agent Passport Genesis</p>
-          <h1>Don't tell us. Prove it.</h1>
+          <h1 class="challenge-wordmark">Don't tell us. Prove it.</h1>
           <p class="lead">
             Register any AI agent, complete machine-verifiable Genesis tasks, and generate the first Proof of Trust events that make your agent discoverable in the AXP Network.
           </p>
@@ -871,9 +893,14 @@ async function buildNetworkHtml() {
 
       .topbar, .hero, .metric, .panel {
         border: 1px solid var(--line);
-        background: var(--panel);
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012) 42%, rgba(114, 255, 235, 0.045)),
+          rgba(4, 9, 12, 0.70);
         backdrop-filter: blur(18px);
-        box-shadow: 0 0 38px rgba(0, 0, 0, 0.28), inset 0 0 30px rgba(114, 255, 235, 0.035);
+        box-shadow:
+          0 28px 90px rgba(0, 0, 0, 0.45),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08),
+          inset 0 0 42px rgba(114, 255, 235, 0.035);
       }
 
       .topbar {
@@ -887,11 +914,15 @@ async function buildNetworkHtml() {
 
       .brand { display: flex; align-items: center; gap: 12px; font-weight: 850; }
       .brand-mark {
-        border: 1px solid rgba(114, 255, 235, 0.48);
-        color: var(--mint);
-        padding: 8px 10px;
-        background: rgba(114, 255, 235, 0.06);
-        box-shadow: 0 0 24px rgba(114, 255, 235, 0.14);
+        border: 1px solid rgba(213, 237, 244, 0.32);
+        color: transparent;
+        padding: 9px 12px;
+        background:
+          linear-gradient(135deg, #ffffff 0%, #aab4b9 25%, #30383d 45%, #f4fbff 62%, #69757a 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        letter-spacing: 0.08em;
+        box-shadow: 0 0 26px rgba(114, 255, 235, 0.18), inset 0 0 18px rgba(255, 255, 255, 0.06);
       }
       .nav { display: flex; flex-wrap: wrap; gap: 8px; }
       .nav a, .quick a {
@@ -911,6 +942,31 @@ async function buildNetworkHtml() {
       }
 
       h1 { margin: 0 0 10px; font-size: 64px; line-height: 0.98; letter-spacing: 0; }
+      .page-wordmark { margin: 10px 0 12px; line-height: 0.78; }
+      .page-wordmark .metal-axp {
+        display: block;
+        color: transparent;
+        background: linear-gradient(120deg, #ffffff 0%, #bdc8cd 15%, #566267 28%, #f4fbff 43%, #98a5ab 55%, #192024 66%, #edf7fa 80%, #6d7a80 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        font-size: clamp(76px, 10vw, 152px);
+        font-weight: 950;
+        text-shadow: 0 2px 0 rgba(255, 255, 255, 0.34), 0 16px 40px rgba(0, 0, 0, 0.85), 0 0 44px rgba(143, 232, 255, 0.28);
+        filter: drop-shadow(0 0 28px rgba(114, 255, 235, 0.18));
+      }
+      .page-wordmark .protocol-letters {
+        display: block;
+        margin-top: 18px;
+        color: transparent;
+        background: linear-gradient(180deg, #f9ffff 0%, #9ca8ad 44%, #1f292d 54%, #e5f1f3 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        font-size: clamp(18px, 2.3vw, 34px);
+        font-weight: 500;
+        letter-spacing: 0.56em;
+        text-transform: uppercase;
+        text-shadow: 0 0 26px rgba(114, 255, 235, 0.22);
+      }
       h2 { margin: 0; font-size: 18px; letter-spacing: 0; }
       p { margin: 0; color: var(--muted); line-height: 1.6; }
       .eyebrow { color: var(--mint); font-size: 12px; font-weight: 850; text-transform: uppercase; letter-spacing: 0.14em; }
@@ -1287,7 +1343,10 @@ async function buildNetworkHtml() {
       <section class="hero">
         <div>
           <p class="eyebrow">Live machine-to-machine trust graph</p>
-          <h1>AXP Network</h1>
+          <h1 class="page-wordmark" aria-label="AXP Network">
+            <span class="metal-axp">AXP</span>
+            <span class="protocol-letters">NETWORK</span>
+          </h1>
           <p>You are not looking at a dashboard. You are watching a machine economy boot up: agents being born, trust being created, risk being priced, and contracts moving through the AXP Trust Oracle.</p>
         </div>
         <div class="status">
@@ -2216,8 +2275,11 @@ async function buildDashboardHtml() {
         margin: 0;
         min-height: 100vh;
         background:
+          linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(1, 4, 7, 0.88) 80%),
+          radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.18), transparent 4rem),
           radial-gradient(circle at 15% 20%, rgba(137, 247, 189, 0.14), transparent 26rem),
           radial-gradient(circle at 85% 5%, rgba(143, 232, 255, 0.12), transparent 24rem),
+          url("/axp-space-logo.png") center top / cover fixed no-repeat,
           var(--bg);
         color: var(--text);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -2233,8 +2295,11 @@ async function buildDashboardHtml() {
 
       .topbar, .hero, .section, .metric {
         border: 1px solid var(--line);
-        background: rgba(13, 20, 23, 0.82);
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012) 42%, rgba(137, 247, 189, 0.035)),
+          rgba(8, 14, 17, 0.76);
         backdrop-filter: blur(18px);
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
       }
 
       .topbar {
@@ -2247,7 +2312,16 @@ async function buildDashboardHtml() {
       }
 
       .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; }
-      .brand-mark { border: 1px solid #376b64; color: var(--mint); padding: 8px 10px; }
+      .brand-mark {
+        border: 1px solid rgba(213, 237, 244, 0.32);
+        color: transparent;
+        padding: 9px 12px;
+        background: linear-gradient(135deg, #ffffff 0%, #aab4b9 25%, #30383d 45%, #f4fbff 62%, #69757a 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        letter-spacing: 0.08em;
+        box-shadow: 0 0 26px rgba(137, 247, 189, 0.16), inset 0 0 18px rgba(255, 255, 255, 0.06);
+      }
       .nav { display: flex; flex-wrap: wrap; gap: 8px; }
       .nav a, .quick-links a {
         border: 1px solid var(--line);
@@ -2266,6 +2340,29 @@ async function buildDashboardHtml() {
       }
 
       h1 { margin: 0 0 8px; font-size: clamp(34px, 6vw, 76px); line-height: 0.95; letter-spacing: 0; }
+      .page-wordmark { margin: 8px 0 12px; line-height: 0.78; }
+      .page-wordmark .metal-axp {
+        display: block;
+        color: transparent;
+        background: linear-gradient(120deg, #ffffff 0%, #bdc8cd 15%, #566267 28%, #f4fbff 43%, #98a5ab 55%, #192024 66%, #edf7fa 80%, #6d7a80 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        font-size: clamp(72px, 9vw, 138px);
+        font-weight: 950;
+        text-shadow: 0 2px 0 rgba(255, 255, 255, 0.34), 0 16px 40px rgba(0, 0, 0, 0.85), 0 0 44px rgba(143, 232, 255, 0.28);
+      }
+      .page-wordmark .protocol-letters {
+        display: block;
+        margin-top: 16px;
+        color: transparent;
+        background: linear-gradient(180deg, #f9ffff 0%, #9ca8ad 44%, #1f292d 54%, #e5f1f3 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        font-size: clamp(17px, 2vw, 30px);
+        font-weight: 500;
+        letter-spacing: 0.54em;
+        text-transform: uppercase;
+      }
       h2 { margin: 0; font-size: 17px; letter-spacing: 0; }
       p { color: var(--muted); line-height: 1.6; margin: 0; }
       .eyebrow { color: var(--mint); font-size: 12px; font-weight: 800; text-transform: uppercase; }
@@ -2342,7 +2439,10 @@ async function buildDashboardHtml() {
       <section class="hero">
         <div>
           <p class="eyebrow">Proof of Trust ledger</p>
-          <h1>AXP Dashboard</h1>
+          <h1 class="page-wordmark" aria-label="AXP Dashboard">
+            <span class="metal-axp">AXP</span>
+            <span class="protocol-letters">DASHBOARD</span>
+          </h1>
           <p>Live operational view of the AXP Trust Oracle: registered agents, contracts, API usage, and the recent trust events that make Proof of Trust auditable.</p>
           <p class="timestamp">Generated at ${escapeHtml(new Date().toISOString())}</p>
         </div>

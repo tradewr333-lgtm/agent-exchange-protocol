@@ -104,23 +104,32 @@ main {
 
 .brand-orb {
   display: grid;
-  width: 52px;
-  height: 52px;
+  width: 64px;
+  height: 58px;
   place-items: center;
-  border: 1px solid rgba(114, 255, 235, 0.48);
+  border: 1px solid rgba(213, 237, 244, 0.32);
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(114, 255, 235, 0.05)),
-    rgba(5, 10, 14, 0.64);
-  color: var(--cyan);
-  font-size: 0.78rem;
+    linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(151, 164, 170, 0.88) 28%, rgba(28, 35, 39, 0.96) 48%, rgba(241, 247, 248, 0.92) 64%, rgba(76, 88, 94, 0.92) 100%),
+    rgba(5, 10, 14, 0.74);
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  font-size: 0.95rem;
   font-weight: 900;
-  box-shadow: 0 0 28px rgba(114, 255, 235, 0.20), inset 0 0 18px rgba(255, 255, 255, 0.06);
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 18px rgba(143, 232, 255, 0.28);
+  box-shadow:
+    0 0 34px rgba(114, 255, 235, 0.18),
+    inset 0 0 18px rgba(255, 255, 255, 0.08),
+    inset 0 -18px 30px rgba(0, 0, 0, 0.42);
 }
 
 .brand-name {
-  color: #eef6f7;
-  font-size: 1rem;
-  font-weight: 800;
+  color: #c8d3d8;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
   white-space: nowrap;
   text-shadow: 0 0 16px rgba(114, 255, 235, 0.24);
 }
@@ -182,7 +191,46 @@ main {
   box-shadow: 0 0 28px rgba(114, 255, 235, 0.10);
 }
 
-h1 {
+.hero-wordmark {
+  max-width: 840px;
+  margin: 0;
+  line-height: 0.78;
+}
+
+.metal-axp {
+  display: block;
+  font-size: clamp(6.6rem, 16vw, 15.8rem);
+  line-height: 0.74;
+  font-weight: 950;
+  letter-spacing: 0;
+  color: transparent;
+  background:
+    linear-gradient(120deg, #ffffff 0%, #bfc9ce 14%, #566267 27%, #f4fbff 41%, #9ca8ae 53%, #1a2024 64%, #eef6f8 78%, #6d7a80 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.36),
+    0 16px 38px rgba(0, 0, 0, 0.82),
+    0 0 46px rgba(159, 216, 255, 0.28);
+  filter: drop-shadow(0 0 28px rgba(114, 255, 235, 0.18));
+}
+
+.protocol-letters {
+  display: block;
+  margin-top: 24px;
+  padding-left: 0.18em;
+  color: transparent;
+  background: linear-gradient(180deg, #f9ffff 0%, #9ca8ad 42%, #1f292d 52%, #e5f1f3 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  font-size: clamp(1.2rem, 3.3vw, 2.4rem);
+  font-weight: 500;
+  letter-spacing: clamp(0.55em, 1.3vw, 0.9em);
+  text-transform: uppercase;
+  text-shadow: 0 0 28px rgba(114, 255, 235, 0.24);
+}
+
+h1:not(.hero-wordmark) {
   max-width: 840px;
   margin: 0;
   font-size: clamp(4.6rem, 13vw, 10rem);
@@ -190,10 +238,6 @@ h1 {
   font-weight: 950;
   letter-spacing: 0;
   color: var(--white);
-  text-shadow:
-    0 1px 0 #9da7ad,
-    0 12px 34px rgba(0, 0, 0, 0.74),
-    0 0 38px rgba(159, 216, 255, 0.24);
 }
 
 .tagline {
