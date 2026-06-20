@@ -59,6 +59,10 @@ const server = http.createServer(async (request, response) => {
     return sendAsset(response, 'application/javascript; charset=utf-8', readFileSync(join(publicPath, 'app.js'), 'utf8'));
   }
 
+  if (url.pathname === '/axp-space-logo.png') {
+    return sendAsset(response, 'image/png', readFileSync(join(publicPath, 'axp-space-logo.png')));
+  }
+
   if (url.pathname === '/health') {
     return sendJson(response, 200, { ok: true, protocol: 'AXP', service: 'agent-registry' });
   }
@@ -773,13 +777,13 @@ async function buildNetworkHtml() {
     <style>
       :root {
         color-scheme: dark;
-        --bg: #020607;
-        --panel: rgba(8, 15, 17, 0.88);
-        --panel-2: rgba(13, 24, 27, 0.82);
-        --line: #263e43;
+        --bg: #010407;
+        --panel: rgba(5, 10, 14, 0.72);
+        --panel-2: rgba(10, 18, 24, 0.74);
+        --line: rgba(182, 224, 235, 0.22);
         --text: #f6fffb;
         --muted: #9cb0ae;
-        --mint: #8af7be;
+        --mint: #72ffeb;
         --cyan: #83e8ff;
         --violet: #c8a4ff;
         --amber: #f5ce67;
@@ -791,12 +795,27 @@ async function buildNetworkHtml() {
         margin: 0;
         min-height: 100vh;
         background:
-          radial-gradient(circle at 12% 10%, rgba(138, 247, 190, 0.15), transparent 24rem),
+          linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.88) 86%),
+          radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.26), transparent 3rem),
+          radial-gradient(circle at 50% 78%, rgba(255, 255, 255, 0.22), transparent 3rem),
+          radial-gradient(circle at 12% 10%, rgba(114, 255, 235, 0.15), transparent 24rem),
           radial-gradient(circle at 82% 18%, rgba(131, 232, 255, 0.14), transparent 28rem),
-          radial-gradient(circle at 50% 100%, rgba(200, 164, 255, 0.11), transparent 28rem),
+          url("/axp-space-logo.png") center top / cover fixed no-repeat,
           var(--bg);
         color: var(--text);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(90deg, transparent 0 49%, rgba(114, 255, 235, 0.14) 50%, transparent 51%),
+          radial-gradient(circle at 50% 32%, rgba(114, 255, 235, 0.09), transparent 30rem),
+          linear-gradient(180deg, rgba(1, 4, 7, 0.12), rgba(1, 4, 7, 0.78));
+        mix-blend-mode: screen;
       }
 
       a { color: inherit; text-decoration: none; }
@@ -811,6 +830,7 @@ async function buildNetworkHtml() {
         border: 1px solid var(--line);
         background: var(--panel);
         backdrop-filter: blur(18px);
+        box-shadow: 0 0 38px rgba(0, 0, 0, 0.28), inset 0 0 30px rgba(114, 255, 235, 0.035);
       }
 
       .topbar {
@@ -823,7 +843,13 @@ async function buildNetworkHtml() {
       }
 
       .brand { display: flex; align-items: center; gap: 12px; font-weight: 850; }
-      .brand-mark { border: 1px solid #3e7069; color: var(--mint); padding: 8px 10px; }
+      .brand-mark {
+        border: 1px solid rgba(114, 255, 235, 0.48);
+        color: var(--mint);
+        padding: 8px 10px;
+        background: rgba(114, 255, 235, 0.06);
+        box-shadow: 0 0 24px rgba(114, 255, 235, 0.14);
+      }
       .nav { display: flex; flex-wrap: wrap; gap: 8px; }
       .nav a, .quick a {
         border: 1px solid var(--line);
@@ -844,7 +870,7 @@ async function buildNetworkHtml() {
       h1 { margin: 0 0 10px; font-size: 64px; line-height: 0.98; letter-spacing: 0; }
       h2 { margin: 0; font-size: 18px; letter-spacing: 0; }
       p { margin: 0; color: var(--muted); line-height: 1.6; }
-      .eyebrow { color: var(--mint); font-size: 12px; font-weight: 850; text-transform: uppercase; }
+      .eyebrow { color: var(--mint); font-size: 12px; font-weight: 850; text-transform: uppercase; letter-spacing: 0.14em; }
       .hash { color: var(--cyan); font-family: "SFMono-Regular", Consolas, monospace; word-break: break-word; }
 
       .status {
@@ -894,11 +920,13 @@ async function buildNetworkHtml() {
         width: 100%;
         height: 640px;
         background:
-          linear-gradient(rgba(138, 247, 190, 0.055) 1px, transparent 1px),
+          radial-gradient(circle at 50% 50%, rgba(114, 255, 235, 0.10), transparent 16rem),
+          radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.14), transparent 5rem),
+          linear-gradient(rgba(114, 255, 235, 0.055) 1px, transparent 1px),
           linear-gradient(90deg, rgba(131, 232, 255, 0.045) 1px, transparent 1px),
-          linear-gradient(135deg, rgba(138, 247, 190, 0.05), transparent 42%),
+          linear-gradient(135deg, rgba(114, 255, 235, 0.05), transparent 42%),
           radial-gradient(circle at 65% 30%, rgba(131, 232, 255, 0.08), transparent 22rem),
-          #04090a;
+          rgba(4, 9, 10, 0.84);
         background-size: 42px 42px, 42px 42px, auto, auto, auto;
       }
 
