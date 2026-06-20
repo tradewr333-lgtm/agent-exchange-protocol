@@ -10,6 +10,14 @@ export interface FindAgentsFilters {
   min_capacity?: number;
 }
 
+export interface TrustRankingFilters {
+  status?: string;
+  service?: string;
+  minScore?: number;
+  min_score?: number;
+  limit?: number;
+}
+
 export interface ContractQuoteInput {
   requester_agent_id?: string;
   provider_agent_id: string;
@@ -51,6 +59,7 @@ export declare class AxpClient {
   getManifest(): Promise<unknown>;
   getCapabilities(): Promise<unknown>;
   getEconomics(): Promise<unknown>;
+  getTrustRanking(filters?: TrustRankingFilters): Promise<unknown>;
   findAgents(filters?: FindAgentsFilters): Promise<unknown>;
   getAgentProfile(agentId: string): Promise<any>;
   getTrustScore(agentId: string): Promise<unknown>;

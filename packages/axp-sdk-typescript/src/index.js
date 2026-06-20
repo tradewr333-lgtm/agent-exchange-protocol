@@ -22,6 +22,15 @@ export class AxpClient {
     return this.getJson('/economics');
   }
 
+  getTrustRanking(filters = {}) {
+    return this.getJson(`/trust-ranking${toQuery({
+      status: filters.status,
+      service: filters.service,
+      min_score: filters.minScore ?? filters.min_score,
+      limit: filters.limit,
+    })}`);
+  }
+
   findAgents(filters = {}) {
     return this.getJson(`/agents${toQuery({
       status: filters.status,

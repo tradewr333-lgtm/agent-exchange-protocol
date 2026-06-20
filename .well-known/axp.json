@@ -15,6 +15,7 @@
     "agent_trust_score_endpoint_template": "/agents/{agent_id}/trust-score",
     "capabilities_endpoint": "/capabilities",
     "economics_endpoint": "/economics",
+    "trust_ranking_endpoint": "/trust-ranking",
     "auth_message_endpoint": "/auth/message",
     "contract_quote_endpoint": "/contracts/quote",
     "contract_prepare_endpoint": "/contracts/prepare",
@@ -61,6 +62,7 @@
     "capacity_score",
     "proof_of_trust",
     "trust_score",
+    "trust_ranking",
     "axp_trust_multiplier",
     "agent_contracts",
     "tokenized_slashing",
@@ -130,6 +132,7 @@
     "status": "experimental_endpoint",
     "principle": "Agents earn influence by creating economically verified trust.",
     "endpoint_template": "/agents/{agent_id}/trust-score",
+    "ranking_endpoint": "/trust-ranking",
     "score_formula": "Trust Score = Trust Created - Trust Destroyed",
     "trust_created_inputs": [
       "settled_volume_usd",

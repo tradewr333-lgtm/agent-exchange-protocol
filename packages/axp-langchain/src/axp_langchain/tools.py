@@ -33,6 +33,13 @@ if _HAS_LANGCHAIN:
         min_capacity: int | float | None = Field(default=None, description="Minimum available USD-equivalent capacity.")
 
 
+    class TrustRankingInput(BaseModel):
+        status: str | None = Field(default=None, description="Optional agent status filter.")
+        service: str | None = Field(default=None, description="Optional service capability filter.")
+        min_score: int | float | None = Field(default=None, description="Minimum Proof of Trust score.")
+        limit: int | None = Field(default=None, description="Maximum number of ranked agents.")
+
+
     class QuoteContractInput(BaseModel):
         provider_agent_id: str = Field(description="AXP provider agent id.")
         service: str = Field(description="Requested service capability.")
@@ -48,6 +55,7 @@ if _HAS_LANGCHAIN:
         agent_id: str = Field(description="AXP agent id.")
 else:
     FindAgentsInput = None
+    TrustRankingInput = None
     QuoteContractInput = None
     GetCapacityInput = None
     GetTrustScoreInput = None
@@ -102,6 +110,29 @@ class AXPFindAgentsTool(_AXPBaseTool):
         )
 
 
+class AXPGetTrustRankingTool(_AXPBaseTool):
+    name: str = "axp_get_trust_ranking"
+    description: str = "Get the public AXP ranking of agents by experimental Proof of Trust score."
+    args_schema: ClassVar[Any] = TrustRankingInput
+
+    def _run(
+        self,
+        status: str | None = None,
+        service: str | None = None,
+        min_score: int | float | None = None,
+        limit: int | None = None,
+        **_: Any,
+    ) -> str:
+        return self._json(
+            self.client.get_trust_ranking(
+                status=status,
+                service=service,
+                min_score=min_score,
+                limit=limit,
+            )
+        )
+
+
 class AXPQuoteContractTool(_AXPBaseTool):
     name: str = "axp_quote_contract"
     description: str = "Quote whether an AXP provider can accept a contract obligation."
@@ -147,6 +178,7 @@ def get_axp_tools(registry_url: str = "https://registry.axp.network") -> list[_A
     client = AxpClient(registry_url)
     return [
         AXPFindAgentsTool(client=client),
+        AXPGetTrustRankingTool(client=client),
         AXPQuoteContractTool(client=client),
         AXPGetCapacityTool(client=client),
         AXPGetTrustScoreTool(client=client),

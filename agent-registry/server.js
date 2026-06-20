@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildAuthMessage } from './src/auth.js';
 import { getEconomicPolicy } from './src/economics.js';
-import { getAgentTrustScore } from './src/trust-score.js';
+import { getAgentTrustScore, getTrustRanking } from './src/trust-score.js';
 import {
   getPreparedContract,
   listPreparedContracts,
@@ -52,6 +52,22 @@ const server = http.createServer(async (request, response) => {
 
   if (url.pathname === '/economics') {
     return sendJson(response, 200, getEconomicPolicy());
+  }
+
+  if (url.pathname === '/trust-ranking') {
+    const minScore = url.searchParams.has('min_score')
+      ? Number.parseFloat(url.searchParams.get('min_score'))
+      : undefined;
+    const limit = url.searchParams.has('limit')
+      ? Number.parseInt(url.searchParams.get('limit'), 10)
+      : undefined;
+
+    return sendJson(response, 200, getTrustRanking({
+      status: url.searchParams.get('status') ?? undefined,
+      service: url.searchParams.get('service') ?? undefined,
+      minScore,
+      limit,
+    }));
   }
 
   if (request.method === 'POST' && url.pathname === '/auth/message') {
@@ -144,6 +160,7 @@ const server = http.createServer(async (request, response) => {
       '/health',
       '/capabilities',
       '/economics',
+      '/trust-ranking',
       'POST /auth/message',
       '/agents',
       '/agents/{agent_id}',

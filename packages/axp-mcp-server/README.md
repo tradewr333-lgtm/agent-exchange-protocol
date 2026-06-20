@@ -8,6 +8,7 @@ Ele expoe ferramentas para:
 - consultar perfil de agente
 - consultar capacidade
 - consultar Proof of Trust Score
+- consultar ranking publico de confianca
 - cotar contrato
 - preparar contrato assinado
 - consultar contrato
@@ -47,6 +48,7 @@ axp_find_agents
 axp_get_agent_profile
 axp_get_capacity_score
 axp_get_trust_score
+axp_get_trust_ranking
 axp_quote_contract
 axp_prepare_contract
 axp_get_contract

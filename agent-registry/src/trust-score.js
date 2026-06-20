@@ -1,4 +1,4 @@
-import { getAgent } from './registry.js';
+import { getAgent, listAgents } from './registry.js';
 
 export const PROOF_OF_TRUST_VERSION = '0.1.0';
 
@@ -9,6 +9,56 @@ export function getAgentTrustScore(agentId) {
   }
 
   return calculateAgentTrustScore(agent);
+}
+
+export function getTrustRanking(filters = {}) {
+  const minScore = filters.minScore === undefined ? undefined : Number(filters.minScore);
+  const limit = filters.limit === undefined ? undefined : Number(filters.limit);
+  let rankedAgents = listAgents({
+    status: filters.status,
+    service: filters.service,
+  }).agents.map(calculateAgentTrustScore);
+
+  if (Number.isFinite(minScore)) {
+    rankedAgents = rankedAgents.filter((score) => score.proof_of_trust_score >= minScore);
+  }
+
+  rankedAgents = rankedAgents
+    .sort((left, right) => {
+      if (right.proof_of_trust_score !== left.proof_of_trust_score) {
+        return right.proof_of_trust_score - left.proof_of_trust_score;
+      }
+
+      if (right.settled_volume_usd !== left.settled_volume_usd) {
+        return right.settled_volume_usd - left.settled_volume_usd;
+      }
+
+      return left.agent_id.localeCompare(right.agent_id);
+    })
+    .map((score, index) => ({
+      rank: index + 1,
+      ...score,
+    }));
+
+  if (Number.isFinite(limit) && limit > 0) {
+    rankedAgents = rankedAgents.slice(0, limit);
+  }
+
+  return {
+    protocol: 'AXP',
+    version: PROOF_OF_TRUST_VERSION,
+    schema: 'axp.trust_ranking.v0',
+    status: 'experimental',
+    ranking_method: 'proof_of_trust_score_desc',
+    count: rankedAgents.length,
+    filters: {
+      status: filters.status ?? null,
+      service: filters.service ?? null,
+      min_score: Number.isFinite(minScore) ? minScore : null,
+      limit: Number.isFinite(limit) && limit > 0 ? limit : null,
+    },
+    agents: rankedAgents,
+  };
 }
 
 export function calculateAgentTrustScore(agent) {

@@ -34,6 +34,24 @@ def find_agents(
     )
 
 
+def get_trust_ranking(
+    status: str | None = None,
+    service: str | None = None,
+    min_score: int | float | None = None,
+    limit: int | None = None,
+    registry_url: str = DEFAULT_REGISTRY_URL,
+) -> str:
+    client = AxpClient(registry_url)
+    return _json(
+        client.get_trust_ranking(
+            status=status,
+            service=service,
+            min_score=min_score,
+            limit=limit,
+        )
+    )
+
+
 def quote_contract(
     provider_agent_id: str,
     service: str,
@@ -95,6 +113,21 @@ class AxpAutoGenToolkit:
             registry_url=self.registry_url,
         )
 
+    def get_trust_ranking(
+        self,
+        status: str | None = None,
+        service: str | None = None,
+        min_score: int | float | None = None,
+        limit: int | None = None,
+    ) -> str:
+        return get_trust_ranking(
+            status=status,
+            service=service,
+            min_score=min_score,
+            limit=limit,
+            registry_url=self.registry_url,
+        )
+
     def quote_contract(
         self,
         provider_agent_id: str,
@@ -130,6 +163,20 @@ class AxpAutoGenToolkit:
                     },
                 },
                 function=self.find_agents,
+            ).as_dict(),
+            AxpAutoGenTool(
+                name="axp_get_trust_ranking",
+                description="Get the public AXP ranking of agents by experimental Proof of Trust score.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "status": {"type": "string"},
+                        "service": {"type": "string"},
+                        "min_score": {"type": "number"},
+                        "limit": {"type": "number"},
+                    },
+                },
+                function=self.get_trust_ranking,
             ).as_dict(),
             AxpAutoGenTool(
                 name="axp_quote_contract",

@@ -16,6 +16,19 @@ const tools = [
     },
   },
   {
+    name: 'axp_get_trust_ranking',
+    description: 'Get the public AXP ranking of agents by experimental Proof of Trust score.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'Optional agent status filter.' },
+        service: { type: 'string', description: 'Optional service capability filter.' },
+        min_score: { type: 'number', description: 'Minimum Proof of Trust score.' },
+        limit: { type: 'number', description: 'Maximum number of ranked agents to return.' },
+      },
+    },
+  },
+  {
     name: 'axp_find_agents',
     description: 'Find AXP agents by status, service, and minimum available capacity.',
     inputSchema: {
@@ -236,6 +249,13 @@ async function callTool(name, args) {
   switch (name) {
     case 'axp_get_economics':
       return axp.getEconomics();
+    case 'axp_get_trust_ranking':
+      return axp.getTrustRanking({
+        status: args.status,
+        service: args.service,
+        minScore: args.min_score,
+        limit: args.limit,
+      });
     case 'axp_find_agents':
       return axp.findAgents({
         status: args.status,

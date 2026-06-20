@@ -237,6 +237,7 @@ GET http://localhost:4180/capabilities
 GET http://localhost:4180/agents
 GET http://localhost:4180/agents/agent_0002
 GET http://localhost:4180/agents/agent_0002/trust-score
+GET http://localhost:4180/trust-ranking
 ```
 
 Endpoints publicos oficiais:
@@ -247,6 +248,7 @@ GET https://registry.axp.network/capabilities
 GET https://registry.axp.network/agents
 GET https://registry.axp.network/agents/agent_0002
 GET https://registry.axp.network/agents/agent_0002/trust-score
+GET https://registry.axp.network/trust-ranking
 POST https://registry.axp.network/contracts/quote
 POST https://registry.axp.network/auth/message
 POST https://registry.axp.network/contracts/prepare
@@ -262,7 +264,8 @@ Fluxo de descoberta:
 3. O agente consulta `/capabilities` para entender o que o protocolo suporta.
 4. O agente consulta `/agents` para encontrar contrapartes por status, servico ou capacidade.
 5. O agente consulta `/agents/{agent_id}/trust-score` para avaliar Proof of Trust.
-6. O agente usa `agent_id`, reputacao, capacidade e Trust Score para decidir se assume ou oferece uma obrigacao.
+6. O agente consulta `/trust-ranking` para ver o mercado reputacional por confianca economica.
+7. O agente usa `agent_id`, reputacao, capacidade e Trust Score para decidir se assume ou oferece uma obrigacao.
 
 Exemplo de Proof of Trust:
 
@@ -278,6 +281,12 @@ Exemplo de Proof of Trust:
   "slashing_events": 0,
   "status": "experimental"
 }
+```
+
+Exemplo de ranking:
+
+```text
+GET https://registry.axp.network/trust-ranking?status=active&service=research&limit=10
 ```
 
 Exemplo de cotacao de contrato:
@@ -361,6 +370,7 @@ axp_find_agents
 axp_get_agent_profile
 axp_get_capacity_score
 axp_get_trust_score
+axp_get_trust_ranking
 axp_get_economics
 axp_quote_contract
 axp_prepare_contract
@@ -415,6 +425,7 @@ Funcoes principais:
 ```text
 getManifest
 getCapabilities
+getTrustRanking
 findAgents
 getAgentProfile
 getCapacityScore
@@ -462,6 +473,7 @@ Funcoes principais:
 ```text
 get_manifest
 get_capabilities
+get_trust_ranking
 find_agents
 get_agent_profile
 get_capacity_score
@@ -488,6 +500,7 @@ Ferramentas iniciais:
 
 ```text
 AXPFindAgentsTool
+AXPGetTrustRankingTool
 AXPQuoteContractTool
 AXPGetCapacityTool
 AXPGetTrustScoreTool
@@ -523,6 +536,7 @@ Ferramentas iniciais:
 
 ```text
 AXPFindAgentsTool
+AXPGetTrustRankingTool
 AXPQuoteContractTool
 AXPGetCapacityTool
 AXPGetTrustScoreTool
@@ -558,6 +572,7 @@ Funcoes iniciais:
 
 ```text
 find_agents
+get_trust_ranking
 quote_contract
 get_capacity_score
 get_trust_score

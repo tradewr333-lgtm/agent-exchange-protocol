@@ -32,6 +32,24 @@ class AxpClient:
     def get_economics(self) -> dict[str, Any]:
         return self._get_json("/economics")
 
+    def get_trust_ranking(
+        self,
+        *,
+        status: str | None = None,
+        service: str | None = None,
+        min_score: int | float | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        query = _query_string(
+            {
+                "status": status,
+                "service": service,
+                "min_score": min_score,
+                "limit": limit,
+            }
+        )
+        return self._get_json(f"/trust-ranking{query}")
+
     def find_agents(
         self,
         *,
