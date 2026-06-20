@@ -15,6 +15,7 @@ import {
   settleContract,
 } from './src/contracts.js';
 import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/registry.js';
+import { listApiUsage, listTrustEvents } from './src/store.js';
 
 const port = Number.parseInt(process.env.PORT ?? '4180', 10);
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -75,6 +76,36 @@ const server = http.createServer(async (request, response) => {
       online: parseBooleanParam(url.searchParams.get('online')),
       minScore,
       limit,
+    }));
+  }
+
+  if (url.pathname === '/trust-events') {
+    const apiKey = await requireApiKey(request, 'trust_events', { path: url.pathname });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
+    return sendJson(response, 200, await listTrustEvents({
+      agentId: url.searchParams.get('agent_id') ?? undefined,
+      eventType: url.searchParams.get('event_type') ?? undefined,
+      contractId: url.searchParams.get('contract_id') ?? undefined,
+      counterpartyId: url.searchParams.get('counterparty_id') ?? undefined,
+      limit: url.searchParams.get('limit') ?? undefined,
+    }));
+  }
+
+  if (url.pathname === '/api-usage') {
+    const apiKey = await requireApiKey(request, 'api_usage', { path: url.pathname });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
+    return sendJson(response, 200, await listApiUsage({
+      keyId: url.searchParams.get('key_id') ?? undefined,
+      usageType: url.searchParams.get('usage_type') ?? undefined,
+      agentId: url.searchParams.get('agent_id') ?? undefined,
+      path: url.searchParams.get('path') ?? undefined,
+      limit: url.searchParams.get('limit') ?? undefined,
     }));
   }
 
@@ -183,6 +214,22 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, result.status, result.ok ? result.agent : result);
   }
 
+  const agentTrustEventsMatch = url.pathname.match(/^\/agents\/([^/]+)\/trust-events$/);
+  if (agentTrustEventsMatch) {
+    const apiKey = await requireApiKey(request, 'trust_events', { path: url.pathname, agent_id: agentTrustEventsMatch[1] });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
+    return sendJson(response, 200, await listTrustEvents({
+      agentId: agentTrustEventsMatch[1],
+      eventType: url.searchParams.get('event_type') ?? undefined,
+      contractId: url.searchParams.get('contract_id') ?? undefined,
+      counterpartyId: url.searchParams.get('counterparty_id') ?? undefined,
+      limit: url.searchParams.get('limit') ?? undefined,
+    }));
+  }
+
   const trustScoreMatch = url.pathname.match(/^\/agents\/([^/]+)\/trust-score$/);
   if (trustScoreMatch) {
     const apiKey = await requireApiKey(request, 'trust_score', { path: url.pathname, agent_id: trustScoreMatch[1] });
@@ -265,6 +312,8 @@ const server = http.createServer(async (request, response) => {
       '/capabilities',
       '/economics',
       '/trust-ranking',
+      '/trust-events',
+      '/api-usage',
       '/trust-score/{agent_id}',
       '/risk-report/{agent_id}',
       '/best-agent',
@@ -276,6 +325,7 @@ const server = http.createServer(async (request, response) => {
       'POST /agents/register',
       '/agents/{agent_id}',
       'POST /agents/{agent_id}/heartbeat',
+      '/agents/{agent_id}/trust-events',
       '/agents/{agent_id}/trust-score',
       'POST /contracts/quote',
       'POST /contracts/prepare',

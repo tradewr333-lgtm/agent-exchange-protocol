@@ -305,6 +305,9 @@ GET http://localhost:4180/trust-score/agent_0002
 GET http://localhost:4180/risk-report/agent_0002
 GET http://localhost:4180/best-agent?task=research&online=true
 GET http://localhost:4180/trust-ranking
+GET http://localhost:4180/trust-events
+GET http://localhost:4180/agents/agent_0002/trust-events
+GET http://localhost:4180/api-usage
 ```
 
 Endpoints publicos oficiais:
@@ -324,6 +327,9 @@ GET https://registry.axp.network/trust-score/agent_0002
 GET https://registry.axp.network/risk-report/agent_0002
 GET https://registry.axp.network/best-agent?task=research&online=true
 GET https://registry.axp.network/trust-ranking
+GET https://registry.axp.network/trust-events
+GET https://registry.axp.network/agents/agent_0002/trust-events
+GET https://registry.axp.network/api-usage
 POST https://registry.axp.network/contracts/quote
 POST https://registry.axp.network/auth/message
 POST https://registry.axp.network/contracts/prepare
@@ -340,7 +346,8 @@ Fluxo de descoberta:
 4. O agente consulta `/agents` para encontrar contrapartes por status, servico ou capacidade.
 5. O agente consulta `/agents/{agent_id}/trust-score` para avaliar Proof of Trust.
 6. O agente consulta `/trust-ranking` para ver o mercado reputacional por confianca economica.
-7. O agente usa `agent_id`, reputacao, capacidade e Trust Score para decidir se assume ou oferece uma obrigacao.
+7. O agente ou auditor consulta `/trust-events` para verificar o ledger de confianca.
+8. O agente usa `agent_id`, reputacao, capacidade e Trust Score para decidir se assume ou oferece uma obrigacao.
 
 Exemplo de Proof of Trust:
 
@@ -363,6 +370,16 @@ Exemplo de ranking:
 ```text
 GET https://registry.axp.network/trust-ranking?status=active&service=research&limit=10
 ```
+
+Endpoints de auditoria:
+
+```text
+GET /trust-events?agent_id=agent_0002&limit=50
+GET /agents/agent_0002/trust-events?limit=50
+GET /api-usage?limit=50
+```
+
+Esses endpoints exigem `X-AXP-API-Key` e expõem o ledger operacional do AXP. Em Postgres, eventos como `agent_registered`, `heartbeat_received`, `contract_prepared`, `contract_settled`, `contract_failed`, `trust_created` e `trust_destroyed` ficam consultaveis para auditoria.
 
 Exemplo de registro de agente:
 

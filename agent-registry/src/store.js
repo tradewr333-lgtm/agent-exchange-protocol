@@ -261,6 +261,92 @@ export async function appendApiUsage(event) {
   );
 }
 
+export async function listTrustEvents(filters = {}) {
+  const limit = normalizeLimit(filters.limit, 100);
+  if (storageMode() !== 'postgres') {
+    return {
+      schema: 'axp.trust_events.v0',
+      storage_mode: 'json',
+      count: 0,
+      events: [],
+    };
+  }
+
+  const clauses = [];
+  const params = [];
+  addWhere(clauses, params, 'agent_id', filters.agentId);
+  addWhere(clauses, params, 'event_type', filters.eventType);
+  addWhere(clauses, params, 'contract_id', filters.contractId);
+  addWhere(clauses, params, 'counterparty_id', filters.counterpartyId);
+  params.push(limit);
+
+  const result = await query(
+    `select id, event_type, agent_id, counterparty_id, contract_id, value_usd, data, created_at
+     from trust_events
+     ${clauses.length > 0 ? `where ${clauses.join(' and ')}` : ''}
+     order by created_at desc, id desc
+     limit $${params.length}`,
+    params,
+  );
+
+  return {
+    schema: 'axp.trust_events.v0',
+    storage_mode: 'postgres',
+    count: result.rows.length,
+    filters: {
+      agent_id: filters.agentId ?? null,
+      event_type: filters.eventType ?? null,
+      contract_id: filters.contractId ?? null,
+      counterparty_id: filters.counterpartyId ?? null,
+      limit,
+    },
+    events: result.rows.map(formatLedgerRow),
+  };
+}
+
+export async function listApiUsage(filters = {}) {
+  const limit = normalizeLimit(filters.limit, 100);
+  if (storageMode() !== 'postgres') {
+    return {
+      schema: 'axp.api_usage.v0',
+      storage_mode: 'json',
+      count: 0,
+      usage: [],
+    };
+  }
+
+  const clauses = [];
+  const params = [];
+  addWhere(clauses, params, 'key_id', filters.keyId);
+  addWhere(clauses, params, 'usage_type', filters.usageType);
+  addWhere(clauses, params, 'agent_id', filters.agentId);
+  addWhere(clauses, params, 'path', filters.path);
+  params.push(limit);
+
+  const result = await query(
+    `select id, key_id, usage_type, agent_id, path, data, created_at
+     from api_usage
+     ${clauses.length > 0 ? `where ${clauses.join(' and ')}` : ''}
+     order by created_at desc, id desc
+     limit $${params.length}`,
+    params,
+  );
+
+  return {
+    schema: 'axp.api_usage.v0',
+    storage_mode: 'postgres',
+    count: result.rows.length,
+    filters: {
+      key_id: filters.keyId ?? null,
+      usage_type: filters.usageType ?? null,
+      agent_id: filters.agentId ?? null,
+      path: filters.path ?? null,
+      limit,
+    },
+    usage: result.rows.map(formatLedgerRow),
+  };
+}
+
 function writeJsonAtomic(path, payload) {
   const tempPath = `${path}.tmp`;
   writeFileSync(tempPath, `${JSON.stringify(payload, null, 2)}\n`);
@@ -284,6 +370,31 @@ function latestUpdatedAt(items) {
   }
 
   return new Date(Math.max(...timestamps)).toISOString();
+}
+
+function addWhere(clauses, params, column, value) {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+
+  params.push(value);
+  clauses.push(`${column} = $${params.length}`);
+}
+
+function normalizeLimit(value, fallback) {
+  const number = Number(value ?? fallback);
+  if (!Number.isFinite(number) || number <= 0) {
+    return fallback;
+  }
+
+  return Math.min(Math.trunc(number), 500);
+}
+
+function formatLedgerRow(row) {
+  return {
+    ...row,
+    value_usd: row.value_usd === undefined ? undefined : Number(row.value_usd),
+  };
 }
 
 async function query(text, params = []) {
