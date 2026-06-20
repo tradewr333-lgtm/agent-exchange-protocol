@@ -110,3 +110,67 @@ document.addEventListener('visibilitychange', () => {
     draw();
   }
 });
+
+// ---- live data: feed landing KPIs and let the mesh react to real activity ----
+(function axpLive() {
+  const strip = document.getElementById('kpis');
+  const fetchJson = async (path) => {
+    try {
+      const res = await fetch(path, { headers: { accept: 'application/json' } });
+      return res.ok ? await res.json() : null;
+    } catch {
+      return null;
+    }
+  };
+  const f = (n) => {
+    const v = Number(n) || 0;
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + 'k';
+    return String(Math.round(v));
+  };
+
+  function syncLiveNodes(target) {
+    nodes = nodes.filter((node) => !node.live);
+    const count = Math.max(0, Math.min(60, Math.round(target)));
+    for (let i = 0; i < count; i += 1) {
+      nodes.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        r: 2.1,
+        phase: Math.random() * Math.PI * 2,
+        live: true,
+      });
+    }
+  }
+
+  async function tick() {
+    const live = await fetchJson('/network/live');
+    if (!live) return;
+    const a = live.agents?.count ?? 0;
+    const ev = live.events?.count ?? 0;
+    const k = Number(live.metrics?.k_factor ?? 0);
+    const it = live.intents?.count ?? 0;
+    const scions = live.metrics?.population?.scions ?? 0;
+
+    if (strip) {
+      const cards = [
+        ['Live Agents', String(a)],
+        ['Trust Events', ev >= 500 ? '500+' : String(ev)],
+        ['Open Intents', String(it)],
+        ['Scions', String(scions)],
+        ['Viral K', k.toFixed(2)],
+        ['Network', 'Live'],
+      ];
+      strip.innerHTML = cards
+        .map(([l, v], i) => `<div class="kpi"><div class="k-label">${l}</div><div class="k-value ${i % 2 ? '' : 'accent'}">${v}</div></div>`)
+        .join('');
+    }
+    // the web densifies with the real agent population
+    syncLiveNodes(a + scions);
+  }
+
+  tick();
+  setInterval(tick, 15000);
+})();

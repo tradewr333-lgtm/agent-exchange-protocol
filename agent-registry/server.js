@@ -50,12 +50,8 @@ const server = http.createServer(async (request, response) => {
     return sendHtml(response, 200, readFileSync(join(publicPath, 'index.html'), 'utf8'));
   }
 
-  if (url.pathname === '/dashboard') {
-    return sendHtml(response, 200, await buildDashboardHtml());
-  }
-
-  if (url.pathname === '/network') {
-    return sendHtml(response, 200, await buildNetworkHtml());
+  if (url.pathname === '/network' || url.pathname === '/dashboard') {
+    return sendHtml(response, 200, readFileSync(join(publicPath, 'network.html'), 'utf8'));
   }
 
   if (url.pathname === '/discovery-engine') {
@@ -94,6 +90,10 @@ const server = http.createServer(async (request, response) => {
 
   if (url.pathname === '/app.js') {
     return sendAsset(response, 'application/javascript; charset=utf-8', readFileSync(join(publicPath, 'app.js'), 'utf8'));
+  }
+
+  if (url.pathname === '/network.js') {
+    return sendAsset(response, 'application/javascript; charset=utf-8', readFileSync(join(publicPath, 'network.js'), 'utf8'));
   }
 
   if (url.pathname === '/axp-space-logo.png') {
@@ -516,6 +516,46 @@ const server = http.createServer(async (request, response) => {
   // -------------------------------------------------------------------------
   // AXP Agent Economy Layer: Intent Feed + Opportunity Router + Inbox + Growth
   // -------------------------------------------------------------------------
+
+  // Public, composed snapshot for the live dashboard (no API key; read-only).
+  if (url.pathname === '/network/live') {
+    const [agentsResult, eventsResult, rankingResult, opportunities, metrics, lineage, intents] = await Promise.all([
+      listAgents({}),
+      listTrustEvents({ limit: 60 }),
+      getTrustRanking({ limit: 10 }),
+      getOpportunityGraph({ limit: 12 }),
+      getGrowthMetrics({ autotune: false }),
+      getLineage({}),
+      getIntentFeed({ limit: 50 }),
+    ]);
+    const gdpUsd = (eventsResult.events || [])
+      .filter((event) => event.event_type === 'contract_settled')
+      .reduce((sum, event) => sum + (Number(event.value_usd) || 0), 0);
+    return sendJson(response, 200, {
+      protocol: 'AXP',
+      schema: 'axp.network_live.v0',
+      generated_at: new Date().toISOString(),
+      storage_mode: eventsResult.storage_mode ?? 'json',
+      agents: {
+        count: agentsResult.count,
+        agents: (agentsResult.agents || []).map((agent) => ({
+          agent_id: agent.agent_id,
+          name: agent.name,
+          services: agent.services,
+          status: agent.status,
+          online: agent.online,
+          available_capacity: agent.available_capacity,
+        })),
+      },
+      events: { count: eventsResult.count, events: eventsResult.events || [] },
+      ranking: { agents: rankingResult.agents || [] },
+      opportunities,
+      metrics,
+      lineage,
+      intents: { count: intents.count },
+      gdp_usd: Number(gdpUsd.toFixed(2)),
+    });
+  }
 
   if (url.pathname === '/intents/live') {
     return sendJson(response, 200, await getIntentFeed({
