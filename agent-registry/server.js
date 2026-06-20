@@ -71,7 +71,7 @@ const server = http.createServer(async (request, response) => {
   if (url.pathname === '/trust-ranking') {
     const apiKey = await requireApiKey(request, 'trust_ranking', { path: url.pathname });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const minScore = url.searchParams.has('min_score')
@@ -87,13 +87,13 @@ const server = http.createServer(async (request, response) => {
       online: parseBooleanParam(url.searchParams.get('online')),
       minScore,
       limit,
-    }));
+    }), apiKey.headers);
   }
 
   if (url.pathname === '/trust-events') {
     const apiKey = await requireApiKey(request, 'trust_events', { path: url.pathname });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     return sendJson(response, 200, await listTrustEvents({
@@ -102,13 +102,13 @@ const server = http.createServer(async (request, response) => {
       contractId: url.searchParams.get('contract_id') ?? undefined,
       counterpartyId: url.searchParams.get('counterparty_id') ?? undefined,
       limit: url.searchParams.get('limit') ?? undefined,
-    }));
+    }), apiKey.headers);
   }
 
   if (url.pathname === '/api-usage') {
     const apiKey = await requireApiKey(request, 'api_usage', { path: url.pathname });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     return sendJson(response, 200, await listApiUsage({
@@ -117,56 +117,56 @@ const server = http.createServer(async (request, response) => {
       agentId: url.searchParams.get('agent_id') ?? undefined,
       path: url.searchParams.get('path') ?? undefined,
       limit: url.searchParams.get('limit') ?? undefined,
-    }));
+    }), apiKey.headers);
   }
 
   if (url.pathname === '/anchors/latest') {
     const apiKey = await requireApiKey(request, 'anchors', { path: url.pathname });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
-    return sendJson(response, 200, await getLatestAnchor());
+    return sendJson(response, 200, await getLatestAnchor(), apiKey.headers);
   }
 
   if (url.pathname === '/anchors') {
     const apiKey = await requireApiKey(request, 'anchors', { path: url.pathname });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     return sendJson(response, 200, await listTrustAnchors({
       status: url.searchParams.get('status') ?? undefined,
       limit: url.searchParams.get('limit') ?? undefined,
-    }));
+    }), apiKey.headers);
   }
 
   if (request.method === 'POST' && url.pathname === '/anchors/prepare') {
     const apiKey = await requireApiKey(request, 'anchor_prepare', { path: url.pathname });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const body = await readJsonBody(request);
     const result = await prepareTrustAnchorBatch(body ?? {});
-    return sendJson(response, result.status, result.ok ? result.anchor : result);
+    return sendJson(response, result.status, result.ok ? result.anchor : result, apiKey.headers);
   }
 
   if (request.method === 'POST' && url.pathname === '/anchors/record') {
     const apiKey = await requireApiKey(request, 'anchor_record', { path: url.pathname });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const body = await readJsonBody(request);
     const result = await recordTrustAnchor(body ?? {});
-    return sendJson(response, result.status, result.ok ? result.anchor : result);
+    return sendJson(response, result.status, result.ok ? result.anchor : result, apiKey.headers);
   }
 
   if (url.pathname === '/best-agent') {
     const apiKey = await requireApiKey(request, 'best_agent', { path: url.pathname });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const requestedCapacity = url.searchParams.has('requested_capacity')
@@ -182,14 +182,14 @@ const server = http.createServer(async (request, response) => {
       online: parseBooleanParam(url.searchParams.get('online')),
       requestedCapacity,
       limit,
-    }));
+    }), apiKey.headers);
   }
 
   const passportAliasMatch = url.pathname.match(/^\/passport\/([^/]+)$/);
   if (passportAliasMatch) {
     const apiKey = await requireApiKey(request, 'agent_passport', { path: url.pathname, agent_id: passportAliasMatch[1] });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const passport = await getAgentPassport(passportAliasMatch[1]);
@@ -198,20 +198,20 @@ const server = http.createServer(async (request, response) => {
         error: 'agent_passport_not_found',
         agent_id: passportAliasMatch[1],
         trust_state: 'TRUST_UNKNOWN',
-      });
+      }, apiKey.headers);
     }
-    return sendJson(response, 200, passport);
+    return sendJson(response, 200, passport, apiKey.headers);
   }
 
   if (request.method === 'POST' && url.pathname === '/handshake') {
     const apiKey = await requireApiKey(request, 'agent_handshake', { path: url.pathname });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const body = await readJsonBody(request);
     const result = await performAxpHandshake(body ?? {});
-    return sendJson(response, result.status ?? 200, result);
+    return sendJson(response, result.status ?? 200, result, apiKey.headers);
   }
 
   if (request.method === 'POST' && url.pathname === '/auth/message') {
@@ -238,7 +238,7 @@ const server = http.createServer(async (request, response) => {
   if (url.pathname === '/agents') {
     const apiKey = await requireApiKey(request, 'agent_query', { path: url.pathname });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const minCapacity = url.searchParams.has('min_capacity')
@@ -250,7 +250,7 @@ const server = http.createServer(async (request, response) => {
       service: url.searchParams.get('service') ?? undefined,
       minCapacity,
       online: parseBooleanParam(url.searchParams.get('online')),
-    }));
+    }), apiKey.headers);
   }
 
   if (request.method === 'POST' && url.pathname === '/agents/register') {
@@ -300,7 +300,7 @@ const server = http.createServer(async (request, response) => {
   if (agentPassportMatch) {
     const apiKey = await requireApiKey(request, 'agent_passport', { path: url.pathname, agent_id: agentPassportMatch[1] });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const passport = await getAgentPassport(agentPassportMatch[1]);
@@ -309,9 +309,9 @@ const server = http.createServer(async (request, response) => {
         error: 'agent_passport_not_found',
         agent_id: agentPassportMatch[1],
         trust_state: 'TRUST_UNKNOWN',
-      });
+      }, apiKey.headers);
     }
-    return sendJson(response, 200, passport);
+    return sendJson(response, 200, passport, apiKey.headers);
   }
 
   const heartbeatMatch = url.pathname.match(/^\/agents\/([^/]+)\/heartbeat$/);
@@ -325,7 +325,7 @@ const server = http.createServer(async (request, response) => {
   if (agentTrustEventsMatch) {
     const apiKey = await requireApiKey(request, 'trust_events', { path: url.pathname, agent_id: agentTrustEventsMatch[1] });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     return sendJson(response, 200, await listTrustEvents({
@@ -334,49 +334,49 @@ const server = http.createServer(async (request, response) => {
       contractId: url.searchParams.get('contract_id') ?? undefined,
       counterpartyId: url.searchParams.get('counterparty_id') ?? undefined,
       limit: url.searchParams.get('limit') ?? undefined,
-    }));
+    }), apiKey.headers);
   }
 
   const trustScoreMatch = url.pathname.match(/^\/agents\/([^/]+)\/trust-score$/);
   if (trustScoreMatch) {
     const apiKey = await requireApiKey(request, 'trust_score', { path: url.pathname, agent_id: trustScoreMatch[1] });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const trustScore = await getAgentTrustScore(trustScoreMatch[1]);
     if (!trustScore) {
-      return sendJson(response, 404, { error: 'agent_not_found', agent_id: trustScoreMatch[1] });
+      return sendJson(response, 404, { error: 'agent_not_found', agent_id: trustScoreMatch[1] }, apiKey.headers);
     }
-    return sendJson(response, 200, trustScore);
+    return sendJson(response, 200, trustScore, apiKey.headers);
   }
 
   const trustScoreAliasMatch = url.pathname.match(/^\/trust-score\/([^/]+)$/);
   if (trustScoreAliasMatch) {
     const apiKey = await requireApiKey(request, 'trust_score', { path: url.pathname, agent_id: trustScoreAliasMatch[1] });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const trustScore = await getAgentTrustScore(trustScoreAliasMatch[1]);
     if (!trustScore) {
-      return sendJson(response, 404, { error: 'agent_not_found', agent_id: trustScoreAliasMatch[1] });
+      return sendJson(response, 404, { error: 'agent_not_found', agent_id: trustScoreAliasMatch[1] }, apiKey.headers);
     }
-    return sendJson(response, 200, trustScore);
+    return sendJson(response, 200, trustScore, apiKey.headers);
   }
 
   const riskReportMatch = url.pathname.match(/^\/risk-report\/([^/]+)$/);
   if (riskReportMatch) {
     const apiKey = await requireApiKey(request, 'risk_report', { path: url.pathname, agent_id: riskReportMatch[1] });
     if (!apiKey.ok) {
-      return sendJson(response, apiKey.status, apiKey);
+      return sendJson(response, apiKey.status, apiKey, apiKey.headers);
     }
 
     const riskReport = await getAgentRiskReport(riskReportMatch[1]);
     if (!riskReport) {
-      return sendJson(response, 404, { error: 'agent_not_found', agent_id: riskReportMatch[1] });
+      return sendJson(response, 404, { error: 'agent_not_found', agent_id: riskReportMatch[1] }, apiKey.headers);
     }
-    return sendJson(response, 200, riskReport);
+    return sendJson(response, 200, riskReport, apiKey.headers);
   }
 
   if (request.method === 'POST' && url.pathname === '/contracts/quote') {
@@ -457,12 +457,14 @@ server.listen(port, () => {
   console.log(`AXP agent registry running at http://localhost:${port}`);
 });
 
-function sendJson(response, status, body) {
+function sendJson(response, status, body, extraHeaders = {}) {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'access-control-allow-origin': '*',
     'access-control-allow-headers': 'content-type, x-axp-api-key',
+    'access-control-expose-headers': 'X-AXP-RateLimit-Limit, X-AXP-RateLimit-Remaining, X-AXP-RateLimit-Reset, X-AXP-RateLimit-Tier',
     'access-control-allow-methods': 'GET, POST, OPTIONS',
+    ...extraHeaders,
   });
   response.end(`${JSON.stringify(body, null, 2)}\n`);
 }

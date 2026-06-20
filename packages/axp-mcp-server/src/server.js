@@ -65,6 +65,12 @@ const tools = [
         owner: { type: 'string', description: 'Owner wallet address.' },
         agent_id: { type: 'string' },
         framework: { type: 'string', description: 'Runtime or framework, for example mcp, langchain, crewai, autogen.' },
+        tier: {
+          type: 'string',
+          enum: ['free_developer', 'agent', 'verified_agent', 'partner'],
+          description: 'Daily rate-limit tier. Defaults to agent when agent_id is present, otherwise free_developer.',
+        },
+        daily_limit: { type: 'number', description: 'Optional custom daily request limit for partner/admin keys.' },
         scopes: {
           type: 'array',
           items: { type: 'string' },
@@ -523,6 +529,8 @@ async function callTool(name, args) {
         owner: args.owner,
         agent_id: args.agent_id,
         framework: args.framework,
+        tier: args.tier,
+        daily_limit: args.daily_limit,
         scopes: args.scopes,
         auth: args.auth,
       });

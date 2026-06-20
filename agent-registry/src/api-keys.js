@@ -5,6 +5,12 @@ import { appendApiUsage, loadApiKeyRegistry, saveApiKeyRegistry } from './store.
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 const KEY_ID_PATTERN = /^ak_[a-zA-Z0-9]{16}$/;
 const API_KEY_PREFIX = 'axp_live_';
+const RATE_LIMIT_TIERS = {
+  free_developer: 1000,
+  agent: 10000,
+  verified_agent: 100000,
+  partner: 1000000,
+};
 
 export async function registerApiKey(payload = {}) {
   const validation = validateApiKeyRegistration(payload);
@@ -27,17 +33,21 @@ export async function registerApiKey(payload = {}) {
   const registry = await loadApiKeyRegistry();
   const now = new Date().toISOString();
   const secret = createApiKeySecret();
+  const tier = normalizeTier(payload.tier, payload);
+  const dailyLimit = normalizeDailyLimit(payload.daily_limit, tier);
   const key = {
     key_id: createKeyId(),
     name: payload.name,
     owner: normalizeAddress(payload.owner),
     agent_id: payload.agent_id ?? null,
     framework: payload.framework ?? null,
+    tier,
     status: 'active',
     scopes: normalizeScopes(payload.scopes),
     rate_limit: {
-      requests_per_minute: Number(payload.requests_per_minute ?? 120),
-      enforcement: 'planned',
+      requests_per_day: dailyLimit,
+      window: 'daily_utc',
+      enforcement: 'active',
     },
     usage: {
       total_requests: 0,
@@ -48,6 +58,7 @@ export async function registerApiKey(payload = {}) {
       agent_query_requests: 0,
       last_used_at: null,
     },
+    daily_usage: createDailyUsage(0, dailyLimit, tier),
     created_at: now,
     rotated_at: null,
     secret_hash: hashApiKey(secret),
@@ -151,7 +162,28 @@ export async function requireApiKey(request, usageType, context = {}) {
     return { ok: false, status: 401, error: 'api_key_invalid_or_inactive' };
   }
 
-  const updatedKey = recordUsage(key, usageType);
+  const rate = evaluateRateLimit(key);
+  if (!rate.allowed) {
+    await appendApiUsage({
+      key_id: key.key_id,
+      usage_type: 'rate_limited',
+      agent_id: key.agent_id ?? context.agent_id ?? null,
+      path: context.path ?? null,
+      framework: key.framework ?? null,
+      rate_limit: rate.public,
+    });
+
+    return {
+      ok: false,
+      status: 429,
+      error: 'api_key_rate_limit_exceeded',
+      key_id: key.key_id,
+      rate_limit: rate.public,
+      headers: buildRateLimitHeaders(rate.public),
+    };
+  }
+
+  const updatedKey = recordUsage(key, usageType, rate);
   await saveApiKeyRegistry({
     ...registry,
     keys: registry.keys.map((item) => (item.key_id === updatedKey.key_id ? updatedKey : item)),
@@ -162,11 +194,14 @@ export async function requireApiKey(request, usageType, context = {}) {
     agent_id: updatedKey.agent_id ?? context.agent_id ?? null,
     path: context.path ?? null,
     framework: updatedKey.framework ?? null,
+    rate_limit: updatedKey.daily_usage,
   });
 
   return {
     ok: true,
     key: publicApiKey(updatedKey),
+    rate_limit: updatedKey.daily_usage,
+    headers: buildRateLimitHeaders(updatedKey.daily_usage),
   };
 }
 
@@ -198,6 +233,17 @@ function validateApiKeyRegistration(payload) {
 
   if (payload.framework !== undefined && typeof payload.framework !== 'string') {
     return { ok: false, status: 400, error: 'framework_invalid' };
+  }
+
+  if (payload.tier !== undefined && typeof payload.tier !== 'string') {
+    return { ok: false, status: 400, error: 'tier_invalid' };
+  }
+
+  if (payload.daily_limit !== undefined) {
+    const dailyLimit = Number(payload.daily_limit);
+    if (!Number.isFinite(dailyLimit) || dailyLimit <= 0) {
+      return { ok: false, status: 400, error: 'daily_limit_invalid' };
+    }
   }
 
   if (!payload.auth || typeof payload.auth !== 'object') {
@@ -267,7 +313,7 @@ async function verifyApiKeyOwnerAuth({ action, owner, agentId, auth, scope }) {
   };
 }
 
-function recordUsage(key, usageType) {
+function recordUsage(key, usageType, rate) {
   const usage = {
     ...key.usage,
     total_requests: Number(key.usage?.total_requests ?? 0) + 1,
@@ -282,6 +328,11 @@ function recordUsage(key, usageType) {
   return {
     ...key,
     usage,
+    daily_usage: {
+      ...rate.public,
+      used: rate.public.used + 1,
+      remaining: Math.max(rate.public.remaining - 1, 0),
+    },
   };
 }
 
@@ -305,6 +356,97 @@ function createKeyId() {
 
 function createApiKeySecret() {
   return `${API_KEY_PREFIX}${randomBytes(24).toString('hex')}`;
+}
+
+function evaluateRateLimit(key) {
+  const tier = normalizeStoredTier(key);
+  const limit = normalizeDailyLimit(key.rate_limit?.requests_per_day ?? key.daily_limit, tier);
+  const currentWindow = dailyWindowKey();
+  const resetAt = dailyResetAt();
+  const dailyUsage = key.daily_usage?.window === currentWindow
+    ? createDailyUsage(key.daily_usage.used ?? 0, limit, tier, currentWindow, resetAt)
+    : createDailyUsage(0, limit, tier, currentWindow, resetAt);
+  const used = Number(dailyUsage.used ?? 0);
+
+  return {
+    allowed: used < limit,
+    public: {
+      tier,
+      limit,
+      used,
+      remaining: Math.max(limit - used, 0),
+      window: currentWindow,
+      reset_at: resetAt,
+    },
+  };
+}
+
+function normalizeStoredTier(key) {
+  const tier = String(key.tier ?? '').toLowerCase();
+  if (Object.hasOwn(RATE_LIMIT_TIERS, tier)) {
+    return tier;
+  }
+
+  return key.agent_id ? 'agent' : 'free_developer';
+}
+
+function createDailyUsage(used = 0, limit = RATE_LIMIT_TIERS.free_developer, tier = 'free_developer', window = dailyWindowKey(), resetAt = dailyResetAt()) {
+  return {
+    tier,
+    limit,
+    used: Number(used),
+    remaining: Math.max(Number(limit) - Number(used), 0),
+    window,
+    reset_at: resetAt,
+  };
+}
+
+function normalizeTier(value, payload = {}) {
+  const tier = String(value ?? '').toLowerCase();
+  const adminToken = payload.admin_rate_limit_token ?? null;
+  const adminAllowed = process.env.AXP_RATE_LIMIT_ADMIN_TOKEN
+    && adminToken
+    && String(adminToken) === String(process.env.AXP_RATE_LIMIT_ADMIN_TOKEN);
+
+  if (tier === 'free_developer') {
+    return tier;
+  }
+
+  if (tier === 'agent' && payload.agent_id) {
+    return tier;
+  }
+
+  if (['verified_agent', 'partner'].includes(tier) && adminAllowed) {
+    return tier;
+  }
+
+  return payload.agent_id ? 'agent' : 'free_developer';
+}
+
+function normalizeDailyLimit(value, tier) {
+  const customLimit = Number(value);
+  if (tier === 'partner' && Number.isFinite(customLimit) && customLimit > 0) {
+    return Math.trunc(customLimit);
+  }
+
+  return RATE_LIMIT_TIERS[tier] ?? RATE_LIMIT_TIERS.free_developer;
+}
+
+function dailyWindowKey(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+function dailyResetAt(date = new Date()) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1)).toISOString();
+}
+
+function buildRateLimitHeaders(rateLimit) {
+  return {
+    'X-AXP-RateLimit-Limit': String(rateLimit.limit),
+    'X-AXP-RateLimit-Remaining': String(rateLimit.remaining),
+    'X-AXP-RateLimit-Reset': rateLimit.reset_at,
+    'X-AXP-RateLimit-Tier': rateLimit.tier,
+  };
 }
 
 function hashApiKey(secret) {

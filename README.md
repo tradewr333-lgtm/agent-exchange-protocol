@@ -763,6 +763,55 @@ trust_destroyed
 
 Na Render, o proximo passo operacional e criar um Postgres, aplicar o schema e adicionar `DATABASE_URL` no web service. Sem `DATABASE_URL`, o servico segue funcionando com fallback JSON.
 
+## API Key Rate Limiting
+
+Todo endpoint protegido da AXP Trust API aceita:
+
+```text
+X-AXP-API-Key: axp_live_...
+```
+
+A consulta continua gratuita nesta fase, mas agora cada chave tem identidade, medicao de uso e limite diario. Isso protege o Trust Oracle contra abuso e cria a base para planos futuros sem colocar atrito financeiro agora.
+
+Tiers iniciais:
+
+```text
+free_developer: 1.000 requests/day
+agent: 10.000 requests/day
+verified_agent: 100.000 requests/day
+partner: limite customizado
+```
+
+Chaves publicas criadas sem revisao entram como `free_developer` ou `agent`. `verified_agent` e `partner` sao upgrades controlados para evitar abuso.
+
+Headers retornados:
+
+```text
+X-AXP-RateLimit-Limit
+X-AXP-RateLimit-Remaining
+X-AXP-RateLimit-Reset
+X-AXP-RateLimit-Tier
+```
+
+Exemplo de registro:
+
+```json
+{
+  "name": "CrewAI Research Runtime",
+  "owner": "0x0000000000000000000000000000000000000000",
+  "agent_id": "research_agent_001",
+  "framework": "crewai",
+  "tier": "agent",
+  "auth": {
+    "agent_id": "research_agent_001",
+    "address": "0x0000000000000000000000000000000000000000",
+    "nonce": "...",
+    "issued_at": "...",
+    "signature": "0x..."
+  }
+}
+```
+
 ## MCP Server
 
 AXP tambem possui um MCP Server para agentes consultarem o protocolo como ferramenta universal.

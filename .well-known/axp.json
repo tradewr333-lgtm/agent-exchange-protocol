@@ -82,6 +82,8 @@
     "agent_heartbeat",
     "api_key_identity",
     "api_key_usage_metering",
+    "api_key_rate_limiting",
+    "api_key_daily_tiers",
     "api_key_rotation",
     "postgres_persistence",
     "json_fallback_storage",
@@ -188,6 +190,20 @@
     "message_endpoint": "/auth/message",
     "api_key_register_scope_template": "api_key:{name}|owner:{owner}|agent:{agent_id_or_none}|framework:{framework_or_none}",
     "api_key_rotate_scope_template": "api_key:{key_id}|owner:{owner}|rotate:true",
+    "api_key_rate_limits": {
+      "header_limit": "X-AXP-RateLimit-Limit",
+      "header_remaining": "X-AXP-RateLimit-Remaining",
+      "header_reset": "X-AXP-RateLimit-Reset",
+      "header_tier": "X-AXP-RateLimit-Tier",
+      "window": "daily_utc",
+      "tiers": {
+        "free_developer": 1000,
+        "agent": 10000,
+        "verified_agent": 100000,
+        "partner": "custom"
+      },
+      "upgrade_policy": "verified_agent and partner limits are controlled upgrades; public self-registration defaults to free_developer or agent."
+    },
     "register_scope_template": "agent:{agent_id}|operator:{operator}|services:{comma_separated_services}|collateral:{asset}:{amount}|manifest:{manifest_url_or_none}",
     "heartbeat_scope_template": "agent:{agent_id}|status:{active_paused_or_offline}|available:{true_or_false}|load:{current_load}|capacity:{available_capacity}|endpoint:{endpoint_or_none}",
     "prepare_scope_template": "provider:{provider_agent_id}|requester:{requester_agent_id_or_none}|service:{service}|capacity:{requested_capacity}",

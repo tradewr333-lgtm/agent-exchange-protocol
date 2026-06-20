@@ -143,6 +143,8 @@ class AxpClient:
         auth: dict[str, Any],
         agent_id: str | None = None,
         framework: str | None = None,
+        tier: str | None = None,
+        daily_limit: int | None = None,
         scopes: list[str] | None = None,
     ) -> dict[str, Any]:
         return self._post_json(
@@ -152,6 +154,8 @@ class AxpClient:
                 "owner": owner,
                 "agent_id": agent_id,
                 "framework": framework,
+                "tier": tier,
+                "daily_limit": daily_limit,
                 "scopes": scopes,
                 "auth": auth,
             },

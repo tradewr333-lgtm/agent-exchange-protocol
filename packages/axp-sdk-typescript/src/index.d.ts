@@ -119,6 +119,8 @@ export interface RegisterApiKeyInput {
   owner: string;
   agent_id?: string;
   framework?: string;
+  tier?: 'free_developer' | 'agent' | 'verified_agent' | 'partner';
+  daily_limit?: number;
   scopes?: string[];
   auth: AgentAuth;
 }

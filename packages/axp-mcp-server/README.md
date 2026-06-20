@@ -40,6 +40,26 @@ AXP_REGISTRY_URL=https://registry.axp.network
 AXP_API_KEY=axp_live_...
 ```
 
+Endpoints protegidos retornam headers de limite diario por chave:
+
+```text
+X-AXP-RateLimit-Limit
+X-AXP-RateLimit-Remaining
+X-AXP-RateLimit-Reset
+X-AXP-RateLimit-Tier
+```
+
+Tiers iniciais:
+
+```text
+free_developer: 1.000 requests/day
+agent: 10.000 requests/day
+verified_agent: 100.000 requests/day
+partner: custom
+```
+
+Por seguranca, `verified_agent` e `partner` sao upgrades controlados. Registro publico sem revisao recebe `free_developer` ou `agent`.
+
 Para usar outro registry:
 
 ```powershell
