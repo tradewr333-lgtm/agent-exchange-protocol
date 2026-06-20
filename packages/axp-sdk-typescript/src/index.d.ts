@@ -30,6 +30,33 @@ export interface BestAgentFilters {
   online?: boolean;
 }
 
+export interface TrustAnchorFilters {
+  status?: string;
+  limit?: number;
+}
+
+export interface PrepareTrustAnchorInput {
+  limit?: number;
+  after_event_id?: number;
+  chain_id?: number;
+  contract_address?: string;
+  registry_url?: string;
+}
+
+export interface RecordTrustAnchorInput {
+  batch_id: string;
+  merkle_root: string;
+  tx_hash: string;
+  from_event_id?: number;
+  to_event_id?: number;
+  event_count?: number;
+  chain_id?: number;
+  contract_address?: string;
+  block_number?: number;
+  registry_url?: string;
+  batch_uri?: string;
+}
+
 export interface ContractQuoteInput {
   requester_agent_id?: string;
   provider_agent_id: string;
@@ -118,6 +145,10 @@ export declare class AxpClient {
   getTrustScore(agentId: string): Promise<unknown>;
   getRiskReport(agentId: string): Promise<unknown>;
   getBestAgent(filters?: BestAgentFilters): Promise<unknown>;
+  listTrustAnchors(filters?: TrustAnchorFilters): Promise<unknown>;
+  getLatestTrustAnchor(): Promise<unknown>;
+  prepareTrustAnchor(input?: PrepareTrustAnchorInput): Promise<unknown>;
+  recordTrustAnchor(input: RecordTrustAnchorInput): Promise<unknown>;
   getCapacityScore(agentId: string): Promise<unknown>;
   quoteContract(input: ContractQuoteInput): Promise<unknown>;
   buildAuthMessage(input: AuthMessageInput): Promise<unknown>;

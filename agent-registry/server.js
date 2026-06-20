@@ -6,6 +6,7 @@ import { verifyAgentManifest } from './src/agent-manifest.js';
 import { registerAgent, updateAgentHeartbeat } from './src/agents.js';
 import { getApiKey, registerApiKey, requireApiKey, rotateApiKey } from './src/api-keys.js';
 import { buildAuthMessage } from './src/auth.js';
+import { getLatestAnchor, listTrustAnchors, prepareTrustAnchorBatch, recordTrustAnchor } from './src/anchors.js';
 import { getEconomicPolicy } from './src/economics.js';
 import { getAgentRiskReport, getAgentTrustScore, getBestAgent, getTrustRanking } from './src/trust-score.js';
 import {
@@ -116,6 +117,49 @@ const server = http.createServer(async (request, response) => {
       path: url.searchParams.get('path') ?? undefined,
       limit: url.searchParams.get('limit') ?? undefined,
     }));
+  }
+
+  if (url.pathname === '/anchors/latest') {
+    const apiKey = await requireApiKey(request, 'anchors', { path: url.pathname });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
+    return sendJson(response, 200, await getLatestAnchor());
+  }
+
+  if (url.pathname === '/anchors') {
+    const apiKey = await requireApiKey(request, 'anchors', { path: url.pathname });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
+    return sendJson(response, 200, await listTrustAnchors({
+      status: url.searchParams.get('status') ?? undefined,
+      limit: url.searchParams.get('limit') ?? undefined,
+    }));
+  }
+
+  if (request.method === 'POST' && url.pathname === '/anchors/prepare') {
+    const apiKey = await requireApiKey(request, 'anchor_prepare', { path: url.pathname });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
+    const body = await readJsonBody(request);
+    const result = await prepareTrustAnchorBatch(body ?? {});
+    return sendJson(response, result.status, result.ok ? result.anchor : result);
+  }
+
+  if (request.method === 'POST' && url.pathname === '/anchors/record') {
+    const apiKey = await requireApiKey(request, 'anchor_record', { path: url.pathname });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
+    const body = await readJsonBody(request);
+    const result = await recordTrustAnchor(body ?? {});
+    return sendJson(response, result.status, result.ok ? result.anchor : result);
   }
 
   if (url.pathname === '/best-agent') {
@@ -331,6 +375,10 @@ const server = http.createServer(async (request, response) => {
       '/trust-ranking',
       '/trust-events',
       '/api-usage',
+      '/anchors',
+      '/anchors/latest',
+      'POST /anchors/prepare',
+      'POST /anchors/record',
       '/trust-score/{agent_id}',
       '/risk-report/{agent_id}',
       '/best-agent',
@@ -374,6 +422,7 @@ async function buildNetworkHtml() {
   const contracts = await listPreparedContracts();
   const trustEvents = await listTrustEvents({ limit: 30 });
   const ranking = await getTrustRanking({ limit: 12 });
+  const latestAnchor = await getLatestAnchor();
   const graph = buildNetworkGraph({
     agents: agents.agents,
     contracts: contracts.contracts,
@@ -480,7 +529,7 @@ async function buildNetworkHtml() {
 
       .metrics {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 12px;
         margin-bottom: 16px;
       }
@@ -594,6 +643,8 @@ async function buildNetworkHtml() {
           <strong>${escapeHtml(storageLabel)}</strong>
           <span>Latest event hash</span>
           <code class="hash">${escapeHtml(shortHash(latestHash))}</code>
+          <span>Latest BSC anchor</span>
+          <code class="hash">${escapeHtml(latestAnchor.tx_hash ? shortHash(latestAnchor.tx_hash) : latestAnchor.status ?? 'not recorded yet')}</code>
           <span>Auto-refresh every 30 seconds</span>
         </div>
       </section>
@@ -602,6 +653,7 @@ async function buildNetworkHtml() {
         ${renderMetric('Agents', agents.count, 'economic identities')}
         ${renderMetric('Contracts', contracts.contracts.length, 'machine obligations')}
         ${renderMetric('Trust Events', trustEvents.count, 'hashed ledger rows')}
+        ${renderMetric('Anchors', latestAnchor.tx_hash ? 1 : 0, latestAnchor.tx_hash ? 'latest root on BSC' : 'waiting for first BSC root')}
         ${renderMetric('Graph Links', graph.links.length, 'agent-to-agent edges')}
       </section>
 

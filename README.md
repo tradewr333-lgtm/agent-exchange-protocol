@@ -335,6 +335,10 @@ GET https://registry.axp.network/trust-ranking
 GET https://registry.axp.network/trust-events
 GET https://registry.axp.network/agents/agent_0002/trust-events
 GET https://registry.axp.network/api-usage
+GET https://registry.axp.network/anchors
+GET https://registry.axp.network/anchors/latest
+POST https://registry.axp.network/anchors/prepare
+POST https://registry.axp.network/anchors/record
 POST https://registry.axp.network/contracts/quote
 POST https://registry.axp.network/auth/message
 POST https://registry.axp.network/contracts/prepare
@@ -433,11 +437,39 @@ GET /dashboard
 GET /trust-events?agent_id=agent_0002&limit=50
 GET /agents/agent_0002/trust-events?limit=50
 GET /api-usage?limit=50
+GET /anchors
+GET /anchors/latest
+POST /anchors/prepare
+POST /anchors/record
 ```
 
 `/dashboard` mostra status do storage, ultimos agentes, contratos, Trust Events, uso recente da API e ranking por Trust Score sem expor segredos.
 
 `/network` mostra a rede viva de Proof of Trust: agentes como nos, contratos como arestas e Trust Events como pulsos criptograficos. Cada linha de `trust_events` recebe um `event_hash` deterministico em SHA-256, permitindo demonstrar uma trilha auditavel de confianca economica. Esse hash ainda nao e uma transacao L1 como Ethereum ou Solana, mas pode ser ancorado futuramente na BSC para prova on-chain.
+
+## BSC Proof of Trust Anchors
+
+O AXP agora tem um mecanismo de ancoragem on-chain:
+
+1. O registry pega Trust Events ainda nao ancorados.
+2. Cada evento ja possui `event_hash`.
+3. O registry monta um Merkle Root SHA-256.
+4. Um worker privado chama `AXPTrustAnchor.recordAnchor(...)` na BSC.
+5. O tx hash volta para o registry via `/anchors/record`.
+
+Contrato:
+
+```text
+blockchain/contracts/AXPTrustAnchor.sol
+```
+
+Script operacional:
+
+```text
+node examples/proof-of-trust-anchor/anchor-bsc.js
+```
+
+Esse script deve rodar em ambiente privado com `BSC_MAINNET_PRIVATE_KEY`, nunca dentro do web service publico. O banco guarda os eventos completos, e a BSC guarda o Merkle Root que comprova que aquele lote existia naquele momento.
 
 Os endpoints JSON de auditoria exigem `X-AXP-API-Key` e expõem o ledger operacional do AXP. Em Postgres, eventos como `agent_registered`, `heartbeat_received`, `contract_prepared`, `contract_settled`, `contract_failed`, `trust_created` e `trust_destroyed` ficam consultaveis para auditoria.
 
@@ -997,8 +1029,10 @@ blockchain/
     AXPStaking.sol
     AXPAgentRegistry.sol
     AXPParticipationVault.sol
+    AXPTrustAnchor.sol
   scripts/
     deploy-bsc-testnet.js
+    deploy-trust-anchor.js
 
 docs/
   whitepaper.md
@@ -1015,6 +1049,7 @@ examples/
   full-agent-onboarding/
   agent-manifest/
   axp-scout-agent/
+  proof-of-trust-anchor/
 ```
 
 ## Documentos

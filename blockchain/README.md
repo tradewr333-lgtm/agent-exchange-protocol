@@ -9,6 +9,7 @@ Contratos Solidity para levar o AXP para BSC Testnet antes de qualquer mainnet.
 - `AXPStaking.sol`: staking, travamento de obrigacoes e slashing on-chain.
 - `AXPAgentRegistry.sol`: registro on-chain de agentes.
 - `AXPParticipationVault.sol`: vault opcional para participacao publica contra BNB.
+- `AXPTrustAnchor.sol`: ancora Merkle Roots do ledger Proof of Trust na BSC.
 
 ## BSC Mainnet Deployment
 
@@ -31,6 +32,43 @@ blockchain/deployments/bsc-mainnet.json
 The Participation Vault is deployed but paused. No public sale is open.
 
 All BSC mainnet contracts are verified on BscScan.
+
+## Proof of Trust Anchor
+
+`AXPTrustAnchor.sol` e a camada leve de prova publica para o AXP Trust Oracle.
+
+Ele grava somente:
+
+- Merkle Root de um lote de `trust_events`
+- primeiro e ultimo event id
+- quantidade de eventos
+- registry URL / batch URI
+
+Ele nao grava dados completos de agentes, evidencias privadas, API keys ou payloads de contratos. Os registros completos ficam no Postgres do AXP; a BSC guarda o checkpoint criptografico publico.
+
+Deploy apenas do contrato de anchor:
+
+```bash
+npm run deploy:trust-anchor:bsc-mainnet
+```
+
+Deploy mainnet continua bloqueado sem:
+
+```text
+AXP_CONFIRM_MAINNET_DEPLOY=YES_I_UNDERSTAND
+```
+
+Depois do deploy, configure:
+
+```text
+AXP_TRUST_ANCHOR_ADDRESS=0x...
+```
+
+E rode o worker privado a partir da raiz do repositorio:
+
+```bash
+node examples/proof-of-trust-anchor/anchor-bsc.js
+```
 
 ## Verify on BscScan
 

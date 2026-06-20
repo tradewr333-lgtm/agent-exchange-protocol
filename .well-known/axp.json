@@ -30,6 +30,10 @@
     "economics_endpoint": "/economics",
     "trust_ranking_endpoint": "/trust-ranking",
     "trust_events_endpoint": "/trust-events",
+    "trust_anchors_endpoint": "/anchors",
+    "trust_anchor_latest_endpoint": "/anchors/latest",
+    "trust_anchor_prepare_endpoint": "/anchors/prepare",
+    "trust_anchor_record_endpoint": "/anchors/record",
     "api_usage_endpoint": "/api-usage",
     "auth_message_endpoint": "/auth/message",
     "contract_quote_endpoint": "/contracts/quote",
@@ -89,6 +93,8 @@
     "operator_dashboard",
     "proof_of_trust_network_visualization",
     "cryptographic_trust_event_hashes",
+    "merkle_trust_anchors",
+    "bsc_trust_anchor_ready",
     "trust_oracle",
     "trust_api",
     "trust_dns",
@@ -127,6 +133,7 @@
       "contracts",
       "settlements",
       "trust_events",
+      "trust_anchors",
       "api_usage"
     ],
     "trust_events": [
@@ -152,7 +159,11 @@
       "GET /trust-ranking",
       "GET /trust-events",
       "GET /agents/{agent_id}/trust-events",
-      "GET /api-usage"
+      "GET /api-usage",
+      "GET /anchors",
+      "GET /anchors/latest",
+      "POST /anchors/prepare",
+      "POST /anchors/record"
     ],
     "required_for": [
       "POST /api-keys/register",
@@ -254,6 +265,19 @@
       "AXPAgentRegistry": "0x5e91402c50EC9D7655617ec787dc8087f7AB4678",
       "AXPStaking": "0xb3faFa1d03b852DFe9BfDe413efEF856788fd787",
       "AXPParticipationVault": "0xF70605341b4f73a5bFa89D363652a973007CC338"
+    },
+    "trust_anchor": {
+      "status": "ready_for_deployment",
+      "contract": "AXPTrustAnchor",
+      "source": "blockchain/contracts/AXPTrustAnchor.sol",
+      "deploy_script": "blockchain/scripts/deploy-trust-anchor.js",
+      "anchor_endpoints": [
+        "/anchors/prepare",
+        "/anchors",
+        "/anchors/latest",
+        "/anchors/record"
+      ],
+      "note": "Stores Merkle Roots of hashed Proof of Trust events on BSC. Full ledger stays in the AXP registry."
     },
     "participation_vault": {
       "status": "paused",

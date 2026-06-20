@@ -8,6 +8,8 @@
     "test": "hardhat test",
     "deploy:bsc-testnet": "hardhat run scripts/deploy-bsc-testnet.js --network bscTestnet",
     "deploy:bsc-mainnet": "hardhat run scripts/deploy-bsc-testnet.js --network bscMainnet",
+    "deploy:trust-anchor:bsc-testnet": "hardhat run scripts/deploy-trust-anchor.js --network bscTestnet",
+    "deploy:trust-anchor:bsc-mainnet": "hardhat run scripts/deploy-trust-anchor.js --network bscMainnet",
     "verify:bsc-mainnet": "hardhat run scripts/verify-bsc-mainnet.js --network bscMainnet",
     "verify:bsc-mainnet:v2": "node scripts/verify-bsc-mainnet-v2.js"
   },

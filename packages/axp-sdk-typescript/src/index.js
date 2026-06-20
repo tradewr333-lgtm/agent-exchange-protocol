@@ -114,6 +114,26 @@ export class AxpClient {
     })}`);
   }
 
+  listTrustAnchors(filters = {}) {
+    return this.getJson(`/anchors${toQuery({
+      status: filters.status,
+      limit: filters.limit,
+    })}`);
+  }
+
+  getLatestTrustAnchor() {
+    return this.getJson('/anchors/latest');
+  }
+
+  prepareTrustAnchor(input = {}) {
+    return this.postJson('/anchors/prepare', input);
+  }
+
+  recordTrustAnchor(input = {}) {
+    requireFields(input, ['batch_id', 'merkle_root', 'tx_hash']);
+    return this.postJson('/anchors/record', input);
+  }
+
   async getCapacityScore(agentId) {
     const agent = await this.getAgentProfile(agentId);
     return {

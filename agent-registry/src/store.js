@@ -305,6 +305,141 @@ export async function listTrustEvents(filters = {}) {
   };
 }
 
+export async function listTrustEventsAfterId(afterId = 0, limitValue = 100) {
+  const limit = normalizeLimit(limitValue, 100);
+  if (storageMode() !== 'postgres') {
+    return {
+      schema: 'axp.trust_events.anchor_batch.v0',
+      storage_mode: 'json',
+      count: 0,
+      events: [],
+    };
+  }
+
+  const result = await query(
+    `select id, event_type, agent_id, counterparty_id, contract_id, value_usd, data, created_at
+     from trust_events
+     where id > $1
+     order by id asc
+     limit $2`,
+    [Number(afterId ?? 0), limit],
+  );
+
+  return {
+    schema: 'axp.trust_events.anchor_batch.v0',
+    storage_mode: 'postgres',
+    count: result.rows.length,
+    after_event_id: Number(afterId ?? 0),
+    limit,
+    events: result.rows.map(formatLedgerRow),
+  };
+}
+
+export async function listTrustAnchors(filters = {}) {
+  const limit = normalizeLimit(filters.limit, 100);
+  if (storageMode() !== 'postgres') {
+    return {
+      schema: 'axp.trust_anchors.v0',
+      storage_mode: 'json',
+      count: 0,
+      anchors: [],
+    };
+  }
+
+  const clauses = [];
+  const params = [];
+  addWhere(clauses, params, 'status', filters.status);
+  params.push(limit);
+
+  const result = await query(
+    `select id, batch_id, merkle_root, from_event_id, to_event_id, event_count, chain_id,
+       contract_address, tx_hash, block_number, status, data, created_at, updated_at
+     from trust_anchors
+     ${clauses.length > 0 ? `where ${clauses.join(' and ')}` : ''}
+     order by created_at desc, id desc
+     limit $${params.length}`,
+    params,
+  );
+
+  return {
+    schema: 'axp.trust_anchors.v0',
+    storage_mode: 'postgres',
+    count: result.rows.length,
+    filters: {
+      status: filters.status ?? null,
+      limit,
+    },
+    anchors: result.rows.map(formatAnchorRow),
+  };
+}
+
+export async function getLatestTrustAnchor(filters = {}) {
+  if (storageMode() !== 'postgres') {
+    return null;
+  }
+
+  const clauses = [];
+  const params = [];
+  addWhere(clauses, params, 'status', filters.status);
+  const result = await query(
+    `select id, batch_id, merkle_root, from_event_id, to_event_id, event_count, chain_id,
+       contract_address, tx_hash, block_number, status, data, created_at, updated_at
+     from trust_anchors
+     ${clauses.length > 0 ? `where ${clauses.join(' and ')}` : ''}
+     order by to_event_id desc, id desc
+     limit 1`,
+    params,
+  );
+
+  return result.rows[0] ? formatAnchorRow(result.rows[0]) : null;
+}
+
+export async function saveTrustAnchor(anchor) {
+  if (storageMode() !== 'postgres') {
+    return {
+      ...anchor,
+      storage_mode: 'json',
+      status: anchor.status ?? 'prepared',
+    };
+  }
+
+  await query(
+    `insert into trust_anchors (
+       batch_id, merkle_root, from_event_id, to_event_id, event_count, chain_id,
+       contract_address, tx_hash, block_number, status, data, updated_at
+     )
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, now())
+     on conflict (batch_id) do update set
+       merkle_root = excluded.merkle_root,
+       from_event_id = excluded.from_event_id,
+       to_event_id = excluded.to_event_id,
+       event_count = excluded.event_count,
+       chain_id = excluded.chain_id,
+       contract_address = excluded.contract_address,
+       tx_hash = excluded.tx_hash,
+       block_number = excluded.block_number,
+       status = excluded.status,
+       data = excluded.data,
+       updated_at = now()`,
+    [
+      anchor.batch_id,
+      anchor.merkle_root,
+      Number(anchor.from_event_id),
+      Number(anchor.to_event_id),
+      Number(anchor.event_count),
+      anchor.chain_id ?? null,
+      anchor.contract_address ?? null,
+      anchor.tx_hash ?? null,
+      anchor.block_number ?? null,
+      anchor.status ?? 'prepared',
+      JSON.stringify(anchor),
+    ],
+  );
+
+  const anchors = await listTrustAnchors({ limit: 1 });
+  return anchors.anchors.find((item) => item.batch_id === anchor.batch_id) ?? anchor;
+}
+
 export async function listApiUsage(filters = {}) {
   const limit = normalizeLimit(filters.limit, 100);
   if (storageMode() !== 'postgres') {
@@ -400,6 +535,18 @@ function formatLedgerRow(row) {
   return {
     ...formatted,
     event_hash: createLedgerHash(formatted),
+  };
+}
+
+function formatAnchorRow(row) {
+  return {
+    ...row,
+    id: Number(row.id),
+    from_event_id: Number(row.from_event_id),
+    to_event_id: Number(row.to_event_id),
+    event_count: Number(row.event_count),
+    chain_id: row.chain_id === null || row.chain_id === undefined ? null : Number(row.chain_id),
+    block_number: row.block_number === null || row.block_number === undefined ? null : Number(row.block_number),
   };
 }
 

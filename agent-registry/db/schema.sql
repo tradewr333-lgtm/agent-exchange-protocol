@@ -72,6 +72,23 @@ create table if not exists api_usage (
   created_at timestamptz not null default now()
 );
 
+create table if not exists trust_anchors (
+  id bigserial primary key,
+  batch_id text not null unique,
+  merkle_root text not null,
+  from_event_id bigint not null,
+  to_event_id bigint not null,
+  event_count integer not null,
+  chain_id integer,
+  contract_address text,
+  tx_hash text,
+  block_number bigint,
+  status text not null default 'prepared',
+  data jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists agents_status_idx on agents(status);
 create index if not exists agents_services_idx on agents using gin(services);
 create index if not exists api_keys_owner_idx on api_keys(owner_address);
@@ -85,3 +102,5 @@ create index if not exists trust_events_contract_idx on trust_events(contract_id
 create index if not exists trust_events_type_idx on trust_events(event_type);
 create index if not exists api_usage_key_created_idx on api_usage(key_id, created_at desc);
 create index if not exists api_usage_type_idx on api_usage(usage_type);
+create index if not exists trust_anchors_status_idx on trust_anchors(status);
+create index if not exists trust_anchors_range_idx on trust_anchors(from_event_id, to_event_id);
