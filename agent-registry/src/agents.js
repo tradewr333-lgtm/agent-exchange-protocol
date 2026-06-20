@@ -1,12 +1,12 @@
-import { renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { verifyOperatorAuth } from './auth.js';
 import { ACCEPTED_COLLATERAL } from './economics.js';
-import { loadRegistry } from './registry.js';
+import {
+  appendHeartbeatEvent,
+  appendTrustEvent,
+  loadAgentsRegistry,
+  saveAgentsRegistry,
+} from './store.js';
 
-const currentDir = dirname(fileURLToPath(import.meta.url));
-const registryPath = join(currentDir, '..', 'data', 'agents.json');
 const AGENT_ID_PATTERN = /^[a-zA-Z0-9_-]{3,64}$/;
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 const HEARTBEAT_WINDOW_MS = 5 * 60 * 1000;
@@ -17,7 +17,7 @@ export async function registerAgent(payload = {}) {
     return validation;
   }
 
-  const registry = loadRegistry();
+  const registry = await loadAgentsRegistry();
   const existingAgent = registry.agents.find((agent) => agent.agent_id === payload.agent_id);
   if (existingAgent) {
     return {
@@ -41,9 +41,19 @@ export async function registerAgent(payload = {}) {
   }
 
   const agent = createRegisteredAgent(payload, authResult, scope);
-  const updatedRegistry = saveRegistry({
+  const updatedRegistry = await saveAgentsRegistry({
     ...registry,
     agents: [...registry.agents, agent],
+  });
+  await appendTrustEvent({
+    event_type: 'agent_registered',
+    agent_id: agent.agent_id,
+    value_usd: agent.collateral?.total_usd ?? 0,
+    data: {
+      services: agent.services,
+      operator: agent.manifest?.onchain?.operator,
+      collateral: agent.collateral,
+    },
   });
 
   return {
@@ -77,7 +87,7 @@ export async function updateAgentHeartbeat(agentId, payload = {}) {
     return validation;
   }
 
-  const registry = loadRegistry();
+  const registry = await loadAgentsRegistry();
   const agent = registry.agents.find((item) => item.agent_id === agentId);
   if (!agent) {
     return { ok: false, status: 404, error: 'agent_not_found', agent_id: agentId };
@@ -116,9 +126,16 @@ export async function updateAgentHeartbeat(agentId, payload = {}) {
     },
   };
 
-  const updatedRegistry = saveRegistry({
+  const updatedRegistry = await saveAgentsRegistry({
     ...registry,
     agents: registry.agents.map((item) => (item.agent_id === agentId ? updatedAgent : item)),
+  });
+  await appendHeartbeatEvent(agentId, updatedAgent.heartbeat);
+  await appendTrustEvent({
+    event_type: 'heartbeat_received',
+    agent_id: agentId,
+    value_usd: updatedAgent.heartbeat.available_capacity,
+    data: updatedAgent.heartbeat,
   });
 
   return {
@@ -145,8 +162,8 @@ export function buildHeartbeatScope(agentId, payload) {
   ].join('|');
 }
 
-export function recordAgentContractOutcome({ agentId, outcome, volumeUsd, counterpartyId }) {
-  const registry = loadRegistry();
+export async function recordAgentContractOutcome({ agentId, outcome, volumeUsd, counterpartyId, contractId }) {
+  const registry = await loadAgentsRegistry();
   const agent = registry.agents.find((item) => item.agent_id === agentId);
   if (!agent) {
     return { ok: false, status: 404, error: 'agent_not_found', agent_id: agentId };
@@ -181,9 +198,22 @@ export function recordAgentContractOutcome({ agentId, outcome, volumeUsd, counte
     },
   };
 
-  const updatedRegistry = saveRegistry({
+  const updatedRegistry = await saveAgentsRegistry({
     ...registry,
     agents: registry.agents.map((item) => (item.agent_id === agentId ? updatedAgent : item)),
+  });
+  await appendTrustEvent({
+    event_type: outcome === 'settled' ? 'trust_created' : 'trust_destroyed',
+    agent_id: agentId,
+    counterparty_id: counterpartyId ?? null,
+    contract_id: contractId ?? null,
+    value_usd: volumeUsd,
+    data: {
+      outcome,
+      completed_contracts: updatedAgent.completed_contracts,
+      failed_contracts: updatedAgent.failed_contracts,
+      trust_metrics: updatedAgent.trust_metrics,
+    },
   });
 
   return {
@@ -384,17 +414,6 @@ function normalizeCollateral(collateral) {
     usdValue: round(usdValue),
     address: accepted.address ?? null,
   };
-}
-
-function saveRegistry(registry) {
-  const updatedRegistry = {
-    ...registry,
-    updated_at: new Date().toISOString(),
-  };
-  const tempPath = `${registryPath}.tmp`;
-  writeFileSync(tempPath, `${JSON.stringify(updatedRegistry, null, 2)}\n`);
-  renameSync(tempPath, registryPath);
-  return updatedRegistry;
 }
 
 function round(value) {

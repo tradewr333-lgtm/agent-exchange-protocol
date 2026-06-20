@@ -69,6 +69,10 @@
     "api_key_identity",
     "api_key_usage_metering",
     "api_key_rotation",
+    "postgres_persistence",
+    "json_fallback_storage",
+    "trust_event_ledger",
+    "api_usage_metering",
     "trust_oracle",
     "trust_api",
     "trust_dns",
@@ -95,6 +99,31 @@
     "simulated_slashing_signal",
     "agent_operator_signature_auth"
   ],
+  "storage": {
+    "mode": "json_fallback_or_postgres",
+    "postgres_env": "DATABASE_URL",
+    "schema": "agent-registry/db/schema.sql",
+    "fallback": "agent-registry/data/*.json",
+    "tables": [
+      "agents",
+      "api_keys",
+      "heartbeats",
+      "contracts",
+      "settlements",
+      "trust_events",
+      "api_usage"
+    ],
+    "trust_events": [
+      "agent_registered",
+      "heartbeat_received",
+      "contract_prepared",
+      "contract_settled",
+      "contract_failed",
+      "trust_created",
+      "trust_destroyed"
+    ],
+    "note": "When DATABASE_URL is present, the registry uses Postgres. Without it, local JSON fallback remains active for development."
+  },
   "authentication": {
     "type": "evm_personal_sign",
     "api_key_header": "X-AXP-API-Key",

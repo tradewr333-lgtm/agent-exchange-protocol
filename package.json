@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "start": "node agent-registry/server.js",
-    "check": "node --check agent-registry/server.js && node --check agent-registry/src/registry.js && node --check agent-registry/src/contracts.js && node --check agent-registry/src/auth.js && node --check agent-registry/src/economics.js && node --check agent-registry/src/trust-score.js && node --check agent-registry/src/agents.js && node --check agent-registry/src/api-keys.js && node --check examples/simple-agent-contract/prepare-signed-contract.js && node --check examples/full-agent-onboarding/run.js && node --check packages/axp-sdk-typescript/src/index.js && node --check packages/axp-mcp-server/src/server.js && python -m py_compile packages/axp-sdk-python/src/axp/__init__.py packages/axp-sdk-python/src/axp/client.py packages/axp-sdk-python/examples/find_agents.py packages/axp-langchain/src/axp_langchain/__init__.py packages/axp-langchain/src/axp_langchain/tools.py packages/axp-langchain/examples/use_tools.py packages/axp-crewai/src/axp_crewai/__init__.py packages/axp-crewai/src/axp_crewai/tools.py packages/axp-crewai/examples/use_tools.py packages/axp-autogen/src/axp_autogen/__init__.py packages/axp-autogen/examples/use_tools.py packages/axp-autogen/src/axp_autogen/tools.py",
+    "check": "node --check agent-registry/server.js && node --check agent-registry/src/store.js && node --check agent-registry/src/registry.js && node --check agent-registry/src/contracts.js && node --check agent-registry/src/auth.js && node --check agent-registry/src/economics.js && node --check agent-registry/src/trust-score.js && node --check agent-registry/src/agents.js && node --check agent-registry/src/api-keys.js && node --check examples/simple-agent-contract/prepare-signed-contract.js && node --check examples/full-agent-onboarding/run.js && node --check packages/axp-sdk-typescript/src/index.js && node --check packages/axp-mcp-server/src/server.js && python -m py_compile packages/axp-sdk-python/src/axp/__init__.py packages/axp-sdk-python/src/axp/client.py packages/axp-sdk-python/examples/find_agents.py packages/axp-langchain/src/axp_langchain/__init__.py packages/axp-langchain/src/axp_langchain/tools.py packages/axp-langchain/examples/use_tools.py packages/axp-crewai/src/axp_crewai/__init__.py packages/axp-crewai/src/axp_crewai/tools.py packages/axp-crewai/examples/use_tools.py packages/axp-autogen/src/axp_autogen/__init__.py packages/axp-autogen/examples/use_tools.py packages/axp-autogen/src/axp_autogen/tools.py",
     "example:prepare": "node examples/simple-agent-contract/prepare-signed-contract.js",
     "example:onboarding": "node examples/full-agent-onboarding/run.js",
     "mcp:start": "node packages/axp-mcp-server/src/server.js"
   },
   "dependencies": {
-    "ethers": "^6.15.0"
+    "ethers": "^6.15.0",
+    "pg": "^8.22.0"
   }
 }

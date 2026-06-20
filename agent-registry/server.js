@@ -57,7 +57,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === '/trust-ranking') {
-    const apiKey = requireApiKey(request, 'trust_ranking');
+    const apiKey = await requireApiKey(request, 'trust_ranking', { path: url.pathname });
     if (!apiKey.ok) {
       return sendJson(response, apiKey.status, apiKey);
     }
@@ -69,7 +69,7 @@ const server = http.createServer(async (request, response) => {
       ? Number.parseInt(url.searchParams.get('limit'), 10)
       : undefined;
 
-    return sendJson(response, 200, getTrustRanking({
+    return sendJson(response, 200, await getTrustRanking({
       status: url.searchParams.get('status') ?? undefined,
       service: url.searchParams.get('service') ?? undefined,
       online: parseBooleanParam(url.searchParams.get('online')),
@@ -79,7 +79,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === '/best-agent') {
-    const apiKey = requireApiKey(request, 'best_agent');
+    const apiKey = await requireApiKey(request, 'best_agent', { path: url.pathname });
     if (!apiKey.ok) {
       return sendJson(response, apiKey.status, apiKey);
     }
@@ -91,7 +91,7 @@ const server = http.createServer(async (request, response) => {
       ? Number.parseInt(url.searchParams.get('limit'), 10)
       : undefined;
 
-    return sendJson(response, 200, getBestAgent({
+    return sendJson(response, 200, await getBestAgent({
       task: url.searchParams.get('task') ?? undefined,
       service: url.searchParams.get('service') ?? undefined,
       online: parseBooleanParam(url.searchParams.get('online')),
@@ -122,7 +122,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === '/agents') {
-    const apiKey = requireApiKey(request, 'agent_query');
+    const apiKey = await requireApiKey(request, 'agent_query', { path: url.pathname });
     if (!apiKey.ok) {
       return sendJson(response, apiKey.status, apiKey);
     }
@@ -131,7 +131,7 @@ const server = http.createServer(async (request, response) => {
       ? Number.parseFloat(url.searchParams.get('min_capacity'))
       : undefined;
 
-    return sendJson(response, 200, listAgents({
+    return sendJson(response, 200, await listAgents({
       status: url.searchParams.get('status') ?? undefined,
       service: url.searchParams.get('service') ?? undefined,
       minCapacity,
@@ -153,7 +153,7 @@ const server = http.createServer(async (request, response) => {
 
   const apiKeyMatch = url.pathname.match(/^\/api-keys\/([^/]+)$/);
   if (apiKeyMatch) {
-    const apiKey = getApiKey(apiKeyMatch[1]);
+    const apiKey = await getApiKey(apiKeyMatch[1]);
     if (!apiKey) {
       return sendJson(response, 404, { error: 'api_key_not_found', key_id: apiKeyMatch[1] });
     }
@@ -169,7 +169,7 @@ const server = http.createServer(async (request, response) => {
 
   const agentMatch = url.pathname.match(/^\/agents\/([^/]+)$/);
   if (agentMatch) {
-    const agent = getAgent(agentMatch[1]);
+    const agent = await getAgent(agentMatch[1]);
     if (!agent) {
       return sendJson(response, 404, { error: 'agent_not_found', agent_id: agentMatch[1] });
     }
@@ -185,12 +185,12 @@ const server = http.createServer(async (request, response) => {
 
   const trustScoreMatch = url.pathname.match(/^\/agents\/([^/]+)\/trust-score$/);
   if (trustScoreMatch) {
-    const apiKey = requireApiKey(request, 'trust_score');
+    const apiKey = await requireApiKey(request, 'trust_score', { path: url.pathname, agent_id: trustScoreMatch[1] });
     if (!apiKey.ok) {
       return sendJson(response, apiKey.status, apiKey);
     }
 
-    const trustScore = getAgentTrustScore(trustScoreMatch[1]);
+    const trustScore = await getAgentTrustScore(trustScoreMatch[1]);
     if (!trustScore) {
       return sendJson(response, 404, { error: 'agent_not_found', agent_id: trustScoreMatch[1] });
     }
@@ -199,12 +199,12 @@ const server = http.createServer(async (request, response) => {
 
   const trustScoreAliasMatch = url.pathname.match(/^\/trust-score\/([^/]+)$/);
   if (trustScoreAliasMatch) {
-    const apiKey = requireApiKey(request, 'trust_score');
+    const apiKey = await requireApiKey(request, 'trust_score', { path: url.pathname, agent_id: trustScoreAliasMatch[1] });
     if (!apiKey.ok) {
       return sendJson(response, apiKey.status, apiKey);
     }
 
-    const trustScore = getAgentTrustScore(trustScoreAliasMatch[1]);
+    const trustScore = await getAgentTrustScore(trustScoreAliasMatch[1]);
     if (!trustScore) {
       return sendJson(response, 404, { error: 'agent_not_found', agent_id: trustScoreAliasMatch[1] });
     }
@@ -213,12 +213,12 @@ const server = http.createServer(async (request, response) => {
 
   const riskReportMatch = url.pathname.match(/^\/risk-report\/([^/]+)$/);
   if (riskReportMatch) {
-    const apiKey = requireApiKey(request, 'risk_report');
+    const apiKey = await requireApiKey(request, 'risk_report', { path: url.pathname, agent_id: riskReportMatch[1] });
     if (!apiKey.ok) {
       return sendJson(response, apiKey.status, apiKey);
     }
 
-    const riskReport = getAgentRiskReport(riskReportMatch[1]);
+    const riskReport = await getAgentRiskReport(riskReportMatch[1]);
     if (!riskReport) {
       return sendJson(response, 404, { error: 'agent_not_found', agent_id: riskReportMatch[1] });
     }
@@ -227,7 +227,7 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === 'POST' && url.pathname === '/contracts/quote') {
     const body = await readJsonBody(request);
-    const result = quoteContract(body);
+    const result = await quoteContract(body);
     return sendJson(response, result.status, result.ok ? result.quote : result);
   }
 
@@ -238,7 +238,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === '/contracts') {
-    return sendJson(response, 200, listPreparedContracts());
+    return sendJson(response, 200, await listPreparedContracts());
   }
 
   const settleMatch = url.pathname.match(/^\/contracts\/([^/]+)\/settle$/);
@@ -250,7 +250,7 @@ const server = http.createServer(async (request, response) => {
 
   const contractMatch = url.pathname.match(/^\/contracts\/([^/]+)$/);
   if (contractMatch) {
-    const contract = getPreparedContract(contractMatch[1]);
+    const contract = await getPreparedContract(contractMatch[1]);
     if (!contract) {
       return sendJson(response, 404, { error: 'contract_not_found', contract_id: contractMatch[1] });
     }

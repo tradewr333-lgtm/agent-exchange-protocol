@@ -15,7 +15,7 @@ export function buildAuthMessage({ action, agentId, address, nonce, issuedAt, sc
 }
 
 export async function verifyAgentAuth({ action, agentId, auth, scope }) {
-  const agent = getAgent(agentId);
+  const agent = await getAgent(agentId);
   if (!agent) {
     return { ok: false, status: 404, error: 'auth_agent_not_found' };
   }

@@ -1,21 +1,14 @@
-﻿import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { getAgentEconomicProfile, getEconomicPolicy } from './economics.js';
+import { loadAgentsRegistry, readJsonFile, storageMode } from './store.js';
 
-const currentDir = dirname(fileURLToPath(import.meta.url));
-const registryPath = join(currentDir, '..', 'data', 'agents.json');
+export { readJsonFile };
 
-export function readJsonFile(path) {
-  return JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, ''));
+export async function loadRegistry() {
+  return loadAgentsRegistry();
 }
 
-export function loadRegistry() {
-  return readJsonFile(registryPath);
-}
-
-export function listAgents(filters = {}) {
-  const registry = loadRegistry();
+export async function listAgents(filters = {}) {
+  const registry = await loadRegistry();
   let agents = registry.agents.map(withEconomicProfile);
 
   if (filters.status) {
@@ -43,8 +36,8 @@ export function listAgents(filters = {}) {
   };
 }
 
-export function getAgent(agentId) {
-  const registry = loadRegistry();
+export async function getAgent(agentId) {
+  const registry = await loadRegistry();
   const agent = registry.agents.find((item) => item.agent_id === agentId);
   return agent ? withEconomicProfile(agent) : null;
 }
@@ -54,12 +47,30 @@ export function getCapabilities() {
     protocol: 'AXP',
     version: '0.1.0',
     economic_model: getEconomicPolicy(),
+    storage: {
+      mode: storageMode(),
+      postgres_enabled: storageMode() === 'postgres',
+      fallback: 'json',
+      schema: 'agent-registry/db/schema.sql',
+      tables: [
+        'agents',
+        'api_keys',
+        'heartbeats',
+        'contracts',
+        'settlements',
+        'trust_events',
+        'api_usage',
+      ],
+    },
     capabilities: [
       'agent_identity',
       'agent_registration',
       'agent_heartbeat',
       'api_key_identity',
       'api_key_usage_metering',
+      'postgres_persistence',
+      'json_fallback_storage',
+      'trust_event_ledger',
       'trust_oracle',
       'trust_api',
       'reputation_staking',

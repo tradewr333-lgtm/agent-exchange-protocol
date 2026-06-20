@@ -2,8 +2,8 @@ import { getAgent, listAgents } from './registry.js';
 
 export const PROOF_OF_TRUST_VERSION = '0.1.0';
 
-export function getAgentTrustScore(agentId) {
-  const agent = getAgent(agentId);
+export async function getAgentTrustScore(agentId) {
+  const agent = await getAgent(agentId);
   if (!agent) {
     return null;
   }
@@ -11,8 +11,8 @@ export function getAgentTrustScore(agentId) {
   return calculateAgentTrustScore(agent);
 }
 
-export function getAgentRiskReport(agentId) {
-  const agent = getAgent(agentId);
+export async function getAgentRiskReport(agentId) {
+  const agent = await getAgent(agentId);
   if (!agent) {
     return null;
   }
@@ -46,14 +46,14 @@ export function getAgentRiskReport(agentId) {
   };
 }
 
-export function getTrustRanking(filters = {}) {
+export async function getTrustRanking(filters = {}) {
   const minScore = filters.minScore === undefined ? undefined : Number(filters.minScore);
   const limit = filters.limit === undefined ? undefined : Number(filters.limit);
-  let rankedAgents = listAgents({
+  let rankedAgents = (await listAgents({
     status: filters.status,
     service: filters.service,
     online: filters.online,
-  }).agents.map(calculateAgentTrustScore);
+  })).agents.map(calculateAgentTrustScore);
 
   if (Number.isFinite(minScore)) {
     rankedAgents = rankedAgents.filter((score) => score.proof_of_trust_score >= minScore);
@@ -98,10 +98,10 @@ export function getTrustRanking(filters = {}) {
   };
 }
 
-export function getBestAgent(filters = {}) {
+export async function getBestAgent(filters = {}) {
   const limit = filters.limit === undefined ? 5 : Number(filters.limit);
   const requestedCapacity = filters.requestedCapacity === undefined ? undefined : Number(filters.requestedCapacity);
-  const ranking = getTrustRanking({
+  const ranking = await getTrustRanking({
     status: filters.status ?? 'active',
     service: filters.task ?? filters.service,
     online: filters.online ?? true,

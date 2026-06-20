@@ -1,12 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { buildAuthMessage } from './auth.js';
-import { readJsonFile } from './registry.js';
+import { appendApiUsage, loadApiKeyRegistry, saveApiKeyRegistry } from './store.js';
 
-const currentDir = dirname(fileURLToPath(import.meta.url));
-const apiKeysPath = join(currentDir, '..', 'data', 'api-keys.json');
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 const KEY_ID_PATTERN = /^ak_[a-zA-Z0-9]{16}$/;
 const API_KEY_PREFIX = 'axp_live_';
@@ -29,7 +24,7 @@ export async function registerApiKey(payload = {}) {
     return authResult;
   }
 
-  const registry = loadApiKeys();
+  const registry = await loadApiKeyRegistry();
   const now = new Date().toISOString();
   const secret = createApiKeySecret();
   const key = {
@@ -65,7 +60,7 @@ export async function registerApiKey(payload = {}) {
     },
   };
 
-  const updatedRegistry = saveApiKeys({
+  const updatedRegistry = await saveApiKeyRegistry({
     ...registry,
     keys: [...registry.keys, key],
   });
@@ -80,14 +75,14 @@ export async function registerApiKey(payload = {}) {
   };
 }
 
-export function getApiKey(keyId) {
-  const registry = loadApiKeys();
+export async function getApiKey(keyId) {
+  const registry = await loadApiKeyRegistry();
   const key = registry.keys.find((item) => item.key_id === keyId);
   return key ? publicApiKey(key) : null;
 }
 
 export async function rotateApiKey(keyId, payload = {}) {
-  const registry = loadApiKeys();
+  const registry = await loadApiKeyRegistry();
   const key = registry.keys.find((item) => item.key_id === keyId);
   if (!key) {
     return { ok: false, status: 404, error: 'api_key_not_found', key_id: keyId };
@@ -122,7 +117,7 @@ export async function rotateApiKey(keyId, payload = {}) {
       scope,
     },
   };
-  const updatedRegistry = saveApiKeys({
+  const updatedRegistry = await saveApiKeyRegistry({
     ...registry,
     keys: registry.keys.map((item) => (item.key_id === keyId ? updatedKey : item)),
   });
@@ -137,7 +132,7 @@ export async function rotateApiKey(keyId, payload = {}) {
   };
 }
 
-export function requireApiKey(request, usageType) {
+export async function requireApiKey(request, usageType, context = {}) {
   const rawKey = request.headers['x-axp-api-key'];
   if (!rawKey || typeof rawKey !== 'string') {
     return {
@@ -149,7 +144,7 @@ export function requireApiKey(request, usageType) {
     };
   }
 
-  const registry = loadApiKeys();
+  const registry = await loadApiKeyRegistry();
   const keyHash = hashApiKey(rawKey);
   const key = registry.keys.find((item) => item.secret_hash === keyHash);
   if (!key || key.status !== 'active') {
@@ -157,9 +152,16 @@ export function requireApiKey(request, usageType) {
   }
 
   const updatedKey = recordUsage(key, usageType);
-  saveApiKeys({
+  await saveApiKeyRegistry({
     ...registry,
     keys: registry.keys.map((item) => (item.key_id === updatedKey.key_id ? updatedKey : item)),
+  });
+  await appendApiUsage({
+    key_id: updatedKey.key_id,
+    usage_type: usageType,
+    agent_id: updatedKey.agent_id ?? context.agent_id ?? null,
+    path: context.path ?? null,
+    framework: updatedKey.framework ?? null,
   });
 
   return {
@@ -281,21 +283,6 @@ function recordUsage(key, usageType) {
     ...key,
     usage,
   };
-}
-
-function loadApiKeys() {
-  return readJsonFile(apiKeysPath);
-}
-
-function saveApiKeys(registry) {
-  const updatedRegistry = {
-    ...registry,
-    updated_at: new Date().toISOString(),
-  };
-  const tempPath = `${apiKeysPath}.tmp`;
-  writeFileSync(tempPath, `${JSON.stringify(updatedRegistry, null, 2)}\n`);
-  renameSync(tempPath, apiKeysPath);
-  return updatedRegistry;
 }
 
 function publicApiKey(key) {

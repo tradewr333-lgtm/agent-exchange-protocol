@@ -481,7 +481,7 @@ Arquivo:
 examples/simple-agent-contract/prepare-signed-contract.js
 ```
 
-Se o agente estiver ativo, suportar o servico solicitado e tiver capacidade disponivel, `POST /contracts/prepare` cria um contrato com status `prepared`. A primeira versao operacional guarda contratos preparados em `agent-registry/data/contracts.json`; banco persistente e liquidacao on-chain entram na proxima fase.
+Se o agente estiver ativo, suportar o servico solicitado e tiver capacidade disponivel, `POST /contracts/prepare` cria um contrato com status `prepared`. Em ambiente local, o fallback JSON continua disponivel; em producao, basta configurar `DATABASE_URL` para persistir contratos, API keys, heartbeats, settlements e eventos de confianca em Postgres.
 
 ## Full Agent Onboarding
 
@@ -504,6 +504,52 @@ examples/full-agent-onboarding/run.js
 ```
 
 Esse fluxo cria uma API key, registra provider e requester, envia heartbeat, consulta `risk-report`, consulta `best-agent`, prepara contrato, liquida como `settled` e consulta o Trust Score final. O segredo `axp_live_...` vira a identidade padrao do agente perante o AXP.
+
+## Persistencia
+
+O registry possui uma camada de armazenamento em `agent-registry/src/store.js`.
+
+Por padrao, em ambiente local, o AXP continua usando JSON como fallback:
+
+```text
+agent-registry/data/agents.json
+agent-registry/data/api-keys.json
+agent-registry/data/contracts.json
+```
+
+Quando a variavel `DATABASE_URL` existir, o registry passa a usar Postgres automaticamente.
+
+Schema:
+
+```text
+agent-registry/db/schema.sql
+```
+
+Tabelas:
+
+```text
+agents
+api_keys
+heartbeats
+contracts
+settlements
+trust_events
+api_usage
+```
+
+A tabela mais importante e `trust_events`: ela transforma o Proof of Trust em um ledger auditavel. Em vez de apenas guardar o score final, o AXP registra eventos como:
+
+```text
+agent_registered
+heartbeat_received
+contract_prepared
+contract_settled
+contract_failed
+trust_created
+trust_destroyed
+```
+
+Na Render, o proximo passo operacional e criar um Postgres, aplicar o schema e adicionar `DATABASE_URL` no web service. Sem `DATABASE_URL`, o servico segue funcionando com fallback JSON.
 
 ## MCP Server
 
@@ -818,10 +864,15 @@ Depois do deploy, agentes externos podem descobrir o AXP pela URL publica do reg
   axp.json
 
 agent-registry/
+  db/
+    schema.sql
   data/
     agents.json
+    api-keys.json
+    contracts.json
   src/
     registry.js
+    store.js
   server.js
 
 packages/

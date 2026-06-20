@@ -1,22 +1,22 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { recordAgentContractOutcome } from './agents.js';
 import { verifyAgentAuth } from './auth.js';
 import { calculateProtocolFee, getAgentEconomicProfile } from './economics.js';
 import { getAgent } from './registry.js';
+import {
+  appendSettlementEvent,
+  appendTrustEvent,
+  loadContractStore,
+  saveContractStore,
+} from './store.js';
 
-const currentDir = dirname(fileURLToPath(import.meta.url));
-const contractsPath = join(currentDir, '..', 'data', 'contracts.json');
-
-export function quoteContract(payload = {}) {
+export async function quoteContract(payload = {}) {
   const validation = validateContractPayload(payload);
   if (!validation.ok) {
     return validation;
   }
 
-  const provider = getAgent(payload.provider_agent_id);
+  const provider = await getAgent(payload.provider_agent_id);
   if (!provider) {
     return { ok: false, status: 404, error: 'provider_agent_not_found' };
   }
@@ -72,7 +72,7 @@ export function quoteContract(payload = {}) {
 }
 
 export async function prepareContract(payload = {}) {
-  const quoteResult = quoteContract(payload);
+  const quoteResult = await quoteContract(payload);
   if (!quoteResult.ok) {
     return quoteResult;
   }
@@ -127,7 +127,23 @@ export async function prepareContract(payload = {}) {
     },
   };
 
-  savePreparedContract(contract);
+  const store = await loadContractStore();
+  await saveContractStore({
+    schema: 'axp.contract_store.v0',
+    updated_at: new Date().toISOString(),
+    contracts: [
+      ...store.contracts.filter((item) => item.contract_id !== contract.contract_id),
+      contract,
+    ],
+  });
+  await appendTrustEvent({
+    event_type: 'contract_prepared',
+    agent_id: quote.provider_agent_id,
+    counterparty_id: quote.requester_agent_id,
+    contract_id: contract.contract_id,
+    value_usd: quote.requested_capacity,
+    data: contract,
+  });
 
   return {
     ok: true,
@@ -136,8 +152,9 @@ export async function prepareContract(payload = {}) {
   };
 }
 
-export function getPreparedContract(contractId) {
-  return loadContractStore().contracts.find((contract) => contract.contract_id === contractId) ?? null;
+export async function getPreparedContract(contractId) {
+  const store = await loadContractStore();
+  return store.contracts.find((contract) => contract.contract_id === contractId) ?? null;
 }
 
 export async function settleContract(contractId, payload = {}) {
@@ -146,7 +163,7 @@ export async function settleContract(contractId, payload = {}) {
     return validation;
   }
 
-  const store = loadContractStore();
+  const store = await loadContractStore();
   const contract = store.contracts.find((item) => item.contract_id === contractId);
   if (!contract) {
     return { ok: false, status: 404, error: 'contract_not_found', contract_id: contractId };
@@ -197,7 +214,7 @@ export async function settleContract(contractId, payload = {}) {
     },
   };
 
-  saveContractStore({
+  await saveContractStore({
     ...store,
     updated_at: settledAt,
     contracts: store.contracts.map((item) => (
@@ -205,11 +222,22 @@ export async function settleContract(contractId, payload = {}) {
     )),
   });
 
-  const trustUpdate = recordAgentContractOutcome({
+  await appendSettlementEvent(contractId, updatedContract.settlement);
+  await appendTrustEvent({
+    event_type: outcome === 'settled' ? 'contract_settled' : 'contract_failed',
+    agent_id: contract.quote.provider_agent_id,
+    counterparty_id: contract.quote.requester_agent_id,
+    contract_id: contractId,
+    value_usd: Number(contract.quote.requested_capacity),
+    data: updatedContract.settlement,
+  });
+
+  const trustUpdate = await recordAgentContractOutcome({
     agentId: contract.quote.provider_agent_id,
     outcome,
     volumeUsd: Number(contract.quote.requested_capacity),
     counterpartyId: contract.quote.requester_agent_id,
+    contractId,
   });
 
   return {
@@ -231,8 +259,8 @@ export async function settleContract(contractId, payload = {}) {
   };
 }
 
-export function listPreparedContracts() {
-  const store = loadContractStore();
+export async function listPreparedContracts() {
+  const store = await loadContractStore();
   return {
     schema: store.schema,
     updated_at: store.updated_at,
@@ -285,53 +313,6 @@ function validateSettlementPayload(payload) {
   }
 
   return { ok: true };
-}
-
-function loadContractStore() {
-  if (!existsSync(contractsPath)) {
-    return createEmptyContractStore();
-  }
-
-  try {
-    const store = JSON.parse(readFileSync(contractsPath, 'utf8').replace(/^\uFEFF/, ''));
-    if (!Array.isArray(store.contracts)) {
-      return createEmptyContractStore();
-    }
-
-    return {
-      schema: store.schema ?? 'axp.contract_store.v0',
-      updated_at: store.updated_at ?? null,
-      contracts: store.contracts,
-    };
-  } catch {
-    return createEmptyContractStore();
-  }
-}
-
-function savePreparedContract(contract) {
-  const store = loadContractStore();
-  saveContractStore({
-    schema: 'axp.contract_store.v0',
-    updated_at: new Date().toISOString(),
-    contracts: [
-      ...store.contracts.filter((item) => item.contract_id !== contract.contract_id),
-      contract,
-    ],
-  });
-}
-
-function saveContractStore(store) {
-  const tempPath = `${contractsPath}.tmp`;
-  writeFileSync(tempPath, `${JSON.stringify(store, null, 2)}\n`);
-  renameSync(tempPath, contractsPath);
-}
-
-function createEmptyContractStore() {
-  return {
-    schema: 'axp.contract_store.v0',
-    updated_at: null,
-    contracts: [],
-  };
 }
 
 function buildQuoteId(payload, provider) {
