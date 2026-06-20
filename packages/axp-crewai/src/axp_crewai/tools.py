@@ -55,6 +55,15 @@ if _HAS_CREWAI:
         agent_id: str = Field(description="AXP agent id.")
 
 
+    class HandshakeInput(BaseModel):
+        counterparty_agent_id: str = Field(description="Counterparty AXP agent id.")
+        requester_agent_id: str | None = Field(default=None, description="Optional requester AXP agent id.")
+        minimum_score: int | float | None = Field(default=None, description="Minimum accepted Proof of Trust score.")
+        minimum_stake_usd: int | float | None = Field(default=None, description="Minimum accepted collateral/stake in USD.")
+        minimum_capacity_usd: int | float | None = Field(default=None, description="Minimum accepted free capacity in USD.")
+        require_online: bool | None = Field(default=True, description="Reject offline agents when true.")
+
+
     class BestAgentInput(BaseModel):
         task: str | None = Field(default=None, description="Task or service needed.")
         service: str | None = Field(default=None, description="Optional service capability filter.")
@@ -72,6 +81,7 @@ else:
     QuoteContractInput = None
     GetCapacityInput = None
     GetTrustScoreInput = None
+    HandshakeInput = None
     BestAgentInput = None
     DiscoverCounterpartyInput = None
 
@@ -196,6 +206,45 @@ class AXPGetRiskReportTool(_AXPCrewTool):
         return self._json(self.client.get_risk_report(agent_id))
 
 
+class AXPGetAgentPassportTool(_AXPCrewTool):
+    name: str = "axp_get_agent_passport"
+    description: str = "Get an AXP Agent Passport. No passport means Trust Unknown."
+    args_schema: Any = GetTrustScoreInput
+
+    def _run(self, agent_id: str, **_: Any) -> str:
+        return self._json(self.client.get_agent_passport(agent_id))
+
+
+class AXPHandshakeTool(_AXPCrewTool):
+    name: str = "axp_handshake"
+    description: str = "Run AXP Handshake with a trust firewall policy before delegating or contracting."
+    args_schema: Any = HandshakeInput
+
+    def _run(
+        self,
+        counterparty_agent_id: str,
+        requester_agent_id: str | None = None,
+        minimum_score: int | float | None = None,
+        minimum_stake_usd: int | float | None = None,
+        minimum_capacity_usd: int | float | None = None,
+        require_online: bool | None = True,
+        **_: Any,
+    ) -> str:
+        policy = {
+            "minimum_score": minimum_score,
+            "minimum_stake_usd": minimum_stake_usd,
+            "minimum_capacity_usd": minimum_capacity_usd,
+            "require_online": require_online,
+        }
+        return self._json(
+            self.client.perform_handshake(
+                requester_agent_id=requester_agent_id,
+                counterparty_agent_id=counterparty_agent_id,
+                policy={key: value for key, value in policy.items() if value is not None},
+            )
+        )
+
+
 class AXPGetBestAgentTool(_AXPCrewTool):
     name: str = "axp_get_best_agent"
     description: str = "Recommend the best available AXP agent for a task using Proof of Trust."
@@ -237,18 +286,27 @@ class AXPDiscoverCounterpartyTrustTool(_AXPCrewTool):
             agent_id=agent_id,
         )
         risk_report = None
+        handshake = None
         discovered_agent_id = verification.get("agent_id")
         if verification.get("discoverable") and discovered_agent_id:
             try:
                 risk_report = self.client.get_risk_report(discovered_agent_id)
             except Exception as error:
                 risk_report = {"error": str(error)}
+            try:
+                handshake = self.client.perform_handshake(
+                    counterparty_agent_id=discovered_agent_id,
+                    policy={"require_online": False, "allowed_risk": ["LOW", "MEDIUM"]},
+                )
+            except Exception as error:
+                handshake = {"error": str(error)}
 
         return self._json(
             {
                 "verification": verification,
                 "risk_report": risk_report,
-                "recommendation": "Use AXP risk_report before preparing or accepting a contract.",
+                "handshake": handshake,
+                "recommendation": "Use AXP handshake before preparing or accepting a contract.",
             }
         )
 
@@ -263,5 +321,7 @@ def get_axp_tools(registry_url: str = "https://registry.axp.network") -> list[_A
         AXPGetCapacityTool(client=client),
         AXPGetTrustScoreTool(client=client),
         AXPGetRiskReportTool(client=client),
+        AXPGetAgentPassportTool(client=client),
+        AXPHandshakeTool(client=client),
         AXPGetBestAgentTool(client=client),
     ]

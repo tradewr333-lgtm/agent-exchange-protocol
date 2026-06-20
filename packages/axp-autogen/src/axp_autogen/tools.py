@@ -85,6 +85,36 @@ def get_risk_report(agent_id: str, registry_url: str = DEFAULT_REGISTRY_URL) -> 
     return _json(client.get_risk_report(agent_id))
 
 
+def get_agent_passport(agent_id: str, registry_url: str = DEFAULT_REGISTRY_URL) -> str:
+    client = AxpClient(registry_url)
+    return _json(client.get_agent_passport(agent_id))
+
+
+def handshake(
+    counterparty_agent_id: str,
+    requester_agent_id: str | None = None,
+    minimum_score: int | float | None = None,
+    minimum_stake_usd: int | float | None = None,
+    minimum_capacity_usd: int | float | None = None,
+    require_online: bool | None = True,
+    registry_url: str = DEFAULT_REGISTRY_URL,
+) -> str:
+    client = AxpClient(registry_url)
+    policy = {
+        "minimum_score": minimum_score,
+        "minimum_stake_usd": minimum_stake_usd,
+        "minimum_capacity_usd": minimum_capacity_usd,
+        "require_online": require_online,
+    }
+    return _json(
+        client.perform_handshake(
+            requester_agent_id=requester_agent_id,
+            counterparty_agent_id=counterparty_agent_id,
+            policy={key: value for key, value in policy.items() if value is not None},
+        )
+    )
+
+
 def get_best_agent(
     task: str | None = None,
     service: str | None = None,
@@ -116,18 +146,27 @@ def discover_counterparty_trust(
         agent_id=agent_id,
     )
     risk_report = None
+    handshake_result = None
     discovered_agent_id = verification.get("agent_id")
     if verification.get("discoverable") and discovered_agent_id:
         try:
             risk_report = client.get_risk_report(discovered_agent_id)
         except Exception as error:
             risk_report = {"error": str(error)}
+        try:
+            handshake_result = client.perform_handshake(
+                counterparty_agent_id=discovered_agent_id,
+                policy={"require_online": False, "allowed_risk": ["LOW", "MEDIUM"]},
+            )
+        except Exception as error:
+            handshake_result = {"error": str(error)}
 
     return _json(
         {
             "verification": verification,
             "risk_report": risk_report,
-            "recommendation": "Use AXP risk_report before preparing or accepting a contract.",
+            "handshake": handshake_result,
+            "recommendation": "Use AXP handshake before preparing or accepting a contract.",
         }
     )
 
@@ -203,6 +242,28 @@ class AxpAutoGenToolkit:
 
     def get_risk_report(self, agent_id: str) -> str:
         return get_risk_report(agent_id, registry_url=self.registry_url)
+
+    def get_agent_passport(self, agent_id: str) -> str:
+        return get_agent_passport(agent_id, registry_url=self.registry_url)
+
+    def handshake(
+        self,
+        counterparty_agent_id: str,
+        requester_agent_id: str | None = None,
+        minimum_score: int | float | None = None,
+        minimum_stake_usd: int | float | None = None,
+        minimum_capacity_usd: int | float | None = None,
+        require_online: bool | None = True,
+    ) -> str:
+        return handshake(
+            counterparty_agent_id=counterparty_agent_id,
+            requester_agent_id=requester_agent_id,
+            minimum_score=minimum_score,
+            minimum_stake_usd=minimum_stake_usd,
+            minimum_capacity_usd=minimum_capacity_usd,
+            require_online=require_online,
+            registry_url=self.registry_url,
+        )
 
     def get_best_agent(
         self,
@@ -324,6 +385,35 @@ class AxpAutoGenToolkit:
                     "required": ["agent_id"],
                 },
                 function=self.get_risk_report,
+            ).as_dict(),
+            AxpAutoGenTool(
+                name="axp_get_agent_passport",
+                description="Get an AXP Agent Passport. No passport means Trust Unknown.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "agent_id": {"type": "string"},
+                    },
+                    "required": ["agent_id"],
+                },
+                function=self.get_agent_passport,
+            ).as_dict(),
+            AxpAutoGenTool(
+                name="axp_handshake",
+                description="Run AXP Handshake with a trust firewall policy before delegating or contracting.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "requester_agent_id": {"type": "string"},
+                        "counterparty_agent_id": {"type": "string"},
+                        "minimum_score": {"type": "number"},
+                        "minimum_stake_usd": {"type": "number"},
+                        "minimum_capacity_usd": {"type": "number"},
+                        "require_online": {"type": "boolean"},
+                    },
+                    "required": ["counterparty_agent_id"],
+                },
+                function=self.handshake,
             ).as_dict(),
             AxpAutoGenTool(
                 name="axp_get_best_agent",

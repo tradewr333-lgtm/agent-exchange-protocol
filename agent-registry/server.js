@@ -8,6 +8,7 @@ import { getApiKey, registerApiKey, requireApiKey, rotateApiKey } from './src/ap
 import { buildAuthMessage } from './src/auth.js';
 import { getLatestAnchor, listTrustAnchors, prepareTrustAnchorBatch, recordTrustAnchor } from './src/anchors.js';
 import { getEconomicPolicy } from './src/economics.js';
+import { getAgentPassport, performAxpHandshake } from './src/passport.js';
 import { getAgentRiskReport, getAgentTrustScore, getBestAgent, getTrustRanking } from './src/trust-score.js';
 import {
   getPreparedContract,
@@ -184,6 +185,35 @@ const server = http.createServer(async (request, response) => {
     }));
   }
 
+  const passportAliasMatch = url.pathname.match(/^\/passport\/([^/]+)$/);
+  if (passportAliasMatch) {
+    const apiKey = await requireApiKey(request, 'agent_passport', { path: url.pathname, agent_id: passportAliasMatch[1] });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
+    const passport = await getAgentPassport(passportAliasMatch[1]);
+    if (!passport) {
+      return sendJson(response, 404, {
+        error: 'agent_passport_not_found',
+        agent_id: passportAliasMatch[1],
+        trust_state: 'TRUST_UNKNOWN',
+      });
+    }
+    return sendJson(response, 200, passport);
+  }
+
+  if (request.method === 'POST' && url.pathname === '/handshake') {
+    const apiKey = await requireApiKey(request, 'agent_handshake', { path: url.pathname });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
+    const body = await readJsonBody(request);
+    const result = await performAxpHandshake(body ?? {});
+    return sendJson(response, result.status ?? 200, result);
+  }
+
   if (request.method === 'POST' && url.pathname === '/auth/message') {
     const body = await readJsonBody(request);
     const validation = validateAuthMessageBody(body);
@@ -264,6 +294,24 @@ const server = http.createServer(async (request, response) => {
       return sendJson(response, 404, { error: 'agent_not_found', agent_id: agentMatch[1] });
     }
     return sendJson(response, 200, agent);
+  }
+
+  const agentPassportMatch = url.pathname.match(/^\/agents\/([^/]+)\/passport$/);
+  if (agentPassportMatch) {
+    const apiKey = await requireApiKey(request, 'agent_passport', { path: url.pathname, agent_id: agentPassportMatch[1] });
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
+    const passport = await getAgentPassport(agentPassportMatch[1]);
+    if (!passport) {
+      return sendJson(response, 404, {
+        error: 'agent_passport_not_found',
+        agent_id: agentPassportMatch[1],
+        trust_state: 'TRUST_UNKNOWN',
+      });
+    }
+    return sendJson(response, 200, passport);
   }
 
   const heartbeatMatch = url.pathname.match(/^\/agents\/([^/]+)\/heartbeat$/);
@@ -379,6 +427,8 @@ const server = http.createServer(async (request, response) => {
       '/anchors/latest',
       'POST /anchors/prepare',
       'POST /anchors/record',
+      '/passport/{agent_id}',
+      'POST /handshake',
       '/trust-score/{agent_id}',
       '/risk-report/{agent_id}',
       '/best-agent',
@@ -390,6 +440,7 @@ const server = http.createServer(async (request, response) => {
       'POST /agents/register',
       'POST /agents/verify-manifest',
       '/agents/{agent_id}',
+      '/agents/{agent_id}/passport',
       'POST /agents/{agent_id}/heartbeat',
       '/agents/{agent_id}/trust-events',
       '/agents/{agent_id}/trust-score',

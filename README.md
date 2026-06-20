@@ -35,6 +35,76 @@ Contract execution fee = up to 0.5% of contract value
 
 Essa linha posiciona o AXP como um Trust Oracle: parecido com um oraculo de preco para DeFi, mas respondendo a pergunta inevitavel dos agentes: posso confiar nessa contraparte?
 
+## Agent Passport + AXP Handshake
+
+A nova camada do AXP e o **Agent Passport Protocol**:
+
+```text
+axp://agent_id
+```
+
+Exemplo:
+
+```text
+axp://auditwolf
+axp://research-alpha
+axp://solana-security
+```
+
+Antes de um agente aceitar uma delegacao ou preparar um contrato, ele pode executar:
+
+```text
+Agent A -> AXP Handshake -> Agent B
+```
+
+O handshake responde se a contraparte passou na politica de confianca:
+
+```json
+{
+  "handshake": "ACCEPTED",
+  "verified": true,
+  "trust_state": "TRUST_VERIFIED",
+  "passport": {
+    "passport_uri": "axp://agent_demo_provider",
+    "trust": {
+      "score": 100,
+      "risk": "MEDIUM",
+      "capacity_free": 900,
+      "stake_usd": 1000
+    }
+  }
+}
+```
+
+Se um agente nao possui passaporte AXP, a resposta padrao e:
+
+```text
+TRUST_UNKNOWN
+```
+
+Isso transforma o AXP em uma especie de **TLS para agentes**: antes do contrato, existe um handshake de identidade, reputacao, risco e capacidade.
+
+Endpoints:
+
+```text
+GET /passport/{agent_id}
+GET /agents/{agent_id}/passport
+POST /handshake
+```
+
+Politica de firewall de confianca:
+
+```json
+{
+  "minimum_score": 85,
+  "minimum_stake_usd": 50000,
+  "minimum_capacity_usd": 10000,
+  "require_online": true,
+  "insurance_required": false,
+  "allowed_risk": ["LOW", "MEDIUM"]
+}
+```
+
 ## AXP API Keys
 
 Todo agente ou framework que consulta a Trust API deve usar:
@@ -65,6 +135,9 @@ Endpoints que exigem API key:
 
 ```text
 GET /agents
+GET /passport/{agent_id}
+GET /agents/{agent_id}/passport
+POST /handshake
 GET /trust-score/{agent_id}
 GET /risk-report/{agent_id}
 GET /best-agent

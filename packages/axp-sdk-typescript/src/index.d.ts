@@ -35,6 +35,22 @@ export interface TrustAnchorFilters {
   limit?: number;
 }
 
+export interface HandshakePolicy {
+  minimum_score?: number;
+  minimum_stake_usd?: number;
+  minimum_capacity_usd?: number;
+  require_online?: boolean;
+  insurance_required?: boolean;
+  allowed_risk?: string[];
+}
+
+export interface HandshakeInput {
+  requester_agent_id?: string;
+  counterparty_agent_id: string;
+  policy?: HandshakePolicy;
+  trust_policy?: HandshakePolicy;
+}
+
 export interface PrepareTrustAnchorInput {
   limit?: number;
   after_event_id?: number;
@@ -145,6 +161,8 @@ export declare class AxpClient {
   getTrustScore(agentId: string): Promise<unknown>;
   getRiskReport(agentId: string): Promise<unknown>;
   getBestAgent(filters?: BestAgentFilters): Promise<unknown>;
+  getAgentPassport(agentId: string): Promise<unknown>;
+  performHandshake(input: HandshakeInput): Promise<unknown>;
   listTrustAnchors(filters?: TrustAnchorFilters): Promise<unknown>;
   getLatestTrustAnchor(): Promise<unknown>;
   prepareTrustAnchor(input?: PrepareTrustAnchorInput): Promise<unknown>;

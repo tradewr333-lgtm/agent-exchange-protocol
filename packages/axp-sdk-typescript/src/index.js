@@ -114,6 +114,16 @@ export class AxpClient {
     })}`);
   }
 
+  getAgentPassport(agentId) {
+    requireValue(agentId, 'agentId');
+    return this.getJson(`/passport/${encodeURIComponent(agentId)}`);
+  }
+
+  performHandshake(input) {
+    requireFields(input, ['counterparty_agent_id']);
+    return this.postJson('/handshake', input);
+  }
+
   listTrustAnchors(filters = {}) {
     return this.getJson(`/anchors${toQuery({
       status: filters.status,

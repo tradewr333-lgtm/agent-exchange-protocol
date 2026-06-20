@@ -204,6 +204,27 @@ class AxpClient:
         _require_value(agent_id, "agent_id")
         return self._get_json(f"/risk-report/{agent_id}")
 
+    def get_agent_passport(self, agent_id: str) -> dict[str, Any]:
+        _require_value(agent_id, "agent_id")
+        return self._get_json(f"/passport/{agent_id}")
+
+    def perform_handshake(
+        self,
+        *,
+        counterparty_agent_id: str,
+        requester_agent_id: str | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        _require_value(counterparty_agent_id, "counterparty_agent_id")
+        return self._post_json(
+            "/handshake",
+            {
+                "requester_agent_id": requester_agent_id,
+                "counterparty_agent_id": counterparty_agent_id,
+                "policy": policy,
+            },
+        )
+
     def get_best_agent(
         self,
         *,

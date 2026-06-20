@@ -227,6 +227,43 @@ const tools = [
     },
   },
   {
+    name: 'axp_get_agent_passport',
+    description: 'Get an AXP Agent Passport. Agents without one should be treated as Trust Unknown before economic interaction.',
+    inputSchema: {
+      type: 'object',
+      required: ['agent_id'],
+      properties: {
+        agent_id: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'axp_handshake',
+    description: 'Run the AXP Handshake Protocol against a counterparty using a trust firewall policy before delegation or contracting.',
+    inputSchema: {
+      type: 'object',
+      required: ['counterparty_agent_id'],
+      properties: {
+        requester_agent_id: { type: 'string' },
+        counterparty_agent_id: { type: 'string' },
+        policy: {
+          type: 'object',
+          properties: {
+            minimum_score: { type: 'number' },
+            minimum_stake_usd: { type: 'number' },
+            minimum_capacity_usd: { type: 'number' },
+            require_online: { type: 'boolean' },
+            insurance_required: { type: 'boolean' },
+            allowed_risk: {
+              type: 'array',
+              items: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
     name: 'axp_get_best_agent',
     description: 'Recommend the best available AXP agent for a task using Proof of Trust ranking.',
     inputSchema: {
@@ -421,17 +458,30 @@ async function callTool(name, args) {
         agent_id: args.agent_id,
       });
       let riskReport = null;
+      let handshake = null;
       if (verification.discoverable && verification.agent_id) {
         try {
           riskReport = await axp.getRiskReport(verification.agent_id);
         } catch (error) {
           riskReport = { error: error.message };
         }
+        try {
+          handshake = await axp.performHandshake({
+            counterparty_agent_id: verification.agent_id,
+            policy: {
+              require_online: false,
+              allowed_risk: ['LOW', 'MEDIUM'],
+            },
+          });
+        } catch (error) {
+          handshake = { error: error.message };
+        }
       }
       return {
         verification,
         risk_report: riskReport,
-        recommendation: 'Use AXP risk_report before preparing or accepting a contract.',
+        handshake,
+        recommendation: 'Use AXP handshake before preparing or accepting a contract.',
       };
     }
     case 'axp_get_economics':
@@ -501,6 +551,16 @@ async function callTool(name, args) {
     case 'axp_get_risk_report':
       requireFields(args, ['agent_id']);
       return axp.getRiskReport(args.agent_id);
+    case 'axp_get_agent_passport':
+      requireFields(args, ['agent_id']);
+      return axp.getAgentPassport(args.agent_id);
+    case 'axp_handshake':
+      requireFields(args, ['counterparty_agent_id']);
+      return axp.performHandshake({
+        requester_agent_id: args.requester_agent_id,
+        counterparty_agent_id: args.counterparty_agent_id,
+        policy: args.policy,
+      });
     case 'axp_get_best_agent':
       return axp.getBestAgent({
         task: args.task,
