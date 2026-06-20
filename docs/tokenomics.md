@@ -121,6 +121,7 @@ A taxa-base do protocolo deve ser baixa e previsivel:
 
 ```text
 Protocol base fee: 0,5%
+Protocol fee recipient on BNB Smart Chain: 0x4c182480c3559A15311FdeB075C1d7af9D4D8854
 Fee ceiling: 0,5%
 Alteracao do teto: somente por governanca
 ```

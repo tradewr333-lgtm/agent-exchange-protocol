@@ -126,6 +126,7 @@
     "initial_axp_staking_yield": false,
     "protocol_fee_ceiling_bps": 50,
     "protocol_fee_ceiling_percent": 0.5,
+    "protocol_fee_recipient_bsc": "0x4c182480c3559A15311FdeB075C1d7af9D4D8854",
     "staking": "multi_asset_planned",
     "slashing": true,
     "insurance_pool": "planned",

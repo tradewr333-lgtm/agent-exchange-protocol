@@ -1,6 +1,7 @@
 export const ECONOMIC_MODEL_VERSION = '0.2.0';
 export const PROTOCOL_FEE_BPS = 50;
 export const PROTOCOL_FEE_RATE = PROTOCOL_FEE_BPS / 10_000;
+export const PROTOCOL_FEE_RECIPIENT_BSC = '0x4c182480c3559A15311FdeB075C1d7af9D4D8854';
 
 export const ACCEPTED_COLLATERAL = [
   {
@@ -47,6 +48,8 @@ export function getEconomicPolicy() {
     protocol_fee: {
       base_fee_bps: PROTOCOL_FEE_BPS,
       base_fee_percent: 0.5,
+      recipient_network: 'BNB Smart Chain',
+      recipient_address: PROTOCOL_FEE_RECIPIENT_BSC,
       ceiling_bps: PROTOCOL_FEE_BPS,
       ceiling_change_requires_governance: true,
       charged_on: 'prepared_contract_value',
@@ -97,6 +100,8 @@ export function calculateProtocolFee(contractValue) {
     fee_percent: 0.5,
     fee_amount_usd: Number.isFinite(value) ? roundUsd(value * PROTOCOL_FEE_RATE) : 0,
     settlement_asset: 'collateral_asset_or_usd_equivalent',
+    recipient_network: 'BNB Smart Chain',
+    recipient_address: PROTOCOL_FEE_RECIPIENT_BSC,
   };
 }
 
