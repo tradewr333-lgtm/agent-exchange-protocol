@@ -123,7 +123,7 @@ export async function listTrustAnchors(filters = {}) {
 }
 
 export async function getLatestAnchor() {
-  return getLatestTrustAnchor() ?? {
+  return (await getLatestTrustAnchor()) ?? {
     protocol: 'AXP',
     schema: 'axp.trust_anchor.v0',
     status: 'no_anchor_recorded',
