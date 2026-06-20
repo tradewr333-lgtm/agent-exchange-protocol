@@ -22,6 +22,17 @@ import {
 } from './src/contracts.js';
 import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/registry.js';
 import { listApiUsage, listTrustEvents } from './src/store.js';
+import { claimIntent, fulfillIntent, getIntent, getIntentFeed, listIntents, publishIntent } from './src/intents.js';
+import { getOpportunitiesForAgent, getOpportunityGraph } from './src/opportunities.js';
+import { getInbox, postInboxMessage } from './src/inbox.js';
+import {
+  distributeDiscoveryRewards,
+  getGrowthMetrics,
+  getGrowthState,
+  getLineage,
+  registerLineage,
+  sponsorScion,
+} from './src/growth.js';
 
 const port = Number.parseInt(process.env.PORT ?? '4180', 10);
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -477,6 +488,19 @@ const server = http.createServer(async (request, response) => {
   if (request.method === 'POST' && settleMatch) {
     const body = await readJsonBody(request);
     const result = await settleContract(settleMatch[1], body);
+    if (result.ok && result.contract?.status === 'settled') {
+      // Genesis Cascade: emit multi-level discovery overrides up the provider's lineage.
+      try {
+        await distributeDiscoveryRewards({
+          contract_id: result.contract.contract_id,
+          provider_agent_id: result.contract.quote?.provider_agent_id,
+          value_usd: Number(result.contract.quote?.requested_capacity ?? 0),
+          intent_id: result.contract.intent_id ?? result.contract.quote?.intent_id ?? null,
+        });
+      } catch (error) {
+        console.error('discovery_reward_distribution_failed', error);
+      }
+    }
     return sendJson(response, result.status, result.ok ? result.contract : result);
   }
 
@@ -489,9 +513,137 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 200, contract);
   }
 
+  // -------------------------------------------------------------------------
+  // AXP Agent Economy Layer: Intent Feed + Opportunity Router + Inbox + Growth
+  // -------------------------------------------------------------------------
+
+  if (url.pathname === '/intents/live') {
+    return sendJson(response, 200, await getIntentFeed({
+      limit: url.searchParams.get('limit') ?? undefined,
+    }));
+  }
+
+  if (request.method === 'POST' && url.pathname === '/intents') {
+    const body = await readJsonBody(request);
+    const result = await publishIntent(body ?? {});
+    return sendJson(response, result.status, result.ok ? result.intent : result);
+  }
+
+  if (url.pathname === '/intents') {
+    return sendJson(response, 200, await listIntents({
+      status: url.searchParams.get('status') ?? undefined,
+      service: url.searchParams.get('service') ?? undefined,
+      urgency: url.searchParams.get('urgency') ?? undefined,
+      requester: url.searchParams.get('requester') ?? undefined,
+      limit: url.searchParams.get('limit') ?? undefined,
+    }));
+  }
+
+  const intentClaimMatch = url.pathname.match(/^\/intents\/([^/]+)\/claim$/);
+  if (request.method === 'POST' && intentClaimMatch) {
+    const body = await readJsonBody(request);
+    const result = await claimIntent(intentClaimMatch[1], body ?? {});
+    return sendJson(response, result.status, result.ok ? result.intent : result);
+  }
+
+  const intentFulfillMatch = url.pathname.match(/^\/intents\/([^/]+)\/fulfill$/);
+  if (request.method === 'POST' && intentFulfillMatch) {
+    const body = await readJsonBody(request);
+    const result = await fulfillIntent(intentFulfillMatch[1], body ?? {});
+    return sendJson(response, result.status, result.ok ? result.intent : result);
+  }
+
+  const intentMatch = url.pathname.match(/^\/intents\/([^/]+)$/);
+  if (intentMatch) {
+    const intent = await getIntent(intentMatch[1]);
+    if (!intent) {
+      return sendJson(response, 404, { error: 'intent_not_found', intent_id: intentMatch[1] });
+    }
+    return sendJson(response, 200, intent);
+  }
+
+  const opportunitiesForMatch = url.pathname.match(/^\/opportunities\/for\/([^/]+)$/);
+  if (opportunitiesForMatch) {
+    const result = await getOpportunitiesForAgent(opportunitiesForMatch[1], {
+      limit: url.searchParams.get('limit') ?? undefined,
+      eligibleOnly: parseBooleanParam(url.searchParams.get('eligible_only')) ?? true,
+    });
+    return sendJson(response, result.status ?? 200, result);
+  }
+
+  if (url.pathname === '/opportunities') {
+    return sendJson(response, 200, await getOpportunityGraph({
+      limit: url.searchParams.get('limit') ?? undefined,
+    }));
+  }
+
+  const inboxMessagesMatch = url.pathname.match(/^\/inbox\/([^/]+)\/messages$/);
+  if (request.method === 'POST' && inboxMessagesMatch) {
+    const body = await readJsonBody(request);
+    const result = await postInboxMessage(inboxMessagesMatch[1], body ?? {});
+    return sendJson(response, result.status, result.ok ? result.message : result);
+  }
+
+  const inboxMatch = url.pathname.match(/^\/inbox\/([^/]+)$/);
+  if (inboxMatch) {
+    const result = await getInbox(inboxMatch[1], {
+      limit: url.searchParams.get('limit') ?? undefined,
+    });
+    return sendJson(response, result.status ?? 200, result);
+  }
+
+  if (url.pathname === '/growth/metrics') {
+    return sendJson(response, 200, await getGrowthMetrics({
+      autotune: parseBooleanParam(url.searchParams.get('autotune')) ?? true,
+    }));
+  }
+
+  if (url.pathname === '/growth/lineage') {
+    return sendJson(response, 200, await getLineage({
+      agentId: url.searchParams.get('agent_id') ?? undefined,
+    }));
+  }
+
+  if (request.method === 'POST' && url.pathname === '/growth/sponsor') {
+    const body = await readJsonBody(request);
+    const result = await sponsorScion(body ?? {});
+    return sendJson(response, result.status, result);
+  }
+
+  if (request.method === 'POST' && url.pathname === '/growth/lineage') {
+    const body = await readJsonBody(request);
+    const result = await registerLineage(body ?? {});
+    return sendJson(response, result.status, result.ok ? result.lineage : result);
+  }
+
+  if (url.pathname === '/growth') {
+    const [state, metrics] = await Promise.all([getGrowthState(), getGrowthMetrics({ autotune: false })]);
+    return sendJson(response, 200, {
+      protocol: 'AXP',
+      schema: 'axp.growth.v0',
+      state,
+      metrics,
+    });
+  }
+
   return sendJson(response, 404, {
     error: 'not_found',
     endpoints: [
+      '/intents/live',
+      'POST /intents',
+      '/intents',
+      '/intents/{intent_id}',
+      'POST /intents/{intent_id}/claim',
+      'POST /intents/{intent_id}/fulfill',
+      '/opportunities',
+      '/opportunities/for/{agent_id}',
+      '/inbox/{agent_id}',
+      'POST /inbox/{agent_id}/messages',
+      '/growth',
+      '/growth/metrics',
+      '/growth/lineage',
+      'POST /growth/sponsor',
+      'POST /growth/lineage',
       '/.well-known/axp.json',
       '/dashboard',
       '/network',

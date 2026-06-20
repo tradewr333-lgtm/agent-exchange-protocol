@@ -4,15 +4,23 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
-const dataDir = join(currentDir, '..', 'data');
+const dataDir = process.env.AXP_DATA_DIR
+  ? process.env.AXP_DATA_DIR
+  : join(currentDir, '..', 'data');
 
 export const paths = {
   agents: join(dataDir, 'agents.json'),
   apiKeys: join(dataDir, 'api-keys.json'),
   contracts: join(dataDir, 'contracts.json'),
+  intents: join(dataDir, 'intents.json'),
+  inbox: join(dataDir, 'inbox.json'),
+  lineage: join(dataDir, 'lineage.json'),
+  discoveryRewards: join(dataDir, 'discovery-rewards.json'),
+  growthState: join(dataDir, 'growth-state.json'),
 };
 
 let poolPromise = null;
+// axp-economy-layer storage extensions present below
 
 export function storageMode() {
   return process.env.DATABASE_URL ? 'postgres' : 'json';
@@ -481,6 +489,324 @@ export async function listApiUsage(filters = {}) {
     },
     usage: result.rows.map(formatLedgerRow),
   };
+}
+
+// ---------------------------------------------------------------------------
+// AXP Agent Economy Layer storage (intents, inbox, lineage, rewards, growth)
+// ---------------------------------------------------------------------------
+
+export async function loadIntents() {
+  if (storageMode() === 'postgres') {
+    const result = await query('select data from intents order by created_at asc');
+    return result.rows.map((row) => row.data);
+  }
+
+  return readCollection(paths.intents, 'intents');
+}
+
+export async function saveIntent(intent) {
+  if (storageMode() === 'postgres') {
+    await query(
+      `insert into intents (intent_id, title, service, status, reward_usd, urgency,
+         required_capacity_usd, min_trust_score, source, requester, claimed_by, data, updated_at, expires_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb, now(), $13)
+       on conflict (intent_id) do update set
+         title = excluded.title,
+         service = excluded.service,
+         status = excluded.status,
+         reward_usd = excluded.reward_usd,
+         urgency = excluded.urgency,
+         required_capacity_usd = excluded.required_capacity_usd,
+         min_trust_score = excluded.min_trust_score,
+         source = excluded.source,
+         requester = excluded.requester,
+         claimed_by = excluded.claimed_by,
+         data = excluded.data,
+         updated_at = now(),
+         expires_at = excluded.expires_at`,
+      [
+        intent.intent_id,
+        intent.title ?? '',
+        intent.service ?? null,
+        intent.status ?? 'open',
+        Number(intent.reward_usd ?? 0),
+        intent.urgency ?? 'MEDIUM',
+        Number(intent.required_capacity_usd ?? 0),
+        Number(intent.min_trust_score ?? 0),
+        intent.source ?? null,
+        intent.requester ?? null,
+        intent.claimed_by ?? null,
+        JSON.stringify(intent),
+        intent.expires_at ?? null,
+      ],
+    );
+    return intent;
+  }
+
+  const intents = readCollection(paths.intents, 'intents');
+  const index = intents.findIndex((item) => item.intent_id === intent.intent_id);
+  if (index >= 0) {
+    intents[index] = intent;
+  } else {
+    intents.push(intent);
+  }
+  writeCollection(paths.intents, 'intents', intents);
+  return intent;
+}
+
+export async function appendInboxMessage(message) {
+  if (storageMode() === 'postgres') {
+    const result = await query(
+      `insert into inbox_messages (agent_id, kind, subject, from_id, ref_id, value_usd, read, data)
+       values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+       returning id, created_at`,
+      [
+        message.agent_id,
+        message.kind,
+        message.subject ?? null,
+        message.from_id ?? null,
+        message.ref_id ?? null,
+        Number(message.value_usd ?? 0),
+        Boolean(message.read ?? false),
+        JSON.stringify(message),
+      ],
+    );
+    return { ...message, id: Number(result.rows[0].id), created_at: result.rows[0].created_at };
+  }
+
+  const messages = readCollection(paths.inbox, 'messages');
+  const id = messages.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+  const stored = {
+    ...message,
+    id,
+    read: Boolean(message.read ?? false),
+    created_at: message.created_at ?? new Date().toISOString(),
+  };
+  messages.push(stored);
+  writeCollection(paths.inbox, 'messages', messages);
+  return stored;
+}
+
+export async function listInboxMessages(filters = {}) {
+  const limit = normalizeLimit(filters.limit, 200);
+  if (storageMode() === 'postgres') {
+    const clauses = [];
+    const params = [];
+    addWhere(clauses, params, 'agent_id', filters.agentId);
+    addWhere(clauses, params, 'kind', filters.kind);
+    params.push(limit);
+    const result = await query(
+      `select id, agent_id, kind, subject, from_id, ref_id, value_usd, read, data, created_at
+       from inbox_messages
+       ${clauses.length > 0 ? `where ${clauses.join(' and ')}` : ''}
+       order by created_at desc, id desc
+       limit $${params.length}`,
+      params,
+    );
+    return result.rows.map((row) => ({
+      ...row.data,
+      id: Number(row.id),
+      read: Boolean(row.read),
+      created_at: row.created_at,
+    }));
+  }
+
+  let messages = readCollection(paths.inbox, 'messages');
+  if (filters.agentId) {
+    messages = messages.filter((item) => item.agent_id === filters.agentId);
+  }
+  if (filters.kind) {
+    messages = messages.filter((item) => item.kind === filters.kind);
+  }
+  return messages
+    .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+    .slice(0, limit);
+}
+
+export async function loadLineage() {
+  if (storageMode() === 'postgres') {
+    const result = await query('select data from agent_lineage order by created_at asc');
+    return result.rows.map((row) => row.data);
+  }
+
+  return readCollection(paths.lineage, 'lineage');
+}
+
+export async function getLineageNode(agentId) {
+  const lineage = await loadLineage();
+  return lineage.find((item) => item.agent_id === agentId) ?? null;
+}
+
+export async function saveLineageNode(node) {
+  if (storageMode() === 'postgres') {
+    await query(
+      `insert into agent_lineage (agent_id, handle, sponsor_agent_id, depth, origin, spawned_for_intent, data, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7::jsonb, now())
+       on conflict (agent_id) do update set
+         handle = excluded.handle,
+         sponsor_agent_id = excluded.sponsor_agent_id,
+         depth = excluded.depth,
+         origin = excluded.origin,
+         spawned_for_intent = excluded.spawned_for_intent,
+         data = excluded.data,
+         updated_at = now()`,
+      [
+        node.agent_id,
+        node.handle ?? null,
+        node.sponsor_agent_id ?? null,
+        Number(node.depth ?? 0),
+        node.origin ?? null,
+        node.spawned_for_intent ?? null,
+        JSON.stringify(node),
+      ],
+    );
+    return node;
+  }
+
+  const lineage = readCollection(paths.lineage, 'lineage');
+  const index = lineage.findIndex((item) => item.agent_id === node.agent_id);
+  if (index >= 0) {
+    lineage[index] = node;
+  } else {
+    lineage.push(node);
+  }
+  writeCollection(paths.lineage, 'lineage', lineage);
+  return node;
+}
+
+export async function appendDiscoveryReward(reward) {
+  if (storageMode() === 'postgres') {
+    const result = await query(
+      `insert into discovery_rewards (beneficiary_agent_id, source_agent_id, contract_id, intent_id, level, amount_axp, reward_multiplier, data)
+       values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+       returning id, created_at`,
+      [
+        reward.beneficiary_agent_id,
+        reward.source_agent_id ?? null,
+        reward.contract_id ?? null,
+        reward.intent_id ?? null,
+        Number(reward.level ?? 1),
+        Number(reward.amount_axp ?? 0),
+        Number(reward.reward_multiplier ?? 1),
+        JSON.stringify(reward),
+      ],
+    );
+    return { ...reward, id: Number(result.rows[0].id), created_at: result.rows[0].created_at };
+  }
+
+  const rewards = readCollection(paths.discoveryRewards, 'rewards');
+  const id = rewards.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+  const stored = { ...reward, id, created_at: reward.created_at ?? new Date().toISOString() };
+  rewards.push(stored);
+  writeCollection(paths.discoveryRewards, 'rewards', rewards);
+  return stored;
+}
+
+export async function listDiscoveryRewards(filters = {}) {
+  const limit = normalizeLimit(filters.limit, 200);
+  if (storageMode() === 'postgres') {
+    const clauses = [];
+    const params = [];
+    addWhere(clauses, params, 'beneficiary_agent_id', filters.beneficiaryAgentId);
+    addWhere(clauses, params, 'source_agent_id', filters.sourceAgentId);
+    params.push(limit);
+    const result = await query(
+      `select id, beneficiary_agent_id, source_agent_id, contract_id, intent_id, level, amount_axp, reward_multiplier, data, created_at
+       from discovery_rewards
+       ${clauses.length > 0 ? `where ${clauses.join(' and ')}` : ''}
+       order by created_at desc, id desc
+       limit $${params.length}`,
+      params,
+    );
+    return result.rows.map((row) => ({
+      ...row.data,
+      id: Number(row.id),
+      amount_axp: Number(row.amount_axp),
+      created_at: row.created_at,
+    }));
+  }
+
+  let rewards = readCollection(paths.discoveryRewards, 'rewards');
+  if (filters.beneficiaryAgentId) {
+    rewards = rewards.filter((item) => item.beneficiary_agent_id === filters.beneficiaryAgentId);
+  }
+  if (filters.sourceAgentId) {
+    rewards = rewards.filter((item) => item.source_agent_id === filters.sourceAgentId);
+  }
+  return rewards
+    .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+    .slice(0, limit);
+}
+
+export async function loadGrowthState() {
+  if (storageMode() === 'postgres') {
+    const result = await query("select data from growth_state where id = 'singleton'");
+    return result.rows[0] ? result.rows[0].data : null;
+  }
+
+  if (!existsSync(paths.growthState)) {
+    return null;
+  }
+  try {
+    return readJsonFile(paths.growthState);
+  } catch {
+    return null;
+  }
+}
+
+export async function saveGrowthState(state) {
+  const updated = { ...state, updated_at: new Date().toISOString() };
+  if (storageMode() === 'postgres') {
+    await query(
+      `insert into growth_state (id, reward_multiplier, treasury_budget_axp, treasury_spent_axp, target_k, data, updated_at)
+       values ('singleton', $1, $2, $3, $4, $5::jsonb, now())
+       on conflict (id) do update set
+         reward_multiplier = excluded.reward_multiplier,
+         treasury_budget_axp = excluded.treasury_budget_axp,
+         treasury_spent_axp = excluded.treasury_spent_axp,
+         target_k = excluded.target_k,
+         data = excluded.data,
+         updated_at = now()`,
+      [
+        Number(updated.reward_multiplier ?? 1),
+        Number(updated.treasury_budget_axp ?? 0),
+        Number(updated.treasury_spent_axp ?? 0),
+        Number(updated.target_k ?? 1.5),
+        JSON.stringify(updated),
+      ],
+    );
+    return updated;
+  }
+
+  writeJsonAtomic(paths.growthState, updated);
+  return updated;
+}
+
+function readCollection(path, key) {
+  if (!existsSync(path)) {
+    return [];
+  }
+  try {
+    const parsed = readJsonFile(path);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+    if (parsed && Array.isArray(parsed[key])) {
+      return parsed[key];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCollection(path, key, items) {
+  writeJsonAtomic(path, {
+    schema: `axp.${key}.v0`,
+    updated_at: new Date().toISOString(),
+    count: items.length,
+    [key]: items,
+  });
 }
 
 function writeJsonAtomic(path, payload) {

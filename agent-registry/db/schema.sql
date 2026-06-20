@@ -104,3 +104,81 @@ create index if not exists api_usage_key_created_idx on api_usage(key_id, create
 create index if not exists api_usage_type_idx on api_usage(usage_type);
 create index if not exists trust_anchors_status_idx on trust_anchors(status);
 create index if not exists trust_anchors_range_idx on trust_anchors(from_event_id, to_event_id);
+
+-- AXP Agent Economy Layer (Intent Feed + Opportunity Router + Universal Inbox + Genesis Cascade)
+
+create table if not exists intents (
+  intent_id text primary key,
+  title text not null,
+  service text,
+  status text not null default 'open',
+  reward_usd numeric not null default 0,
+  urgency text not null default 'MEDIUM',
+  required_capacity_usd numeric not null default 0,
+  min_trust_score numeric not null default 0,
+  source text,
+  requester text,
+  claimed_by text,
+  data jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  expires_at timestamptz
+);
+
+create table if not exists inbox_messages (
+  id bigserial primary key,
+  agent_id text not null,
+  kind text not null,
+  subject text,
+  from_id text,
+  ref_id text,
+  value_usd numeric not null default 0,
+  read boolean not null default false,
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists agent_lineage (
+  agent_id text primary key,
+  handle text,
+  sponsor_agent_id text,
+  depth integer not null default 0,
+  origin text,
+  spawned_for_intent text,
+  data jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists discovery_rewards (
+  id bigserial primary key,
+  beneficiary_agent_id text not null,
+  source_agent_id text,
+  contract_id text,
+  intent_id text,
+  level integer not null default 1,
+  amount_axp numeric not null default 0,
+  reward_multiplier numeric not null default 1,
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists growth_state (
+  id text primary key default 'singleton',
+  reward_multiplier numeric not null default 1,
+  treasury_budget_axp numeric not null default 0,
+  treasury_spent_axp numeric not null default 0,
+  target_k numeric not null default 1.5,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists intents_status_idx on intents(status);
+create index if not exists intents_service_idx on intents(service);
+create index if not exists intents_urgency_idx on intents(urgency);
+create index if not exists inbox_agent_created_idx on inbox_messages(agent_id, created_at desc);
+create index if not exists inbox_agent_kind_idx on inbox_messages(agent_id, kind);
+create index if not exists lineage_sponsor_idx on agent_lineage(sponsor_agent_id);
+create index if not exists lineage_handle_idx on agent_lineage(handle);
+create index if not exists discovery_rewards_beneficiary_idx on discovery_rewards(beneficiary_agent_id, created_at desc);
+create index if not exists discovery_rewards_source_idx on discovery_rewards(source_agent_id);
