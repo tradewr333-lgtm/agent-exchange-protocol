@@ -10,6 +10,7 @@
   "discovery": {
     "registry_base_url": "https://registry.axp.network",
     "local_registry_base_url": "http://localhost:4180",
+    "dashboard_endpoint": "/dashboard",
     "api_key_register_endpoint": "/api-keys/register",
     "api_key_endpoint_template": "/api-keys/{key_id}",
     "api_key_rotate_endpoint_template": "/api-keys/{key_id}/rotate",
@@ -78,6 +79,7 @@
     "trust_event_query",
     "api_usage_query",
     "api_usage_metering",
+    "operator_dashboard",
     "trust_oracle",
     "trust_api",
     "trust_dns",

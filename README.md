@@ -292,6 +292,7 @@ Endpoints:
 
 ```text
 GET http://localhost:4180/.well-known/axp.json
+GET http://localhost:4180/dashboard
 GET http://localhost:4180/capabilities
 POST http://localhost:4180/api-keys/register
 GET http://localhost:4180/api-keys/{key_id}
@@ -314,6 +315,7 @@ Endpoints publicos oficiais:
 
 ```text
 GET https://registry.axp.network/.well-known/axp.json
+GET https://registry.axp.network/dashboard
 GET https://registry.axp.network/capabilities
 POST https://registry.axp.network/api-keys/register
 GET https://registry.axp.network/api-keys/{key_id}
@@ -374,12 +376,15 @@ GET https://registry.axp.network/trust-ranking?status=active&service=research&li
 Endpoints de auditoria:
 
 ```text
+GET /dashboard
 GET /trust-events?agent_id=agent_0002&limit=50
 GET /agents/agent_0002/trust-events?limit=50
 GET /api-usage?limit=50
 ```
 
-Esses endpoints exigem `X-AXP-API-Key` e expõem o ledger operacional do AXP. Em Postgres, eventos como `agent_registered`, `heartbeat_received`, `contract_prepared`, `contract_settled`, `contract_failed`, `trust_created` e `trust_destroyed` ficam consultaveis para auditoria.
+`/dashboard` mostra status do storage, ultimos agentes, contratos, Trust Events, uso recente da API e ranking por Trust Score sem expor segredos.
+
+Os endpoints JSON de auditoria exigem `X-AXP-API-Key` e expõem o ledger operacional do AXP. Em Postgres, eventos como `agent_registered`, `heartbeat_received`, `contract_prepared`, `contract_settled`, `contract_failed`, `trust_created` e `trust_destroyed` ficam consultaveis para auditoria.
 
 Exemplo de registro de agente:
 

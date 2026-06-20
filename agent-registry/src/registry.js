@@ -61,6 +61,7 @@ export function getCapabilities() {
         'trust_events',
         'api_usage',
       ],
+      dashboard_endpoint: '/dashboard',
     },
     capabilities: [
       'agent_identity',
@@ -73,6 +74,7 @@ export function getCapabilities() {
       'trust_event_ledger',
       'trust_event_query',
       'api_usage_query',
+      'operator_dashboard',
       'trust_oracle',
       'trust_api',
       'reputation_staking',
@@ -113,6 +115,7 @@ export function getCapabilities() {
       '/trust-events': ['agent_id', 'event_type', 'contract_id', 'counterparty_id', 'limit'],
       '/agents/{agent_id}/trust-events': ['agent_id', 'event_type', 'contract_id', 'counterparty_id', 'limit'],
       '/api-usage': ['key_id', 'usage_type', 'agent_id', 'path', 'limit'],
+      '/dashboard': [],
       '/best-agent': ['task', 'service', 'requested_capacity', 'limit', 'online'],
       'POST /auth/message': ['action', 'agent_id', 'address', 'nonce', 'issued_at', 'scope'],
       'POST /contracts/quote': ['provider_agent_id', 'service', 'requested_capacity'],
