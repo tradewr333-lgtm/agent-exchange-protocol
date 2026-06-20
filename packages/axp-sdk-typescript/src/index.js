@@ -4,6 +4,7 @@ export class AxpClient {
   constructor(options = {}) {
     this.registryUrl = (options.registryUrl ?? defaultRegistryUrl).replace(/\/$/, '');
     this.fetch = options.fetch ?? globalThis.fetch;
+    this.apiKey = options.apiKey ?? (typeof process !== 'undefined' ? process.env?.AXP_API_KEY : undefined);
 
     if (!this.fetch) {
       throw new Error('A fetch implementation is required.');
@@ -44,6 +45,22 @@ export class AxpClient {
   registerAgent(input) {
     requireFields(input, ['agent_id', 'name', 'operator', 'services', 'collateral', 'auth']);
     return this.postJson('/agents/register', input);
+  }
+
+  registerApiKey(input) {
+    requireFields(input, ['name', 'owner', 'auth']);
+    return this.postJson('/api-keys/register', input, { skipApiKey: true });
+  }
+
+  getApiKey(keyId) {
+    requireValue(keyId, 'keyId');
+    return this.getJson(`/api-keys/${encodeURIComponent(keyId)}`, { skipApiKey: true });
+  }
+
+  rotateApiKey(keyId, input) {
+    requireValue(keyId, 'keyId');
+    requireFields(input, ['auth']);
+    return this.postJson(`/api-keys/${encodeURIComponent(keyId)}/rotate`, input, { skipApiKey: true });
   }
 
   sendHeartbeat(agentId, input) {
@@ -125,21 +142,33 @@ export class AxpClient {
     return this.postJson(`/contracts/${encodeURIComponent(contractId)}/settle`, input);
   }
 
-  async getJson(path) {
-    const response = await this.fetch(`${this.registryUrl}${path}`);
+  async getJson(path, options = {}) {
+    const response = await this.fetch(`${this.registryUrl}${path}`, {
+      headers: this.buildHeaders(options),
+    });
     return readJsonResponse(response, path);
   }
 
-  async postJson(path, body) {
+  async postJson(path, body, options = {}) {
     const response = await this.fetch(`${this.registryUrl}${path}`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
+      headers: this.buildHeaders(options),
       body: JSON.stringify(body),
     });
 
     return readJsonResponse(response, path);
+  }
+
+  buildHeaders(options = {}) {
+    const headers = {
+      'content-type': 'application/json',
+    };
+
+    if (!options.skipApiKey && this.apiKey) {
+      headers['x-axp-api-key'] = this.apiKey;
+    }
+
+    return headers;
   }
 }
 

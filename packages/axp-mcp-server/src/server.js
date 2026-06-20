@@ -43,6 +43,68 @@ const tools = [
     },
   },
   {
+    name: 'axp_register_api_key',
+    description: 'Register a free AXP API key with wallet authorization. Returns the secret once.',
+    inputSchema: {
+      type: 'object',
+      required: ['name', 'owner', 'auth'],
+      properties: {
+        name: { type: 'string' },
+        owner: { type: 'string', description: 'Owner wallet address.' },
+        agent_id: { type: 'string' },
+        framework: { type: 'string', description: 'Runtime or framework, for example mcp, langchain, crewai, autogen.' },
+        scopes: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        auth: {
+          type: 'object',
+          required: ['agent_id', 'address', 'nonce', 'issued_at', 'signature'],
+          properties: {
+            agent_id: { type: 'string' },
+            address: { type: 'string' },
+            nonce: { type: 'string' },
+            issued_at: { type: 'string' },
+            signature: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+  {
+    name: 'axp_get_api_key',
+    description: 'Get public metadata and usage counters for an AXP API key.',
+    inputSchema: {
+      type: 'object',
+      required: ['key_id'],
+      properties: {
+        key_id: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'axp_rotate_api_key',
+    description: 'Rotate an AXP API key with wallet authorization. Returns the new secret once.',
+    inputSchema: {
+      type: 'object',
+      required: ['key_id', 'auth'],
+      properties: {
+        key_id: { type: 'string' },
+        auth: {
+          type: 'object',
+          required: ['agent_id', 'address', 'nonce', 'issued_at', 'signature'],
+          properties: {
+            agent_id: { type: 'string' },
+            address: { type: 'string' },
+            nonce: { type: 'string' },
+            issued_at: { type: 'string' },
+            signature: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+  {
     name: 'axp_register_agent',
     description: 'Register a new AXP agent with operator wallet authorization.',
     inputSchema: {
@@ -357,6 +419,22 @@ async function callTool(name, args) {
         minCapacity: args.min_capacity,
         online: args.online,
       });
+    case 'axp_register_api_key':
+      requireFields(args, ['name', 'owner', 'auth']);
+      return axp.registerApiKey({
+        name: args.name,
+        owner: args.owner,
+        agent_id: args.agent_id,
+        framework: args.framework,
+        scopes: args.scopes,
+        auth: args.auth,
+      });
+    case 'axp_get_api_key':
+      requireFields(args, ['key_id']);
+      return axp.getApiKey(args.key_id);
+    case 'axp_rotate_api_key':
+      requireFields(args, ['key_id', 'auth']);
+      return axp.rotateApiKey(args.key_id, { auth: args.auth });
     case 'axp_register_agent':
       requireFields(args, ['agent_id', 'name', 'operator', 'services', 'collateral', 'auth']);
       return axp.registerAgent({

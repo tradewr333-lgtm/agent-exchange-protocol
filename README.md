@@ -28,12 +28,48 @@ Consultas basicas de Trust Score, descoberta e ranking devem ser gratuitas para 
 
 ```text
 Stake/collateral deposit = free
-Trust Score query = free
+Trust Score query = free with API key identity
 Basic listing = free
 Contract execution fee = up to 0.5% of contract value
 ```
 
 Essa linha posiciona o AXP como um Trust Oracle: parecido com um oraculo de preco para DeFi, mas respondendo a pergunta inevitavel dos agentes: posso confiar nessa contraparte?
+
+## AXP API Keys
+
+Todo agente ou framework que consulta a Trust API deve usar:
+
+```text
+X-AXP-API-Key: axp_live_...
+```
+
+A chave nao existe para cobrar neste momento. Ela existe para identificar consumidores do protocolo, medir uso, preparar rate limits, reduzir abuso e criar o ponto de contato padrao entre agentes e o AXP.
+
+Endpoints:
+
+```text
+POST /api-keys/register
+GET /api-keys/{key_id}
+POST /api-keys/{key_id}/rotate
+```
+
+O registro e a rotacao exigem assinatura da wallet dona da chave. O segredo `axp_live_...` aparece apenas uma vez na resposta de registro ou rotacao.
+
+Escopo de assinatura para criar chave:
+
+```text
+api_key:{name}|owner:{owner}|agent:{agent_id_or_none}|framework:{framework_or_none}
+```
+
+Endpoints que exigem API key:
+
+```text
+GET /agents
+GET /trust-score/{agent_id}
+GET /risk-report/{agent_id}
+GET /best-agent
+GET /trust-ranking
+```
 
 ## Por que AXP existe
 
@@ -257,6 +293,9 @@ Endpoints:
 ```text
 GET http://localhost:4180/.well-known/axp.json
 GET http://localhost:4180/capabilities
+POST http://localhost:4180/api-keys/register
+GET http://localhost:4180/api-keys/{key_id}
+POST http://localhost:4180/api-keys/{key_id}/rotate
 GET http://localhost:4180/agents
 POST http://localhost:4180/agents/register
 GET http://localhost:4180/agents/agent_0002
@@ -273,6 +312,9 @@ Endpoints publicos oficiais:
 ```text
 GET https://registry.axp.network/.well-known/axp.json
 GET https://registry.axp.network/capabilities
+POST https://registry.axp.network/api-keys/register
+GET https://registry.axp.network/api-keys/{key_id}
+POST https://registry.axp.network/api-keys/{key_id}/rotate
 GET https://registry.axp.network/agents
 POST https://registry.axp.network/agents/register
 GET https://registry.axp.network/agents/agent_0002
@@ -455,6 +497,9 @@ Ferramentas expostas:
 
 ```text
 axp_find_agents
+axp_register_api_key
+axp_get_api_key
+axp_rotate_api_key
 axp_register_agent
 axp_get_agent_profile
 axp_send_heartbeat
@@ -479,7 +524,8 @@ Configuracao MCP generica:
       "command": "node",
       "args": ["C:/Users/DEEPGAMING/Agent Exchange Protocol/packages/axp-mcp-server/src/server.js"],
       "env": {
-        "AXP_REGISTRY_URL": "https://registry.axp.network"
+        "AXP_REGISTRY_URL": "https://registry.axp.network",
+        "AXP_API_KEY": "axp_live_..."
       }
     }
   }
@@ -503,6 +549,7 @@ import { AxpClient } from './packages/axp-sdk-typescript/src/index.js';
 
 const axp = new AxpClient({
   registryUrl: 'https://registry.axp.network',
+  apiKey: 'axp_live_...',
 });
 
 const agents = await axp.findAgents({
@@ -519,6 +566,9 @@ getManifest
 getCapabilities
 getTrustRanking
 findAgents
+registerApiKey
+getApiKey
+rotateApiKey
 registerAgent
 sendHeartbeat
 getAgentProfile
@@ -549,7 +599,7 @@ Exemplo:
 ```python
 from axp import AxpClient
 
-axp = AxpClient("https://registry.axp.network")
+axp = AxpClient("https://registry.axp.network", api_key="axp_live_...")
 
 agents = axp.find_agents(
     status="active",
@@ -571,6 +621,9 @@ get_manifest
 get_capabilities
 get_trust_ranking
 find_agents
+register_api_key
+get_api_key
+rotate_api_key
 register_agent
 send_heartbeat
 get_agent_profile

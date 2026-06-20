@@ -1,6 +1,7 @@
 export interface AxpClientOptions {
   registryUrl?: string;
   fetch?: typeof fetch;
+  apiKey?: string;
 }
 
 export interface FindAgentsFilters {
@@ -70,6 +71,15 @@ export interface AgentAuth {
   signature: string;
 }
 
+export interface RegisterApiKeyInput {
+  name: string;
+  owner: string;
+  agent_id?: string;
+  framework?: string;
+  scopes?: string[];
+  auth: AgentAuth;
+}
+
 export interface PrepareContractInput extends ContractQuoteInput {
   auth: AgentAuth;
 }
@@ -93,11 +103,15 @@ export interface SettleContractInput {
 export declare class AxpClient {
   constructor(options?: AxpClientOptions);
   registryUrl: string;
+  apiKey?: string;
   getManifest(): Promise<unknown>;
   getCapabilities(): Promise<unknown>;
   getEconomics(): Promise<unknown>;
   getTrustRanking(filters?: TrustRankingFilters): Promise<unknown>;
   findAgents(filters?: FindAgentsFilters): Promise<unknown>;
+  registerApiKey(input: RegisterApiKeyInput): Promise<unknown>;
+  getApiKey(keyId: string): Promise<unknown>;
+  rotateApiKey(keyId: string, input: { auth: AgentAuth }): Promise<unknown>;
   registerAgent(input: RegisterAgentInput): Promise<unknown>;
   sendHeartbeat(agentId: string, input: HeartbeatInput): Promise<unknown>;
   getAgentProfile(agentId: string): Promise<any>;

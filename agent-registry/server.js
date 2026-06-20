@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registerAgent, updateAgentHeartbeat } from './src/agents.js';
+import { getApiKey, registerApiKey, requireApiKey, rotateApiKey } from './src/api-keys.js';
 import { buildAuthMessage } from './src/auth.js';
 import { getEconomicPolicy } from './src/economics.js';
 import { getAgentRiskReport, getAgentTrustScore, getBestAgent, getTrustRanking } from './src/trust-score.js';
@@ -56,6 +57,11 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === '/trust-ranking') {
+    const apiKey = requireApiKey(request, 'trust_ranking');
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
     const minScore = url.searchParams.has('min_score')
       ? Number.parseFloat(url.searchParams.get('min_score'))
       : undefined;
@@ -73,6 +79,11 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === '/best-agent') {
+    const apiKey = requireApiKey(request, 'best_agent');
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
     const requestedCapacity = url.searchParams.has('requested_capacity')
       ? Number.parseFloat(url.searchParams.get('requested_capacity'))
       : undefined;
@@ -111,6 +122,11 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === '/agents') {
+    const apiKey = requireApiKey(request, 'agent_query');
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
     const minCapacity = url.searchParams.has('min_capacity')
       ? Number.parseFloat(url.searchParams.get('min_capacity'))
       : undefined;
@@ -127,6 +143,28 @@ const server = http.createServer(async (request, response) => {
     const body = await readJsonBody(request);
     const result = await registerAgent(body);
     return sendJson(response, result.status, result.ok ? result.agent : result);
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api-keys/register') {
+    const body = await readJsonBody(request);
+    const result = await registerApiKey(body);
+    return sendJson(response, result.status, result.ok ? result : result);
+  }
+
+  const apiKeyMatch = url.pathname.match(/^\/api-keys\/([^/]+)$/);
+  if (apiKeyMatch) {
+    const apiKey = getApiKey(apiKeyMatch[1]);
+    if (!apiKey) {
+      return sendJson(response, 404, { error: 'api_key_not_found', key_id: apiKeyMatch[1] });
+    }
+    return sendJson(response, 200, apiKey);
+  }
+
+  const apiKeyRotateMatch = url.pathname.match(/^\/api-keys\/([^/]+)\/rotate$/);
+  if (request.method === 'POST' && apiKeyRotateMatch) {
+    const body = await readJsonBody(request);
+    const result = await rotateApiKey(apiKeyRotateMatch[1], body);
+    return sendJson(response, result.status, result.ok ? result : result);
   }
 
   const agentMatch = url.pathname.match(/^\/agents\/([^/]+)$/);
@@ -147,6 +185,11 @@ const server = http.createServer(async (request, response) => {
 
   const trustScoreMatch = url.pathname.match(/^\/agents\/([^/]+)\/trust-score$/);
   if (trustScoreMatch) {
+    const apiKey = requireApiKey(request, 'trust_score');
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
     const trustScore = getAgentTrustScore(trustScoreMatch[1]);
     if (!trustScore) {
       return sendJson(response, 404, { error: 'agent_not_found', agent_id: trustScoreMatch[1] });
@@ -156,6 +199,11 @@ const server = http.createServer(async (request, response) => {
 
   const trustScoreAliasMatch = url.pathname.match(/^\/trust-score\/([^/]+)$/);
   if (trustScoreAliasMatch) {
+    const apiKey = requireApiKey(request, 'trust_score');
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
     const trustScore = getAgentTrustScore(trustScoreAliasMatch[1]);
     if (!trustScore) {
       return sendJson(response, 404, { error: 'agent_not_found', agent_id: trustScoreAliasMatch[1] });
@@ -165,6 +213,11 @@ const server = http.createServer(async (request, response) => {
 
   const riskReportMatch = url.pathname.match(/^\/risk-report\/([^/]+)$/);
   if (riskReportMatch) {
+    const apiKey = requireApiKey(request, 'risk_report');
+    if (!apiKey.ok) {
+      return sendJson(response, apiKey.status, apiKey);
+    }
+
     const riskReport = getAgentRiskReport(riskReportMatch[1]);
     if (!riskReport) {
       return sendJson(response, 404, { error: 'agent_not_found', agent_id: riskReportMatch[1] });
@@ -215,6 +268,9 @@ const server = http.createServer(async (request, response) => {
       '/trust-score/{agent_id}',
       '/risk-report/{agent_id}',
       '/best-agent',
+      'POST /api-keys/register',
+      '/api-keys/{key_id}',
+      'POST /api-keys/{key_id}/rotate',
       'POST /auth/message',
       '/agents',
       'POST /agents/register',
@@ -238,7 +294,7 @@ function sendJson(response, status, body) {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'access-control-allow-origin': '*',
-    'access-control-allow-headers': 'content-type',
+    'access-control-allow-headers': 'content-type, x-axp-api-key',
     'access-control-allow-methods': 'GET, POST, OPTIONS',
   });
   response.end(`${JSON.stringify(body, null, 2)}\n`);

@@ -10,6 +10,9 @@
   "discovery": {
     "registry_base_url": "https://registry.axp.network",
     "local_registry_base_url": "http://localhost:4180",
+    "api_key_register_endpoint": "/api-keys/register",
+    "api_key_endpoint_template": "/api-keys/{key_id}",
+    "api_key_rotate_endpoint_template": "/api-keys/{key_id}/rotate",
     "agents_endpoint": "/agents",
     "agent_register_endpoint": "/agents/register",
     "agent_endpoint_template": "/agents/{agent_id}",
@@ -63,6 +66,9 @@
     "agent_identity",
     "agent_registration",
     "agent_heartbeat",
+    "api_key_identity",
+    "api_key_usage_metering",
+    "api_key_rotation",
     "trust_oracle",
     "trust_api",
     "trust_dns",
@@ -91,13 +97,26 @@
   ],
   "authentication": {
     "type": "evm_personal_sign",
+    "api_key_header": "X-AXP-API-Key",
+    "api_key_prefix": "axp_live_",
+    "api_key_required_for": [
+      "GET /agents",
+      "GET /trust-score/{agent_id}",
+      "GET /risk-report/{agent_id}",
+      "GET /best-agent",
+      "GET /trust-ranking"
+    ],
     "required_for": [
+      "POST /api-keys/register",
+      "POST /api-keys/{key_id}/rotate",
       "POST /agents/register",
       "POST /agents/{agent_id}/heartbeat",
       "POST /contracts/prepare",
       "POST /contracts/{contract_id}/settle"
     ],
     "message_endpoint": "/auth/message",
+    "api_key_register_scope_template": "api_key:{name}|owner:{owner}|agent:{agent_id_or_none}|framework:{framework_or_none}",
+    "api_key_rotate_scope_template": "api_key:{key_id}|owner:{owner}|rotate:true",
     "register_scope_template": "agent:{agent_id}|operator:{operator}|services:{comma_separated_services}|collateral:{asset}:{amount}|manifest:{manifest_url_or_none}",
     "heartbeat_scope_template": "agent:{agent_id}|status:{active_paused_or_offline}|available:{true_or_false}|load:{current_load}|capacity:{available_capacity}|endpoint:{endpoint_or_none}",
     "prepare_scope_template": "provider:{provider_agent_id}|requester:{requester_agent_id_or_none}|service:{service}|capacity:{requested_capacity}",
@@ -214,7 +233,7 @@
   },
   "trust_model": {
     "principle": "AXP answers the machine-native question: can I trust this counterparty?",
-    "distribution_model": "Trust Score queries are free; basic discovery is free; staking/collateral makes agents visible and economically accountable; protocol fees apply to contract value, not collateral deposits.",
+    "distribution_model": "Trust Score queries are free but require X-AXP-API-Key identity; basic discovery is free but metered; staking/collateral makes agents visible and economically accountable; protocol fees apply to contract value, not collateral deposits.",
     "oracle_model": "AXP is designed to become the Trust Oracle and DNS of confidence for autonomous agents.",
     "capacity_formula": "Capacity = BNB/USDT/USDC Collateral USD * Reputation Multiplier * AXP Trust Multiplier * Insurance Multiplier * Risk Adjustment",
     "adoption_principle": "Agents can enter with BNB, USDT, or USDC collateral; AXP amplifies trust and capacity instead of blocking entry."

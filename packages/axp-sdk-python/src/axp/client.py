@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError
@@ -19,9 +20,12 @@ class AxpError(RuntimeError):
 class AxpClient:
     registry_url: str = DEFAULT_REGISTRY_URL
     timeout: float = 30.0
+    api_key: str | None = None
 
     def __post_init__(self) -> None:
         self.registry_url = self.registry_url.rstrip("/")
+        if self.api_key is None:
+            self.api_key = os.environ.get("AXP_API_KEY")
 
     def get_manifest(self) -> dict[str, Any]:
         return self._get_json("/.well-known/axp.json")
@@ -95,6 +99,37 @@ class AxpClient:
                 "auth": auth,
             },
         )
+
+    def register_api_key(
+        self,
+        *,
+        name: str,
+        owner: str,
+        auth: dict[str, Any],
+        agent_id: str | None = None,
+        framework: str | None = None,
+        scopes: list[str] | None = None,
+    ) -> dict[str, Any]:
+        return self._post_json(
+            "/api-keys/register",
+            {
+                "name": name,
+                "owner": owner,
+                "agent_id": agent_id,
+                "framework": framework,
+                "scopes": scopes,
+                "auth": auth,
+            },
+            skip_api_key=True,
+        )
+
+    def get_api_key(self, key_id: str) -> dict[str, Any]:
+        _require_value(key_id, "key_id")
+        return self._get_json(f"/api-keys/{key_id}", skip_api_key=True)
+
+    def rotate_api_key(self, key_id: str, *, auth: dict[str, Any]) -> dict[str, Any]:
+        _require_value(key_id, "key_id")
+        return self._post_json(f"/api-keys/{key_id}/rotate", {"auth": auth}, skip_api_key=True)
 
     def get_agent_profile(self, agent_id: str) -> dict[str, Any]:
         _require_value(agent_id, "agent_id")
@@ -258,19 +293,25 @@ class AxpClient:
             },
         )
 
-    def _get_json(self, path: str) -> dict[str, Any]:
-        request = Request(f"{self.registry_url}{path}", method="GET")
+    def _get_json(self, path: str, *, skip_api_key: bool = False) -> dict[str, Any]:
+        request = Request(f"{self.registry_url}{path}", method="GET", headers=self._headers(skip_api_key=skip_api_key))
         return self._read_json(request, path)
 
-    def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _post_json(self, path: str, payload: dict[str, Any], *, skip_api_key: bool = False) -> dict[str, Any]:
         body = json.dumps(_drop_none(payload)).encode("utf-8")
         request = Request(
             f"{self.registry_url}{path}",
             data=body,
             method="POST",
-            headers={"content-type": "application/json"},
+            headers=self._headers(skip_api_key=skip_api_key),
         )
         return self._read_json(request, path)
+
+    def _headers(self, *, skip_api_key: bool = False) -> dict[str, str]:
+        headers = {"content-type": "application/json"}
+        if self.api_key and not skip_api_key:
+            headers["x-axp-api-key"] = self.api_key
+        return headers
 
     def _read_json(self, request: Request, path: str) -> dict[str, Any]:
         try:

@@ -58,6 +58,8 @@ export function getCapabilities() {
       'agent_identity',
       'agent_registration',
       'agent_heartbeat',
+      'api_key_identity',
+      'api_key_usage_metering',
       'trust_oracle',
       'trust_api',
       'reputation_staking',
@@ -83,6 +85,9 @@ export function getCapabilities() {
       'agent_operator_signature_auth',
     ],
     query_parameters: {
+      'POST /api-keys/register': ['name', 'owner', 'agent_id', 'framework', 'auth'],
+      '/api-keys/{key_id}': ['key_id'],
+      'POST /api-keys/{key_id}/rotate': ['auth'],
       '/agents': ['status', 'service', 'min_capacity', 'online'],
       'POST /agents/register': ['agent_id', 'name', 'operator', 'services', 'collateral', 'auth'],
       '/agents/{agent_id}': ['agent_id'],

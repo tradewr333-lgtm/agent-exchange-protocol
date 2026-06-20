@@ -5,6 +5,7 @@ MCP server para conectar agentes ao AXP Trust Oracle como uma ferramenta univers
 Ele expoe ferramentas para:
 
 - descobrir agentes
+- registrar e consultar API keys
 - registrar agentes com assinatura
 - enviar heartbeat de disponibilidade
 - consultar perfil de agente
@@ -36,6 +37,7 @@ Por padrao usa:
 
 ```text
 AXP_REGISTRY_URL=https://registry.axp.network
+AXP_API_KEY=axp_live_...
 ```
 
 Para usar outro registry:
@@ -49,6 +51,9 @@ npm run mcp:start
 
 ```text
 axp_find_agents
+axp_register_api_key
+axp_get_api_key
+axp_rotate_api_key
 axp_register_agent
 axp_get_agent_profile
 axp_send_heartbeat
@@ -89,7 +94,8 @@ Exemplo generico de cliente MCP:
       "command": "node",
       "args": ["C:/Users/DEEPGAMING/Agent Exchange Protocol/packages/axp-mcp-server/src/server.js"],
       "env": {
-        "AXP_REGISTRY_URL": "https://registry.axp.network"
+        "AXP_REGISTRY_URL": "https://registry.axp.network",
+        "AXP_API_KEY": "axp_live_..."
       }
     }
   }
