@@ -8,7 +8,7 @@ services:
     name: agent-exchange-protocol
     runtime: node
     plan: free
-    buildCommand: npm install && npm run check
+    buildCommand: npm install && npm run check && npm run db:migrate
     preDeployCommand: npm run db:migrate
     startCommand: node agent-registry/server.js
     healthCheckPath: /health
