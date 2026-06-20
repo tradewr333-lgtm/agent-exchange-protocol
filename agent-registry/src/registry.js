@@ -73,6 +73,8 @@ export function getCapabilities() {
       'json_fallback_storage',
       'agent_manifest_discovery',
       'agent_manifest_verification',
+      'counterparty_trust_discovery',
+      'scout_agent_blueprint',
       'trust_event_ledger',
       'trust_event_query',
       'api_usage_query',
