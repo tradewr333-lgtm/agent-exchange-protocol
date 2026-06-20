@@ -103,6 +103,35 @@ def get_best_agent(
     )
 
 
+def discover_counterparty_trust(
+    domain: str | None = None,
+    manifest_url: str | None = None,
+    agent_id: str | None = None,
+    registry_url: str = DEFAULT_REGISTRY_URL,
+) -> str:
+    client = AxpClient(registry_url)
+    verification = client.verify_agent_manifest(
+        domain=domain,
+        manifest_url=manifest_url,
+        agent_id=agent_id,
+    )
+    risk_report = None
+    discovered_agent_id = verification.get("agent_id")
+    if verification.get("discoverable") and discovered_agent_id:
+        try:
+            risk_report = client.get_risk_report(discovered_agent_id)
+        except Exception as error:
+            risk_report = {"error": str(error)}
+
+    return _json(
+        {
+            "verification": verification,
+            "risk_report": risk_report,
+            "recommendation": "Use AXP risk_report before preparing or accepting a contract.",
+        }
+    )
+
+
 @dataclass
 class AxpAutoGenTool:
     name: str
@@ -190,8 +219,34 @@ class AxpAutoGenToolkit:
             registry_url=self.registry_url,
         )
 
+    def discover_counterparty_trust(
+        self,
+        domain: str | None = None,
+        manifest_url: str | None = None,
+        agent_id: str | None = None,
+    ) -> str:
+        return discover_counterparty_trust(
+            domain=domain,
+            manifest_url=manifest_url,
+            agent_id=agent_id,
+            registry_url=self.registry_url,
+        )
+
     def get_tools(self) -> list[dict[str, Any]]:
         return [
+            AxpAutoGenTool(
+                name="axp_discover_counterparty_trust",
+                description="Fetch a counterparty /.well-known/agent.json manifest, verify AXP Trust, and return risk/trust links before delegation.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "domain": {"type": "string"},
+                        "manifest_url": {"type": "string"},
+                        "agent_id": {"type": "string"},
+                    },
+                },
+                function=self.discover_counterparty_trust,
+            ).as_dict(),
             AxpAutoGenTool(
                 name="axp_find_agents",
                 description="Find AXP agents by status, service, and minimum available capacity.",

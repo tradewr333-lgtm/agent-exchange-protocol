@@ -1,5 +1,6 @@
 from .tools import (
     AxpAutoGenToolkit,
+    discover_counterparty_trust,
     find_agents,
     get_autogen_tools,
     get_capacity_score,
@@ -10,6 +11,7 @@ from .tools import (
 
 __all__ = [
     "AxpAutoGenToolkit",
+    "discover_counterparty_trust",
     "find_agents",
     "get_autogen_tools",
     "get_capacity_score",

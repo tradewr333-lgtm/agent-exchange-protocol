@@ -8,6 +8,18 @@ const axp = new AxpClient({ registryUrl: registryBaseUrl });
 
 const tools = [
   {
+    name: 'axp_discover_counterparty_trust',
+    description: 'Fetch a counterparty /.well-known/agent.json manifest, verify AXP Trust, and return risk/trust links before delegation or contracting.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        domain: { type: 'string', description: 'Counterparty domain. The tool reads https://domain/.well-known/agent.json.' },
+        manifest_url: { type: 'string', description: 'Direct URL to the counterparty agent manifest.' },
+        agent_id: { type: 'string', description: 'Optional expected AXP agent id.' },
+      },
+    },
+  },
+  {
     name: 'axp_get_economics',
     description: 'Get AXP economic policy: accepted collateral, fee ceiling, AXP role, and capacity formula.',
     inputSchema: {
@@ -402,6 +414,26 @@ async function handleMessage(message) {
 
 async function callTool(name, args) {
   switch (name) {
+    case 'axp_discover_counterparty_trust': {
+      const verification = await axp.verifyAgentManifest({
+        domain: args.domain,
+        manifest_url: args.manifest_url,
+        agent_id: args.agent_id,
+      });
+      let riskReport = null;
+      if (verification.discoverable && verification.agent_id) {
+        try {
+          riskReport = await axp.getRiskReport(verification.agent_id);
+        } catch (error) {
+          riskReport = { error: error.message };
+        }
+      }
+      return {
+        verification,
+        risk_report: riskReport,
+        recommendation: 'Use AXP risk_report before preparing or accepting a contract.',
+      };
+    }
     case 'axp_get_economics':
       return axp.getEconomics();
     case 'axp_get_trust_ranking':

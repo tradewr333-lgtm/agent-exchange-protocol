@@ -361,6 +361,26 @@ Fluxo de descoberta por manifesto de agente:
 4. O framework chama `POST /agents/verify-manifest` ou usa o SDK oficial.
 5. O framework consulta AXP Trust Score e Risk Report antes de contratar.
 
+Os adapters oficiais expõem essa rotina como ferramenta:
+
+```text
+axp_discover_counterparty_trust
+```
+
+Disponível em:
+
+- MCP Server
+- LangChain
+- CrewAI
+- AutoGen
+
+Uso esperado:
+
+1. Um agente encontra um domínio ou manifesto de contraparte.
+2. O adapter tenta ler `/.well-known/agent.json`.
+3. Se houver `trust.provider = "AXP"`, o adapter consulta o Trust Oracle.
+4. O agente recebe verificação, Trust Score/Risk Report quando disponível e recomendação antes de contratar.
+
 Exemplo de manifesto:
 
 ```json
@@ -991,6 +1011,7 @@ examples/
   simple-agent-contract/
   full-agent-onboarding/
   agent-manifest/
+  axp-scout-agent/
 ```
 
 ## Documentos
@@ -1001,6 +1022,7 @@ examples/
 - [`specs/economic-model.md`](specs/economic-model.md): modelo de capacidade, staking, slashing e reputacao.
 - [`specs/proof-of-trust.md`](specs/proof-of-trust.md): especificacao inicial do AXP Trust Score.
 - [`specs/agent-manifest.md`](specs/agent-manifest.md): padrao `/.well-known/agent.json` para agentes descobrirem AXP Trust.
+- [`specs/axp-scout-agent.md`](specs/axp-scout-agent.md): blueprint de agente autonomo para descobrir manifests publicos e convidar operadores de forma opt-in.
 - [`ROADMAP.md`](ROADMAP.md): fases de desenvolvimento.
 - [`agent-registry/README.md`](agent-registry/README.md): descoberta de agentes e endpoints locais.
 - [`blockchain/README.md`](blockchain/README.md): contratos e deploy BSC Testnet.

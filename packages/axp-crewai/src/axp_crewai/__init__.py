@@ -1,5 +1,6 @@
 from .tools import (
     AXPFindAgentsTool,
+    AXPDiscoverCounterpartyTrustTool,
     AXPGetCapacityTool,
     AXPGetTrustRankingTool,
     AXPGetTrustScoreTool,
@@ -9,6 +10,7 @@ from .tools import (
 
 __all__ = [
     "AXPFindAgentsTool",
+    "AXPDiscoverCounterpartyTrustTool",
     "AXPGetCapacityTool",
     "AXPGetTrustRankingTool",
     "AXPGetTrustScoreTool",

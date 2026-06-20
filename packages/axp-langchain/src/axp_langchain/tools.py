@@ -60,6 +60,12 @@ if _HAS_LANGCHAIN:
         service: str | None = Field(default=None, description="Optional service capability filter.")
         requested_capacity: int | float | None = Field(default=None, description="Minimum free capacity required.")
         limit: int | None = Field(default=None, description="Maximum number of recommendations.")
+
+
+    class DiscoverCounterpartyInput(BaseModel):
+        domain: str | None = Field(default=None, description="Counterparty domain. The tool will read /.well-known/agent.json.")
+        manifest_url: str | None = Field(default=None, description="Direct URL to the counterparty agent manifest.")
+        agent_id: str | None = Field(default=None, description="Optional expected AXP agent id.")
 else:
     FindAgentsInput = None
     TrustRankingInput = None
@@ -67,6 +73,7 @@ else:
     GetCapacityInput = None
     GetTrustScoreInput = None
     BestAgentInput = None
+    DiscoverCounterpartyInput = None
 
 
 class _AXPBaseTool(BaseTool):
@@ -214,9 +221,44 @@ class AXPGetBestAgentTool(_AXPBaseTool):
         )
 
 
+class AXPDiscoverCounterpartyTrustTool(_AXPBaseTool):
+    name: str = "axp_discover_counterparty_trust"
+    description: str = "Fetch a counterparty /.well-known/agent.json manifest, verify AXP Trust, and return risk/trust links before delegation."
+    args_schema: ClassVar[Any] = DiscoverCounterpartyInput
+
+    def _run(
+        self,
+        domain: str | None = None,
+        manifest_url: str | None = None,
+        agent_id: str | None = None,
+        **_: Any,
+    ) -> str:
+        verification = self.client.verify_agent_manifest(
+            domain=domain,
+            manifest_url=manifest_url,
+            agent_id=agent_id,
+        )
+        risk_report = None
+        discovered_agent_id = verification.get("agent_id")
+        if verification.get("discoverable") and discovered_agent_id:
+            try:
+                risk_report = self.client.get_risk_report(discovered_agent_id)
+            except Exception as error:
+                risk_report = {"error": str(error)}
+
+        return self._json(
+            {
+                "verification": verification,
+                "risk_report": risk_report,
+                "recommendation": "Use AXP risk_report before preparing or accepting a contract.",
+            }
+        )
+
+
 def get_axp_tools(registry_url: str = "https://registry.axp.network") -> list[_AXPBaseTool]:
     client = AxpClient(registry_url)
     return [
+        AXPDiscoverCounterpartyTrustTool(client=client),
         AXPFindAgentsTool(client=client),
         AXPGetTrustRankingTool(client=client),
         AXPQuoteContractTool(client=client),
