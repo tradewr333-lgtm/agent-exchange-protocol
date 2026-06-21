@@ -59,6 +59,12 @@ console.log(JSON.stringify({
   event_count: prepared.event_count,
 }, null, 2));
 
+// Graceful no-op for scheduled/periodic runs: nothing new to anchor.
+if (!prepared.event_count || !prepared.merkle_root) {
+  console.log('No new trust events since the last anchor — nothing to record.');
+  process.exit(0);
+}
+
 const tx = await contract.recordAnchor(
   prepared.merkle_root,
   prepared.from_event_id,

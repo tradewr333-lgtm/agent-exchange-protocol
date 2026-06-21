@@ -519,7 +519,7 @@ const server = http.createServer(async (request, response) => {
 
   // Public, composed snapshot for the live dashboard (no API key; read-only).
   if (url.pathname === '/network/live') {
-    const [agentsResult, eventsResult, rankingResult, opportunities, metrics, lineage, intents, anchor] = await Promise.all([
+    const [agentsResult, eventsResult, rankingResult, opportunities, metrics, lineage, intents, anchor, anchorsResult] = await Promise.all([
       listAgents({}),
       listTrustEvents({ limit: 60 }),
       getTrustRanking({ limit: 10 }),
@@ -528,6 +528,7 @@ const server = http.createServer(async (request, response) => {
       getLineage({}),
       getIntentFeed({ limit: 50 }),
       getLatestAnchor().catch(() => null),
+      listTrustAnchors({ limit: 10 }).catch(() => ({ anchors: [] })),
     ]);
     const gdpUsd = (eventsResult.events || [])
       .filter((event) => event.event_type === 'contract_settled')
@@ -556,6 +557,7 @@ const server = http.createServer(async (request, response) => {
       intents: { count: intents.count },
       gdp_usd: Number(gdpUsd.toFixed(2)),
       anchor: anchor ?? null,
+      anchors: anchorsResult?.anchors ?? [],
     });
   }
 

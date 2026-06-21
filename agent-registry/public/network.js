@@ -257,27 +257,45 @@
     ).join('');
   }
 
-  function renderAnchor(anchor) {
+  const scanFor = (chainId) => (Number(chainId) === 97 ? 'https://testnet.bscscan.com' : 'https://bscscan.com');
+
+  function renderAnchor(anchor, anchors) {
     const tag = $('anchor-tag');
-    if (!anchor || !anchor.merkle_root) {
+    const list = Array.isArray(anchors) ? anchors.filter((a) => a && a.merkle_root) : [];
+    const latest = (anchor && anchor.merkle_root) ? anchor : list[0];
+    if (!latest || !latest.merkle_root) {
       tag.textContent = 'not yet anchored';
       $('anchor').innerHTML = '<div class="empty">No on-chain anchor recorded yet. Run the anchor flow to commit a Merkle root of the trust-event ledger to BSC.</div>';
       return;
     }
-    const isTestnet = Number(anchor.chain_id) === 97;
-    const scan = isTestnet ? 'https://testnet.bscscan.com' : 'https://bscscan.com';
-    tag.textContent = anchor.status || 'recorded';
+    const scan = scanFor(latest.chain_id);
+    tag.textContent = `${list.length || 1} recorded`;
     const rows = [
-      ['Merkle root', `<span class="hash">${esc(anchor.merkle_root)}</span>`],
-      ['Events covered', `${esc(anchor.event_count)} (ids ${esc(anchor.from_event_id)}–${esc(anchor.to_event_id)})`],
-      ['Network', isTestnet ? 'BSC testnet (97)' : 'BSC mainnet (56)'],
+      ['Merkle root', `<span class="hash">${esc(latest.merkle_root)}</span>`],
+      ['Events covered', `${esc(latest.event_count)} (ids ${esc(latest.from_event_id)}–${esc(latest.to_event_id)})`],
+      ['Network', Number(latest.chain_id) === 97 ? 'BSC testnet (97)' : 'BSC mainnet (56)'],
     ];
-    if (anchor.tx_hash) rows.push(['Transaction', `<a href="${scan}/tx/${esc(anchor.tx_hash)}" target="_blank" rel="noopener">${shortHash(anchor.tx_hash)} ↗</a>`]);
-    if (anchor.contract_address) rows.push(['Anchor contract', `<a href="${scan}/address/${esc(anchor.contract_address)}" target="_blank" rel="noopener">${shortHash(anchor.contract_address)} ↗</a>`]);
-    if (anchor.block_number) rows.push(['Block', esc(anchor.block_number)]);
-    $('anchor').innerHTML = '<div class="rows">' + rows.map(([k, v]) =>
+    if (latest.tx_hash) rows.push(['Transaction', `<a href="${scan}/tx/${esc(latest.tx_hash)}" target="_blank" rel="noopener">${shortHash(latest.tx_hash)} ↗</a>`]);
+    if (latest.contract_address) rows.push(['Anchor contract', `<a href="${scan}/address/${esc(latest.contract_address)}" target="_blank" rel="noopener">${shortHash(latest.contract_address)} ↗</a>`]);
+    if (latest.block_number) rows.push(['Block', esc(latest.block_number)]);
+
+    let html = '<div class="rows">' + rows.map(([k, v]) =>
       `<div class="row"><div class="lhs"><span class="title">${k}</span></div><div class="rhs">${v}</div></div>`
     ).join('') + '</div>';
+
+    if (list.length > 1) {
+      html += '<div style="margin-top:14px;color:var(--faint);font-size:11px;letter-spacing:1.4px;text-transform:uppercase">History</div><div class="rows">';
+      html += list.slice(0, 8).map((a) => {
+        const s = scanFor(a.chain_id);
+        const txCell = a.tx_hash
+          ? `<a href="${s}/tx/${esc(a.tx_hash)}" target="_blank" rel="noopener" class="hash">${shortHash(a.tx_hash)} ↗</a>`
+          : `<span class="chip">${esc(a.status || 'prepared')}</span>`;
+        return `<div class="row"><div class="lhs"><span class="meta">${esc(a.merkle_root)}</span>` +
+          `<span class="meta">${esc(a.event_count)} events · ids ${esc(a.from_event_id)}–${esc(a.to_event_id)}</span></div>` +
+          `<div class="rhs">${txCell}</div></div>`;
+      }).join('') + '</div>';
+    }
+    $('anchor').innerHTML = html;
   }
 
   function setStatus(d) {
@@ -308,12 +326,13 @@
       intents: live.intents,
       gdp_usd: live.gdp_usd,
       anchor: live.anchor,
+      anchors: live.anchors,
     };
     setStatus(d);
     renderKpis(d);
     renderGauge(d.metrics);
     renderTreasury(d.metrics);
-    renderAnchor(d.anchor);
+    renderAnchor(d.anchor, d.anchors);
     renderOpportunities(d.opportunities);
     renderLedger(d.events);
     renderRanking(d.ranking);
