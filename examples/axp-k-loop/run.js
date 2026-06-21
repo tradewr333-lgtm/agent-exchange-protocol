@@ -16,15 +16,30 @@ import { loadBlockchainEnv } from '../proof-of-trust-anchor/load-env.js';
 import { buildAuthMessage } from '../../agent-registry/src/auth.js';
 import { buildRegistrationScope } from '../../agent-registry/src/agents.js';
 
-loadBlockchainEnv();
+const loadedEnvFiles = loadBlockchainEnv();
 
 const registryUrl = (process.env.AXP_REGISTRY_URL ?? 'https://axp.network').replace(/\/$/, '');
-const key = process.env.AXP_OPERATOR_KEY || process.env.BSC_MAINNET_PRIVATE_KEY;
-if (!key) {
-  throw new Error('Missing operator key. Set BSC_MAINNET_PRIVATE_KEY (blockchain/.env) or AXP_OPERATOR_KEY.');
+const KEY_NAMES = [
+  'AXP_OPERATOR_KEY', 'BSC_MAINNET_PRIVATE_KEY', 'BSC_TESTNET_PRIVATE_KEY',
+  'PRIVATE_KEY', 'DEPLOYER_PRIVATE_KEY', 'BSC_PRIVATE_KEY', 'OPERATOR_PRIVATE_KEY',
+];
+let rawKey = KEY_NAMES.map((name) => process.env[name]).find((value) => value && value.trim());
+if (rawKey) {
+  rawKey = rawKey.trim();
+  if (!rawKey.startsWith('0x')) rawKey = '0x' + rawKey;
+}
+if (!rawKey) {
+  const present = KEY_NAMES.filter((name) => process.env[name]);
+  console.error('Missing operator key. The wallet key is read locally and never sent anywhere.');
+  console.error('Looked in env files:', loadedEnvFiles.length ? loadedEnvFiles.join(', ') : '(none found)');
+  console.error('Recognized key variable names:', KEY_NAMES.join(', '));
+  console.error('Key vars currently set:', present.length ? present.join(', ') : '(none)');
+  console.error('Fix: either rename your key var to one of the above in blockchain/.env, or run with it inline, e.g.:');
+  console.error('  set "AXP_OPERATOR_KEY=0xYOURKEY" && node examples/axp-k-loop/run.js');
+  process.exit(1);
 }
 
-const wallet = new ethers.Wallet(key);
+const wallet = new ethers.Wallet(rawKey);
 const operator = wallet.address;
 const tag = Date.now().toString(36);
 
