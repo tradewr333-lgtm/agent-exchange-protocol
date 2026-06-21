@@ -692,6 +692,9 @@ const server = http.createServer(async (request, response) => {
       successUrl: `${base}/store?checkout=success`,
       cancelUrl: `${base}/store?checkout=cancel`,
     });
+    if (!result.ok) {
+      console.error('billing_checkout_failed', plan.sku, result.error, result.detail || '');
+    }
     return sendJson(response, result.status, result);
   }
 

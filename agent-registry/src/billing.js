@@ -85,7 +85,10 @@ export function stripePlanBySku(sku) {
 export function stripePriceId(sku, env = process.env) {
   const plan = stripePlanBySku(sku);
   if (!plan) return null;
-  return env[plan.env_price] || null;
+  const v = env[plan.env_price];
+  // Trim stray whitespace/newlines — a common copy-paste error in dashboards
+  // that makes Stripe reject the id with "No such price".
+  return v ? String(v).trim() : null;
 }
 
 export function slotsForSku(sku) {
