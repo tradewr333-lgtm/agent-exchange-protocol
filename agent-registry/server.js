@@ -771,28 +771,34 @@ const server = http.createServer(async (request, response) => {
       return sendJson(response, 502, { error: 'execution_failed', detail: run.reason || run.detail, note: 'payment received — contact support for a refund' });
     }
 
-    const split = computeSplit(verified.amount, hireFeeRate());
+    // Split in the PAID ASSET (for the on-chain payout) and in USD (for accounting).
+    const assetSplit = computeSplit(verified.amount, hireFeeRate());
+    const usdPrice = hireAmounts().USDT; // USD reference price for a hire
+    const usdSplit = computeSplit(usdPrice, hireFeeRate());
+
     let payout = { ok: false, reason: 'payout_not_configured' };
-    if (payoutEnabled()) payout = await sendPayout({ to: agent.owner, asset: verified.asset, amount: split.owner });
+    if (payoutEnabled()) payout = await sendPayout({ to: agent.owner, asset: verified.asset, amount: assetSplit.owner });
 
     await appendHire({
       agent_id: agentId, customer_address: body.customer_address || null, asset: verified.asset,
-      amount: verified.amount, fee_usd: split.fee, owner_usd: split.owner, tx_hash: payment.tx_hash,
+      amount: verified.amount, fee_usd: usdSplit.fee, owner_usd: usdSplit.owner, tx_hash: payment.tx_hash,
       payout_tx: payout.ok ? payout.tx_hash : null, status: payout.ok ? 'paid' : 'payout_pending',
       task, deliverable: run.output,
     });
     const prevEarnings = Number(agent.real_earnings_usd || 0);
     await updateAgentFields(agentId, {
-      real_earnings_usd: Number((prevEarnings + split.owner).toFixed(2)),
+      real_earnings_usd: Number((prevEarnings + usdSplit.owner).toFixed(2)),
       last_work: { at: new Date().toISOString(), task: task.slice(0, 200), model: run.model, preview: run.output.slice(0, 500), paid: true },
     });
     try {
-      await appendTrustEvent({ event_type: 'hire_settled', agent_id: agentId, value_usd: verified.amount, data: { asset: verified.asset, owner_usd: split.owner, fee_usd: split.fee, payout_tx: payout.ok ? payout.tx_hash : null } });
+      await appendTrustEvent({ event_type: 'hire_settled', agent_id: agentId, value_usd: usdPrice, data: { asset: verified.asset, asset_amount: verified.amount, owner_usd: usdSplit.owner, fee_usd: usdSplit.fee, payout_tx: payout.ok ? payout.tx_hash : null } });
     } catch { /* ledger best-effort */ }
 
     return sendJson(response, 200, {
       ok: true, agent_id: agentId, deliverable: run.output,
-      amount: verified.amount, asset: verified.asset, owner_earned: split.owner, platform_fee: split.fee,
+      amount: verified.amount, asset: verified.asset,
+      owner_earned: assetSplit.owner, platform_fee: assetSplit.fee,
+      owner_earned_usd: usdSplit.owner, platform_fee_usd: usdSplit.fee,
       payout: payout.ok ? { paid: true, tx_hash: payout.tx_hash } : { paid: false, reason: payout.reason, note: 'owner balance accrued; on-chain payout pending' },
     });
   }

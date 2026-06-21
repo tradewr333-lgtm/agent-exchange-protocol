@@ -273,7 +273,7 @@
       const res = await postJSON(`/agents/${agentId}/hire`, { task, payment: { tx_hash: tx, asset }, customer_address: from });
       if (res.ok) {
         const pay = res.payout && res.payout.paid ? `Owner paid on-chain ✓ (${res.payout.tx_hash.slice(0, 12)}…)` : 'Owner balance accrued (payout pending).';
-        st.innerHTML = `<span class="ok">Done! Owner earned ${res.owner_earned} ${res.asset} · AXP fee ${res.platform_fee} ${res.asset}. ${pay}</span>`;
+        st.innerHTML = `<span class="ok">Done! Owner earned ${res.owner_earned} ${res.asset} (~$${res.owner_earned_usd}) · AXP fee ${res.platform_fee} ${res.asset}. ${pay}</span>`;
         $('hire-result').innerHTML = `<div class="muted" style="font-size:11px;margin-top:12px">DELIVERABLE</div><code class="k" style="white-space:pre-wrap">${esc(res.deliverable)}</code>`;
       } else {
         st.innerHTML = `<span class="err">${esc(res.error || 'failed')}${res.detail ? ' — ' + esc(res.detail) : ''}</span>`;
