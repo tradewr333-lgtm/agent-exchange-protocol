@@ -267,6 +267,27 @@
     document.querySelectorAll('[data-sku]').forEach((b) => { b.onclick = () => subscribe(b.getAttribute('data-sku'), a.agent_id); });
   }
 
+  async function showMyAgents() {
+    try {
+      const addr = (hasWallet() && window.ethereum.selectedAddress)
+        ? window.ethereum.selectedAddress
+        : await connectWallet();
+      $('mine-section').style.display = '';
+      $('mine-spacer').style.display = '';
+      $('mine-tag').textContent = `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+      const data = await getJSON('/store/agents');
+      const mine = (data && data.agents ? data.agents : []).filter((a) => (a.owner || '').toLowerCase() === addr.toLowerCase());
+      $('mine-agents').innerHTML = mine.length
+        ? mine.map(agentCardHtml).join('')
+        : '<div class="empty">No agents owned by this wallet yet. Launch one above — then subscribe to Hosting to put it to work.</div>';
+      $('mine-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      $('mine-section').style.display = '';
+      $('mine-tag').textContent = 'connect wallet';
+      $('mine-agents').innerHTML = `<div class="empty">${esc(e.message || 'Connect your wallet to see your agents.')}</div>`;
+    }
+  }
+
   async function initStore() {
     const [quote, plans, agents] = await Promise.all([
       getJSON('/agents/launch/quote'),
@@ -280,6 +301,10 @@
     }
     renderAgents(agents ? agents.agents : []);
     if (hasWallet() && window.ethereum.selectedAddress) setWallet(window.ethereum.selectedAddress);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') === 'success' || window.location.hash === '#mine' || (hasWallet() && window.ethereum.selectedAddress)) {
+      showMyAgents();
+    }
   }
 
   // route
@@ -289,4 +314,11 @@
 
   $('modal-close').onclick = closeModal;
   $('modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
+
+  const navMine = $('nav-mine');
+  if (navMine) navMine.onclick = (e) => {
+    e.preventDefault();
+    if ($('view-store').style.display === 'none') window.location.href = '/store#mine';
+    else showMyAgents();
+  };
 })();

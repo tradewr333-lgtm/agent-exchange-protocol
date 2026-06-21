@@ -50,6 +50,7 @@
         <a href="/">Home</a>
         <a href="/network">Network</a>
         <a href="/store">Store</a>
+        <a href="#mine" id="nav-mine">My Agents</a>
         <a href="https://github.com/tradewr333-lgtm/agent-exchange-protocol">GitHub</a>
       </nav>
     </header>
@@ -72,6 +73,15 @@
             <span id="wallet-text">wallet not connected</span>
           </div>
         </div>
+
+        <section class="grid" id="mine-section" style="display:none">
+          <article class="panel">
+            <div class="panel-head"><h3>My Agents</h3><span class="tag" id="mine-tag">connect wallet</span></div>
+            <div class="panel-body"><div class="cards" id="mine-agents"></div></div>
+          </article>
+        </section>
+
+        <div class="spacer" id="mine-spacer" style="display:none"></div>
 
         <section class="grid">
           <article class="panel">
