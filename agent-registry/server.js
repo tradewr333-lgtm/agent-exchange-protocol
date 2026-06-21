@@ -24,6 +24,7 @@ import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/regis
 import { listApiUsage, listTrustEvents } from './src/store.js';
 import { startSwarmScheduler } from './src/swarm-scheduler.js';
 import { computeWeightedScores, reputationWeight } from './src/sybil.js';
+import { buildObservatory } from './src/observatory.js';
 import { claimIntent, fulfillIntent, getIntent, getIntentFeed, listIntents, publishIntent } from './src/intents.js';
 import { getOpportunitiesForAgent, getOpportunityGraph } from './src/opportunities.js';
 import { getInbox, postInboxMessage } from './src/inbox.js';
@@ -518,6 +519,20 @@ const server = http.createServer(async (request, response) => {
   // -------------------------------------------------------------------------
   // AXP Agent Economy Layer: Intent Feed + Opportunity Router + Inbox + Growth
   // -------------------------------------------------------------------------
+
+  // Economic Observatory — "where is the money" intelligence over the AXP ledger.
+  if (url.pathname === '/observatory') {
+    const [agentsR, intentsR, contractsR] = await Promise.all([
+      listAgents({}),
+      listIntents({ limit: 500 }),
+      listPreparedContracts(),
+    ]);
+    return sendJson(response, 200, buildObservatory({
+      agents: agentsR.agents,
+      intents: intentsR.intents,
+      contracts: contractsR.contracts,
+    }));
+  }
 
   // A2A Agent Card — lets Agent2Agent-aware clients discover AXP as a service.
   if (url.pathname === '/.well-known/agent-card.json' || url.pathname === '/agent-card.json') {
