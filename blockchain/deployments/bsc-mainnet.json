@@ -8,7 +8,8 @@
     "AXPFounderVesting": "0x7C6AB042076468e9e4B45B9caaBB3DD3da5bcD6e",
     "AXPAgentRegistry": "0x5e91402c50EC9D7655617ec787dc8087f7AB4678",
     "AXPStaking": "0xb3faFa1d03b852DFe9BfDe413efEF856788fd787",
-    "AXPParticipationVault": "0xF70605341b4f73a5bFa89D363652a973007CC338"
+    "AXPParticipationVault": "0xF70605341b4f73a5bFa89D363652a973007CC338",
+    "AXPTrustAnchor": "0x41c427c3F895EfE382Ab5a8B5C6E6Bbd70873278"
   },
   "token": {
     "name": "Agent Exchange Protocol",
