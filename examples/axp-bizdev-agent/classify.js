@@ -19,6 +19,7 @@ export async function classifyTask({ title, body } = {}, env = process.env) {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({ model, max_tokens: 120, system, messages: [{ role: 'user', content: user }] }),
+      signal: AbortSignal.timeout(Number(env.AXP_BIZDEV_TIMEOUT_MS) || 15000),
     });
     if (!res.ok) return null;
     const data = await res.json();

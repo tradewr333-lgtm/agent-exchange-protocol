@@ -81,15 +81,16 @@ async function gather() {
 const [workItems, agents] = await Promise.all([gather(), fetchAgents()]);
 
 // Classify each task with Claude (accurate) when ANTHROPIC_API_KEY is set; else keyword.
-const rawLeads = [];
-for (const item of workItems) {
+// Run in parallel so 15 issues take ~2s, not ~30s — with a timeout so it never hangs.
+if (workItems.length) console.log(`Classifying ${workItems.length} task(s)…`);
+const rawLeads = await Promise.all(workItems.map(async (item) => {
   let service;
   let summary = '';
   const classified = await classifyTask({ title: item.title, body: item.body });
   if (classified) { service = classified.service; summary = classified.summary; }
   else { service = inferService(item).service; }
-  rawLeads.push(buildLead({ item, service, summary, agents, registryUrl: REGISTRY, minTrust: MIN_TRUST }));
-}
+  return buildLead({ item, service, summary, agents, registryUrl: REGISTRY, minTrust: MIN_TRUST });
+}));
 const leads = prioritize(rawLeads);
 
 console.log(`\n=== AXP BizDev review queue — ${leads.length} lead(s) · HUMAN REVIEW REQUIRED ===`);
