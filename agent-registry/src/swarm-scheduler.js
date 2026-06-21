@@ -16,6 +16,7 @@ import { prepareContract, fundContract, acceptContract, settleContract } from '.
 import { getGrowthMetrics } from './growth.js';
 import { buildObservatory } from './observatory.js';
 import { publishObservatoryOpportunities } from './observatory-publisher.js';
+import { reconcileAllHosting } from './hosting.js';
 import { deriveAgentWallet } from './agent-launcher.js';
 import { githubIssuesSource } from '../../examples/axp-opportunity-miner/sources.js';
 import { workItemToIntent } from '../../examples/axp-opportunity-miner/normalize.js';
@@ -269,6 +270,7 @@ export function startSwarmScheduler() {
       await mineGithub();
       await topUpFeed();
       await publishObservatory();
+      await reconcileAllHosting(); // sync owner subscriptions → hosted slots
       await runHostedAgents();
       const metrics = await getGrowthMetrics({ autotune: true });
       if ((metrics.population?.scions ?? 0) < maxScions) {

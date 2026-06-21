@@ -24,8 +24,9 @@ import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/regis
 import {
   listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals,
   appendTrustEvent, saveSubscription, appendLaunchPayment, launchPaymentExists, updateAgentFields,
-  appendHire, loadHires, hireExists, appendInboxMessage,
+  appendHire, loadHires, hireExists, appendInboxMessage, loadAgentsRegistry,
 } from './src/store.js';
+import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { computeWeightedScores, reputationWeight } from './src/sybil.js';
 import { buildObservatory } from './src/observatory.js';
@@ -742,6 +743,10 @@ const server = http.createServer(async (request, response) => {
       } catch (error) {
         console.error('launch_payment_record_failed', error);
       }
+    }
+    // Auto-host the freshly launched agent if its owner has a free slot.
+    if (result.ok && body?.owner_address) {
+      try { await reconcileHosting(body.owner_address); } catch (error) { console.error('launch_reconcile_failed', error); }
     }
     return sendJson(response, result.status, result);
   }
@@ -3411,9 +3416,24 @@ async function handleStripeEvent(event) {
     owner_ref: meta.owner_ref || null,
     current_period_end: obj.current_period_end ? new Date(obj.current_period_end * 1000).toISOString() : null,
   };
+  // Resolve the OWNER for slot-based auto-hosting. Prefer explicit owner_ref;
+  // otherwise fall back to the owner of the referenced agent.
+  let ownerRef = meta.owner_ref || null;
+  if (!ownerRef && agentId) {
+    try {
+      const reg = await loadAgentsRegistry();
+      const ag = (reg.agents || []).find((a) => a.agent_id === agentId);
+      ownerRef = ag?.owner || null;
+    } catch { /* ignore */ }
+  }
+  sub.owner_ref = ownerRef;
   await saveSubscription(sub);
 
-  if (agentId) {
+  if (ownerRef) {
+    // Owner-scoped: auto-host this owner's agents up to the plan's slot limit.
+    await reconcileHosting(ownerRef);
+  } else if (agentId) {
+    // Legacy fallback: no owner known, activate just the referenced agent.
     const active = ['active', 'trialing'].includes(status);
     await updateAgentFields(agentId, {
       hosting: { status: active ? 'active' : 'inactive', plan: sub.plan_sku, active, subscription_id: subId },

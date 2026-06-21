@@ -13,13 +13,13 @@ const ok = (cond, msg) => { assert.ok(cond, msg); passed += 1; };
 const cat = getPlanCatalog();
 ok(cat.schema === 'axp.billing_catalog.v0', 'catalog schema');
 ok(cat.launch.usd === 49, 'launch is $49');
-ok(cat.hosting.length === 3, 'three hosting plans');
+ok(cat.hosting.length === 2, 'two hosting plans');
 ok(cat.trust_api.usd_month === 99, 'trust api $99');
 ok(cat.contract_fee_rate === 0.005, 'fee rate 0.5%');
 
 ok(planBySku('hosting_starter').usd_month === 9, 'starter $9');
 ok(planBySku('hosting_pro').usd_month === 29, 'pro $29');
-ok(planBySku('hosting_scale').usd_month === 99 && slotsForSku('hosting_scale') === 100, 'scale $99 / 100 agents');
+ok(slotsForSku('trust_api') === 100, 'trust api grants 100 hosting slots');
 ok(planBySku('nope') === null, 'unknown sku null');
 
 // --- stripe plan resolution ---

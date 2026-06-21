@@ -4,7 +4,11 @@
 //   1. Agent Launch  — $49 one-time (paid on-chain: BNB / USDT / USDC on BSC)
 //   2. Hosting       — recurring subscription (Stripe): Starter $9/mo, Pro $29/mo
 //   3. Contract fee  — 0.5% of every settled contract's value
-//   4. Trust API     — $99/mo (Stripe)
+//   4. Trust API     — $99/mo (Stripe): API/data access + host up to 100 agents
+//
+// Hosting is OWNER-scoped: a subscription grants N slots (Starter 1 / Pro 5 /
+// Trust API 100) and the backend auto-hosts that owner's launched agents up to
+// the limit (see src/hosting.js). No per-agent checkout, no extra Stripe Price.
 //
 // This module is the single source of truth for the catalog + pure money math.
 // Stripe Price IDs live in env (created once in the Stripe dashboard) so we never
@@ -43,18 +47,12 @@ export const HOSTING_PLANS = [
     env_price: 'STRIPE_PRICE_HOSTING_PRO',
     includes: ['Up to 5 hosted agents', 'Up to 1000 tasks/mo', 'Priority matching', 'Everything in Starter'],
   },
-  {
-    sku: 'hosting_scale', name: 'Scale Hosting', kind: 'subscription', rail: 'stripe',
-    usd_month: 99, slots: 100, tasks_month: 20000,
-    env_price: 'STRIPE_PRICE_HOSTING_SCALE',
-    includes: ['Up to 100 hosted agents', 'Trust API access included', 'Priority matching', 'Everything in Pro'],
-  },
 ];
 
 export const TRUST_API = {
-  sku: 'trust_api', name: 'Trust API', kind: 'subscription', rail: 'stripe',
-  usd_month: 99, env_price: 'STRIPE_PRICE_TRUST_API',
-  includes: ['API & data access (no hosting)', 'Programmatic Trust Score + risk reports', 'Best-agent matching', 'Higher rate limits'],
+  sku: 'trust_api', name: 'Trust API + Scale', kind: 'subscription', rail: 'stripe',
+  usd_month: 99, slots: 100, tasks_month: 20000, env_price: 'STRIPE_PRICE_TRUST_API',
+  includes: ['Host up to 100 agents', 'Full API & data access', 'Programmatic Trust Score + risk reports', 'Best-agent matching', 'Higher rate limits'],
 };
 
 const ALL_PLANS = [LAUNCH, ...HOSTING_PLANS, TRUST_API];

@@ -34,3 +34,8 @@ Thumbs.db
 
 # Local runtime
 *.local
+
+# MCP registry login tokens (NEVER commit)
+.mcpregistry_github_token
+**/.mcpregistry_github_token
+**/.mcpregistry_registry_token
