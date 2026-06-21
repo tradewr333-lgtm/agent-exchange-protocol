@@ -1,0 +1,16 @@
+{
+  "name": "axp-x402-test-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Test buyer that pays an AXP agent's x402 endpoint autonomously (EIP-3009 USDC).",
+  "scripts": {
+    "buy": "node buy.mjs"
+  },
+  "dependencies": {
+    "@x402/fetch": "^2.0.0",
+    "@x402/core": "^2.0.0",
+    "@x402/evm": "^2.0.0",
+    "viem": "^2.21.0"
+  }
+}

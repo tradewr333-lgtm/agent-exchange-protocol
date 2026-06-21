@@ -17,6 +17,7 @@ export const X402_VERSION = 1;
 // is Base; BSC is included because AXP already settles there. Override via env.
 export const X402_NETWORKS = {
   base: { chain_id: 8453, usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', decimals: 6, rpc: 'https://mainnet.base.org' },
+  'base-sepolia': { chain_id: 84532, usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', decimals: 6, rpc: 'https://sepolia.base.org' },
   bsc: { chain_id: 56, usdc: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', decimals: 18, rpc: 'https://bsc-dataseed.binance.org' },
 };
 

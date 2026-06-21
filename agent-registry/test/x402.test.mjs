@@ -22,6 +22,8 @@ ok(net.name === 'base' && net.chain_id === 8453 && net.decimals === 6, 'default 
 const bsc = x402Network({ AXP_X402_NETWORK: 'bsc' });
 ok(bsc.name === 'bsc' && bsc.chain_id === 56 && bsc.decimals === 18, 'bsc preset');
 ok(x402Network({ AXP_X402_NETWORK: 'nonsense' }).name === 'base', 'unknown network falls back to base');
+const sep = x402Network({ AXP_X402_NETWORK: 'base-sepolia' });
+ok(sep.name === 'base-sepolia' && sep.chain_id === 84532 && sep.decimals === 6, 'base-sepolia testnet preset');
 
 // --- PaymentRequired object (x402 standard shape) ---
 const pr = buildPaymentRequired({
