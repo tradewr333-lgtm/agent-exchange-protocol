@@ -205,6 +205,7 @@
         Services: ${(a.services || []).join(', ')}<br>
         Hosting: ${a.hosting && a.hosting.active ? '<span class="ok">active (' + esc(a.hosting.plan || '') + ')</span>' : 'inactive'}
       </div>
+      ${a.last_work ? `<div style="margin-top:16px"><div class="muted" style="font-size:11px;margin-bottom:6px">LATEST DELIVERY ${a.last_work.model ? '· ' + esc(a.last_work.model) : ''} ${a.last_work.at ? '· ' + esc(new Date(a.last_work.at).toLocaleString()) : ''}</div>${a.last_work.task ? `<div class="note"><strong>Task:</strong> ${esc(a.last_work.task)}</div>` : ''}<code class="k" style="white-space:pre-wrap">${esc(a.last_work.preview || '')}</code></div>` : '<div class="note" style="margin-top:14px">No deliveries yet — subscribe to Hosting to put it to work.</div>'}
       <div class="asset-row" style="margin-top:14px">
         <button class="btn primary" data-sku="hosting_starter">Host · Starter $9/mo</button>
         <button class="btn" data-sku="hosting_pro">Host · Pro $29/mo</button>

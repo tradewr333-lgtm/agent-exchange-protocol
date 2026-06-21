@@ -3314,6 +3314,7 @@ function toAgentCard(agent, trustScore) {
     contracts: completed,
     success_rate: total > 0 ? Number((completed / total).toFixed(3)) : Number(tm.success_rate || 0),
     capacity_usd: Number(agent.available_capacity || 0),
+    last_work: agent.last_work || null,
     public_page: `/agent/${agent.agent_id}`,
   };
 }

@@ -8,8 +8,9 @@
 // so no user private key is involved.
 import { randomBytes } from 'node:crypto';
 import { buildAuthMessage } from './auth.js';
-import { loadAgentsRegistry, saveAgentsRegistry, loadContractStore, loadExternalSignals } from './store.js';
-import { publishIntent, listIntents } from './intents.js';
+import { loadAgentsRegistry, saveAgentsRegistry, loadContractStore, loadExternalSignals, updateAgentFields } from './store.js';
+import { publishIntent, listIntents, fulfillIntent } from './intents.js';
+import { executeTask, llmEnabled } from './agent-executor.js';
 import { sponsorScion, distributeDiscoveryRewards } from './growth.js';
 import { prepareContract, fundContract, acceptContract, settleContract } from './contracts.js';
 import { getGrowthMetrics } from './growth.js';
@@ -65,8 +66,9 @@ export function startSwarmScheduler() {
   // signed by the agent's own derived wallet, then register Proof of Trust.
   async function runHostedAgents() {
     if (process.env.AXP_HOSTING_WORKER === 'false') return;
+    const all = process.env.AXP_HOSTING_WORKER_ALL === 'true'; // demo: run launched agents even without a paid sub
     const registry = await loadAgentsRegistry();
-    const hosted = registry.agents.filter((a) => a.origin === 'launch' && a.hosting?.active);
+    const hosted = registry.agents.filter((a) => a.origin === 'launch' && (a.hosting?.active || all));
     let processed = 0;
     for (const agent of hosted) {
       if (processed >= 5) break;
@@ -86,6 +88,36 @@ export function startSwarmScheduler() {
     const service = (agent.services && agent.services[0]) || 'research';
     const cap = 100 + Math.floor(Math.random() * 400);
 
+    // Find a real open intent matching this agent's service to work on (real demand).
+    let matchedIntent = null;
+    try {
+      const feed = await listIntents({ status: 'open', service, limit: 20 });
+      matchedIntent = (feed.intents || []).find((i) => i.claimed_by == null) || null;
+    } catch { /* fall back to a template briefing */ }
+    const taskText = matchedIntent
+      ? `${matchedIntent.title}\n\n${matchedIntent.description || ''}`.trim()
+      : '';
+
+    // REAL WORK: have the agent actually do the task with the LLM (if configured).
+    let deliverable = null;
+    if (llmEnabled()) {
+      const run = await executeTask({ template_id: agent.template, task: taskText, maxTokens: 700 });
+      if (run.ok && run.output) {
+        deliverable = run;
+        try {
+          await updateAgentFields(aid, {
+            last_work: {
+              at: new Date().toISOString(),
+              intent_id: matchedIntent?.intent_id ?? null,
+              task: (run.task || '').slice(0, 200),
+              model: run.model,
+              preview: run.output.slice(0, 500),
+            },
+          });
+        } catch (err) { console.error('hosted_last_work_save_failed', aid, err?.message || err); }
+      }
+    }
+
     const prep = await prepareContract({
       provider_agent_id: aid, requester_agent_id: requesterId, service,
       requested_capacity: cap, handshake_mode: 'advisory',
@@ -100,6 +132,11 @@ export function startSwarmScheduler() {
     const settled = await settleContract(cid, { outcome: 'settled', auth: await signWith(provWallet, 'contracts.settle', aid, `contract:${cid}|outcome:settled`) });
     if (!settled.ok || settled.contract?.status !== 'settled') return;
     await distributeDiscoveryRewards({ contract_id: cid, provider_agent_id: aid, value_usd: cap });
+
+    // Close the loop on real demand: mark the intent fulfilled by this agent.
+    if (matchedIntent && deliverable) {
+      try { await fulfillIntent(matchedIntent.intent_id, { agent_id: aid, contract_id: cid }); } catch { /* best effort */ }
+    }
   }
 
   function systemAgent(id, name, services) {
