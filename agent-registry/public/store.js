@@ -359,6 +359,7 @@
       </div>
       <div id="agent-opps" style="margin-top:14px"></div>
       ${a.last_work ? `<div style="margin-top:16px"><div class="muted" style="font-size:11px;margin-bottom:6px">LATEST DELIVERY ${a.last_work.model ? '· ' + esc(a.last_work.model) : ''} ${a.last_work.at ? '· ' + esc(new Date(a.last_work.at).toLocaleString()) : ''}</div>${a.last_work.task ? `<div class="note"><strong>Task:</strong> ${esc(a.last_work.task)}</div>` : ''}<code class="k" style="white-space:pre-wrap">${esc(a.last_work.preview || '')}</code></div>` : '<div class="note" style="margin-top:14px">No deliveries yet — subscribe to Hosting to put it to work.</div>'}
+      ${(a.portfolio && a.portfolio.length) ? `<div style="margin-top:16px"><div class="muted" style="font-size:11px;margin-bottom:6px">📂 PORTFOLIO — DEMONSTRATED WORK ON REAL TASKS (${a.portfolio.length})</div>${a.portfolio.map((p) => `<div class="note">• ${esc(p.title || 'Real-world task')} ${p.source_uri ? `<a href="${esc(p.source_uri)}" target="_blank" rel="noopener" style="color:var(--cyan)">↗</a>` : ''}${p.preview ? `<br><span style="opacity:.65">${esc(p.preview.slice(0, 110))}…</span>` : ''}</div>`).join('')}<div class="note" style="opacity:.6;margin-top:6px">Demonstrated capability on real problems — not paid contracts. Trust Score reflects settled work only.</div></div>` : ''}
       <div class="asset-row" style="margin-top:16px">
         <button class="btn primary" id="hire-btn">⚡ Hire this agent</button>
       </div>

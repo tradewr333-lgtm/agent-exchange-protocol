@@ -8,7 +8,7 @@
 // so no user private key is involved.
 import { randomBytes } from 'node:crypto';
 import { buildAuthMessage } from './auth.js';
-import { loadAgentsRegistry, saveAgentsRegistry, loadContractStore, loadExternalSignals, updateAgentFields } from './store.js';
+import { loadAgentsRegistry, saveAgentsRegistry, loadContractStore, loadExternalSignals, updateAgentFields, listInboxMessages } from './store.js';
 import { publishIntent, listIntents, fulfillIntent } from './intents.js';
 import { executeTask, llmEnabled } from './agent-executor.js';
 import { sponsorScion, distributeDiscoveryRewards } from './growth.js';
@@ -94,15 +94,32 @@ export function startSwarmScheduler() {
     const service = (agent.services && agent.services[0]) || 'research';
     const cap = 100 + Math.floor(Math.random() * 400);
 
-    // Find a real open intent matching this agent's service to work on (real demand).
-    let matchedIntent = null;
+    // PRIORITY 1: a REAL external opportunity from this agent's inbox (BizDev/Algora),
+    // so the agent builds a genuine portfolio on real-world problems. It only DOES the
+    // work (analysis/review) to demonstrate capability — it never posts/submits anywhere
+    // (the owner reviews and submits). Dedup by source_uri against the existing portfolio.
+    const portfolio = Array.isArray(agent.portfolio) ? agent.portfolio : [];
+    const doneRefs = new Set(portfolio.map((p) => p.source_uri).filter(Boolean));
+    let oppMsg = null;
     try {
-      const feed = await listIntents({ status: 'open', service, limit: 20 });
-      matchedIntent = (feed.intents || []).find((i) => i.claimed_by == null) || null;
-    } catch { /* fall back to a template briefing */ }
-    const taskText = matchedIntent
-      ? `${matchedIntent.title}\n\n${matchedIntent.description || ''}`.trim()
-      : '';
+      const msgs = await listInboxMessages({ agentId: aid, kind: 'opportunity', limit: 25 });
+      oppMsg = (msgs || []).find((m) => m?.data?.source_uri && !doneRefs.has(m.data.source_uri)) || null;
+    } catch { /* ignore — fall through to intents */ }
+
+    // PRIORITY 2: a real open intent matching this agent's service.
+    let matchedIntent = null;
+    if (!oppMsg) {
+      try {
+        const feed = await listIntents({ status: 'open', service, limit: 20 });
+        matchedIntent = (feed.intents || []).find((i) => i.claimed_by == null) || null;
+      } catch { /* fall back to a template briefing */ }
+    }
+
+    const taskText = oppMsg
+      ? `${oppMsg.subject || oppMsg.data.summary || ''}\n\n${oppMsg.data.summary || ''}`.trim()
+      : matchedIntent
+        ? `${matchedIntent.title}\n\n${matchedIntent.description || ''}`.trim()
+        : '';
 
     // REAL WORK: have the agent actually do the task with the LLM (if configured).
     let deliverable = null;
@@ -110,16 +127,30 @@ export function startSwarmScheduler() {
       const run = await executeTask({ template_id: agent.template, task: taskText, maxTokens: 700 });
       if (run.ok && run.output) {
         deliverable = run;
+        const lastWork = {
+          at: new Date().toISOString(),
+          intent_id: matchedIntent?.intent_id ?? null,
+          source_uri: oppMsg?.data?.source_uri ?? null,
+          task: (run.task || '').slice(0, 200),
+          model: run.model,
+          preview: run.output.slice(0, 500),
+        };
+        const fields = { last_work: lastWork };
+        // Portfolio: a capped list of demonstrated work on REAL problems (credibility,
+        // separate from Trust Score — this is NOT a paid/verified contract).
+        if (oppMsg) {
+          const entry = {
+            at: lastWork.at,
+            source: 'bizdev_opportunity',
+            source_uri: oppMsg.data.source_uri,
+            title: oppMsg.subject || oppMsg.data.summary || 'Real-world task',
+            service,
+            preview: run.output.slice(0, 400),
+          };
+          fields.portfolio = [entry, ...portfolio].slice(0, 8);
+        }
         try {
-          await updateAgentFields(aid, {
-            last_work: {
-              at: new Date().toISOString(),
-              intent_id: matchedIntent?.intent_id ?? null,
-              task: (run.task || '').slice(0, 200),
-              model: run.model,
-              preview: run.output.slice(0, 500),
-            },
-          });
+          await updateAgentFields(aid, fields);
         } catch (err) { console.error('hosted_last_work_save_failed', aid, err?.message || err); }
       }
     }

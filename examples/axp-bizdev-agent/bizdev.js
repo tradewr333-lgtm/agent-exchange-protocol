@@ -82,7 +82,7 @@ async function gather() {
   // Paid Algora bounties (real demand with money attached) — prioritized later by fit.
   if (WITH_ALGORA) {
     try {
-      const bounties = await fetchAlgoraBounties({ token: process.env.GITHUB_TOKEN, max: 15 });
+      const bounties = await fetchAlgoraBounties({ token: process.env.GITHUB_TOKEN, max: 30 });
       for (const b of bounties) {
         if (b.url && seen.has(b.url)) continue;
         if (b.url) seen.add(b.url);
