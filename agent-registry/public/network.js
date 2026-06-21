@@ -321,6 +321,36 @@
     $('observatory').innerHTML = html;
   }
 
+  function renderExternalSignals(obs) {
+    const el = $('external-signals');
+    if (!obs || !Array.isArray(obs.categories)) {
+      el.innerHTML = '<div class="empty">No external signals yet — run <code>npm run alpha:collect</code>.</div>';
+      return;
+    }
+    const sig = obs.categories
+      .filter((c) => (c.external_demand_index || 0) > 0)
+      .sort((a, b) => b.external_demand_index - a.external_demand_index)
+      .slice(0, 8);
+    const t = obs.totals || {};
+    $('ext-tag').textContent = `${t.external_signal_categories || 0} categories · ${t.external_only_categories || 0} alpha`;
+    if (sig.length === 0) {
+      el.innerHTML = '<div class="empty">No external signals yet — run <code>npm run alpha:collect</code> to feed GitHub/HuggingFace demand.</div>';
+      return;
+    }
+    const max = Math.max(1, ...sig.map((c) => c.external_demand_index));
+    let html = '<div class="muted" style="font-size:11px;margin-bottom:8px">Demand forming outside the AXP ledger (GitHub, HuggingFace, MCP registries). <span class="chip amber">alpha</span> = demand exists, zero AXP supply yet.</div><div class="rows">';
+    for (const c of sig) {
+      const g = c.external_growth_pct >= 0 ? `+${c.external_growth_pct}%` : `${c.external_growth_pct}%`;
+      const sources = (c.external_sources || []).join(', ') || '—';
+      html += `<div class="row"><div class="lhs"><span class="title">${esc(c.category)} ${c.external_only ? '<span class="chip amber">alpha</span>' : ''}</span>` +
+        `<div class="bar-track" style="margin-top:5px;width:200px"><div class="bar-fill" style="width:${(c.external_demand_index / max * 100).toFixed(1)}%"></div></div>` +
+        `<span class="meta">${sources} · growth ${g} · ${c.active_agents} AXP agents</span></div>` +
+        `<div class="rhs"><span class="chip green">${c.external_demand_index.toFixed(2)}</span></div></div>`;
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
   function setStatus(d) {
     const dot = $('status-dot'), text = $('status-text');
     const ok = d.agents || d.metrics;
@@ -339,6 +369,7 @@
     const [live, observatory] = await Promise.all([getJSON('/network/live'), getJSON('/observatory')]);
     if (!live) { setStatus({}); return; }
     renderObservatory(observatory);
+    renderExternalSignals(observatory);
     const d = {
       storage_mode: live.storage_mode,
       agents: live.agents,
