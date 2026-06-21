@@ -4,7 +4,7 @@
   const usd = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  const STATE = { quote: null, templates: [], agents: [], hireQuote: null };
+  const STATE = { quote: null, templates: [], agents: [], hireQuote: null, wallet: null };
 
   async function getJSON(url) { try { const r = await fetch(url); return await r.json(); } catch { return null; } }
   async function postJSON(url, body) {
@@ -36,6 +36,7 @@
   }
 
   function setWallet(addr) {
+    STATE.wallet = addr || null;
     $('wallet-dot').style.background = addr ? 'var(--green)' : '';
     $('wallet-text').textContent = addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : 'wallet not connected';
   }
@@ -116,19 +117,28 @@
       <p class="ok">${esc(a.name)} is live and in the AXP graph.</p>
       <p class="note">Agent ID: <strong>${esc(a.agent_id)}</strong><br>Wallet: <code class="k">${esc(a.operator)}</code></p>
       ${res.api_key ? `<p class="note">API key (shown once — save it):</p><code class="k">${esc(res.api_key)}</code>` : ''}
-      <p class="note">Keep it earning with Hosting:</p>
+      <p class="note">Keep it earning with Hosting — your subscription auto-hosts every agent you own, up to the plan limit:</p>
       <div class="asset-row">
-        <button class="btn primary" data-sku="hosting_starter">Host · Starter $9/mo</button>
-        <button class="btn" data-sku="hosting_pro">Host · Pro $29/mo</button>
+        <button class="btn primary" data-sku="hosting_starter">Host · Starter $9/mo · 1 agent</button>
+        <button class="btn" data-sku="hosting_pro">Pro $29/mo · 5 agents</button>
+        <button class="btn" data-sku="trust_api">Scale $99/mo · 100 + API</button>
       </div>
       <p class="note"><a href="${esc(a.public_page || ('/agent/' + a.agent_id))}" style="color:var(--cyan)">View its public page →</a></p>
     `);
-    document.querySelectorAll('[data-sku]').forEach((b) => { b.onclick = () => subscribe(b.getAttribute('data-sku'), a.agent_id); });
+    document.querySelectorAll('[data-sku]').forEach((b) => { b.onclick = () => subscribe(b.getAttribute('data-sku')); });
   }
 
-  // ---- hosting (Stripe) ----
-  async function subscribe(sku, agentId) {
-    const res = await postJSON('/billing/checkout', { plan_sku: sku, agent_id: agentId || '' });
+  // ---- hosting (Stripe), OWNER-scoped ----
+  // A subscription grants slots to your WALLET; AXP auto-hosts the agents you own
+  // up to the plan limit (Starter 1 / Pro 5 / Trust API 100). No per-agent checkout.
+  async function subscribe(sku) {
+    let owner;
+    try { owner = STATE.wallet || await connectWallet(); }
+    catch (e) {
+      openModal('Connect your wallet', `<p class="note err">${esc(e.message || 'Wallet required')}</p><p class="note">Hosting is tied to your wallet — it owns your agents. Connect the same wallet you launch with, and AXP keeps your agents hosted up to your plan's limit automatically.</p>`);
+      return;
+    }
+    const res = await postJSON('/billing/checkout', { plan_sku: sku, owner_ref: owner });
     if (res.ok && res.url) { window.location.href = res.url; return; }
     openModal('Hosting checkout', `<p class="note err">Could not start checkout: ${esc(res.error || 'unknown')}.</p><p class="note">${res.error === 'stripe_disabled' ? 'Stripe is not configured on the server yet (set STRIPE_SECRET_KEY).' : res.error === 'price_not_configured' ? 'The plan price id is not set on the server.' : ''}</p>`);
   }
@@ -180,11 +190,7 @@
       </div>`;
     $('hosting').innerHTML = (plans || []).map(card).join('') + (trustApi ? card(trustApi) : '');
     document.querySelectorAll('[data-host]').forEach((b) => {
-      b.onclick = () => {
-        const sku = b.getAttribute('data-host');
-        const agentId = prompt('Agent ID to host (launch one first, or leave blank):', '');
-        subscribe(sku, agentId || '');
-      };
+      b.onclick = () => subscribe(b.getAttribute('data-host'));
     });
   }
 
@@ -338,10 +344,11 @@
         <button class="btn" id="copy-link">📋 Copy hire link</button>
         <a class="btn" id="tweet-link" target="_blank" rel="noopener">Share on X</a>
       </div>
-      <p class="note">Owner hosting:</p>
+      <p class="note">Owner hosting (auto-hosts every agent you own, up to the plan limit):</p>
       <div class="asset-row">
-        <button class="btn" data-sku="hosting_starter">Host · Starter $9/mo</button>
-        <button class="btn" data-sku="hosting_pro">Host · Pro $29/mo</button>
+        <button class="btn" data-sku="hosting_starter">Starter $9/mo · 1</button>
+        <button class="btn" data-sku="hosting_pro">Pro $29/mo · 5</button>
+        <button class="btn" data-sku="trust_api">Scale $99/mo · 100 + API</button>
       </div>`;
     $('hire-btn').onclick = () => openHire(a.agent_id, a.name);
     const hireLink = `${window.location.origin}/agent/${a.agent_id}`;
@@ -350,7 +357,7 @@
       catch { prompt('Copy this hire link:', hireLink); }
     };
     $('tweet-link').href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`Hire my ${a.name} on AXP — real work, on-chain proof of trust:`)}&url=${encodeURIComponent(hireLink)}`;
-    document.querySelectorAll('[data-sku]').forEach((b) => { b.onclick = () => subscribe(b.getAttribute('data-sku'), a.agent_id); });
+    document.querySelectorAll('[data-sku]').forEach((b) => { b.onclick = () => subscribe(b.getAttribute('data-sku')); });
 
     // Opportunities delivered to this agent's owner (from the cloud BizDev Agent).
     (async () => {
