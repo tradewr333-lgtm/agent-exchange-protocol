@@ -5,7 +5,7 @@
   "type": "module",
   "keywords": ["axp", "ai-agents", "sdk", "trust", "agent-economy", "bsc"],
   "homepage": "https://axp.network",
-  "repository": { "type": "git", "url": "https://github.com/tradewr333-lgtm/agent-exchange-protocol", "directory": "packages/axp-sdk-typescript" },
+  "repository": { "type": "git", "url": "git+https://github.com/tradewr333-lgtm/agent-exchange-protocol.git", "directory": "packages/axp-sdk-typescript" },
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "exports": {
