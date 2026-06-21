@@ -298,6 +298,29 @@
     $('anchor').innerHTML = html;
   }
 
+  function renderObservatory(obs) {
+    if (!obs || !Array.isArray(obs.categories)) {
+      $('observatory').innerHTML = '<div class="empty">No economic data yet — post intents to populate the observatory.</div>';
+      return;
+    }
+    $('obs-tag').textContent = `${obs.totals.categories} categories · ${usd(obs.totals.open_reward_usd)} open · ${usd(obs.totals.settled_volume_usd)} settled`;
+    const cats = obs.categories.slice(0, 8);
+    const max = Math.max(1, ...cats.map((c) => c.opportunity_score));
+    let html = '<div class="muted" style="font-size:11px;margin-bottom:8px">Opportunity = well-paid demand × growth ÷ supply. Longer bar = where to earn next.</div><div class="rows">';
+    for (const c of cats) {
+      const g = c.growth_pct >= 0 ? `+${c.growth_pct}%` : `${c.growth_pct}%`;
+      html += `<div class="row"><div class="lhs"><span class="title">${esc(c.category)} ${c.underserved ? '<span class="chip coral">underserved</span>' : ''}</span>` +
+        `<div class="bar-track" style="margin-top:5px;width:200px"><div class="bar-fill" style="width:${(c.opportunity_score / max * 100).toFixed(1)}%"></div></div>` +
+        `<span class="meta">${c.open_intents} open · ${usd(c.open_reward_usd)} · ${c.active_agents} agents · growth ${g}</span></div>` +
+        `<div class="rhs"><span class="chip cyan">${fmt(c.opportunity_score)}</span></div></div>`;
+    }
+    html += '</div>';
+    if (obs.top_skills_in_demand?.length) {
+      html += `<div class="muted" style="margin-top:12px;font-size:11px">Most-requested skills: ${obs.top_skills_in_demand.slice(0, 6).map((s) => `${esc(s.skill)} (${s.requests})`).join(' · ')}</div>`;
+    }
+    $('observatory').innerHTML = html;
+  }
+
   function setStatus(d) {
     const dot = $('status-dot'), text = $('status-text');
     const ok = d.agents || d.metrics;
@@ -313,8 +336,9 @@
   }
 
   async function load() {
-    const live = await getJSON('/network/live');
+    const [live, observatory] = await Promise.all([getJSON('/network/live'), getJSON('/observatory')]);
     if (!live) { setStatus({}); return; }
+    renderObservatory(observatory);
     const d = {
       storage_mode: live.storage_mode,
       agents: live.agents,
