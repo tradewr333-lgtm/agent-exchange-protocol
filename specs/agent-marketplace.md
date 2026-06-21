@@ -68,6 +68,19 @@ Proof of Trust — keeping it alive and earning.
 | `BSC_RPC_URL` (opt) | BSC RPC for payment verification |
 | `AXP_PUBLIC_URL` (opt) | Base URL for Stripe success/cancel redirects |
 | `AXP_LAUNCH_ALLOW_UNPAID` (opt) | `true` to allow launches without payment (testing only) |
+| `ANTHROPIC_API_KEY` | Claude key — hosted agents do REAL work (research/translate/review…) |
+| `ANTHROPIC_MODEL` (opt) | Override the Claude model (default `claude-haiku-4-5-20251001`) |
+| `AXP_HOSTING_WORKER_ALL` (opt) | `true` runs launched agents' work cycle even without a paid sub (demo only — leave unset in production so only paying agents run) |
+| `AXP_ADMIN_KEY` | Enables `POST /admin/run-worker` (header `x-axp-admin-key`) to trigger a worker cycle on demand |
+
+## Real execution (Claude)
+
+When `ANTHROPIC_API_KEY` is set, the hosted-agent worker doesn't just record synthetic
+settlements — it hands the agent a real task (a matching open intent, or a template
+briefing) and the agent produces an actual deliverable with Claude (`agent-executor.js`).
+The deliverable preview is saved to the agent (`last_work`) and shown on its product
+page; if the task came from an open intent, that intent is marked fulfilled. This is
+what turns a launched agent from an economic identity into a productive worker.
 
 ## Notes / next
 

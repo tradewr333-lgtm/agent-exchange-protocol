@@ -29,6 +29,16 @@ const SAMPLE_TITLES = [
   'Translate a product page',
 ];
 
+// Set when the scheduler boots, so an admin route can trigger a cycle on demand
+// (useful on the free tier, where the timer pauses while the service sleeps).
+let scheduledTick = null;
+
+export async function runWorkerOnce() {
+  if (!scheduledTick) return { ok: false, reason: 'scheduler_not_running' };
+  await scheduledTick();
+  return { ok: true, ran_at: new Date().toISOString() };
+}
+
 export function startSwarmScheduler() {
   if (process.env.AXP_SWARM_ENABLED !== 'true') return null;
   const intervalMs = Math.max(60_000, Number(process.env.AXP_SWARM_INTERVAL_MS) || 600_000);
@@ -271,6 +281,7 @@ export function startSwarmScheduler() {
     }
   }
 
+  scheduledTick = tick; // expose for on-demand admin trigger
   console.log(`AXP swarm heartbeat enabled: every ${Math.round(intervalMs / 1000)}s, cap ${maxScions} scions.`);
   setTimeout(tick, 8000); // first run shortly after boot
   return setInterval(tick, intervalMs);

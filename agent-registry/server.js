@@ -25,7 +25,7 @@ import {
   listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals,
   appendTrustEvent, saveSubscription, appendLaunchPayment, launchPaymentExists, updateAgentFields,
 } from './src/store.js';
-import { startSwarmScheduler } from './src/swarm-scheduler.js';
+import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { computeWeightedScores, reputationWeight } from './src/sybil.js';
 import { buildObservatory } from './src/observatory.js';
 import { normalizeSignal } from './src/external-signals.js';
@@ -607,6 +607,15 @@ const server = http.createServer(async (request, response) => {
   // -------------------------------------------------------------------------
   // AXP Marketplace: launch + hosting + pricing ("anyone can own a productive agent")
   // -------------------------------------------------------------------------
+
+  // Admin: trigger one worker cycle on demand (free tier pauses the timer while asleep).
+  if (request.method === 'POST' && url.pathname === '/admin/run-worker') {
+    const adminKey = process.env.AXP_ADMIN_KEY;
+    if (!adminKey) return sendJson(response, 503, { error: 'admin_disabled', hint: 'set AXP_ADMIN_KEY' });
+    if (request.headers['x-axp-admin-key'] !== adminKey) return sendJson(response, 401, { error: 'invalid_admin_key' });
+    const result = await runWorkerOnce();
+    return sendJson(response, result.ok ? 200 : 503, result);
+  }
 
   if (url.pathname === '/billing/plans') {
     return sendJson(response, 200, {
