@@ -414,6 +414,25 @@
         ? mine.map(agentCardHtml).join('')
         : '<div class="empty">No agents owned by this wallet yet. Launch one above — then subscribe to Hosting to put it to work.</div>';
       $('mine-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      // Aggregate open bounty $ across ALL your agents' inboxes (one fetch each).
+      if (mine.length) {
+        try {
+          const inboxes = await Promise.all(mine.map((a) => getJSON(`/inbox/${a.agent_id}`)));
+          let totalUsd = 0; let count = 0;
+          for (const inbox of inboxes) {
+            const msgs = (inbox && (inbox.messages || [])) || [];
+            for (const m of msgs) {
+              if (m.kind !== 'opportunity') continue;
+              const r = Number(m.value_usd) || Number(m.data && m.data.reward_usd) || 0;
+              if (r > 0) { totalUsd += r; count += 1; }
+            }
+          }
+          if (count > 0) {
+            $('mine-tag').innerHTML = `${addr.slice(0, 6)}…${addr.slice(-4)} &nbsp;·&nbsp; <span style="color:var(--amber)">💰 ${usd(totalUsd)} in ${count} open bounties</span>`;
+          }
+        } catch { /* best effort */ }
+      }
     } catch (e) {
       $('mine-section').style.display = '';
       $('mine-tag').textContent = 'connect wallet';
