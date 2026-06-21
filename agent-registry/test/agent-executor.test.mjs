@@ -20,10 +20,13 @@ ok(/code review/i.test(codereview.system), 'code_review system prompt');
 // Unknown template falls back to research persona (safe default).
 ok(/research agent/i.test(buildPrompt('nope', 'x').system), 'unknown template -> research default');
 
-// All five templates have prompts.
-for (const t of ['research', 'translation', 'code_review', 'data_processing', 'leadgen']) {
+// All template ids have a tailored system prompt.
+for (const t of ['research', 'translation', 'code_review', 'data_processing', 'leadgen',
+  'security_audit', 'content_writing', 'analysis', 'customer_support', 'market_research']) {
   ok(buildPrompt(t, '').system.length > 20, `${t} has a system prompt`);
 }
+// The market_research prompt must carry the not-financial-advice guardrail.
+ok(/not financial advice/i.test(buildPrompt('market_research', '').system), 'market_research has non-advice guardrail');
 
 // Gating: without ANTHROPIC_API_KEY, executeTask declines gracefully (no network call).
 const savedKey = process.env.ANTHROPIC_API_KEY;

@@ -49,6 +49,22 @@ export async function githubSignal(category, query, { token, withGrowth = true }
   };
 }
 
+// npm package ecosystem activity for a query — public registry, no key, generous limits.
+export async function npmSignal(category, query) {
+  if (!query) return null;
+  const data = await getJson(`https://registry.npmjs.org/-/v1/search?text=${encodeURIComponent(query)}&size=1`);
+  const value = Number(data.total) || 0;
+  return {
+    source: 'npm',
+    category,
+    metric: 'packages',
+    value,
+    growth_pct: 0,
+    query,
+    observed_at: new Date().toISOString(),
+  };
+}
+
 // HuggingFace models matching a search term (count of returned models, capped list).
 export async function huggingfaceSignal(category, search) {
   if (!search) return null;

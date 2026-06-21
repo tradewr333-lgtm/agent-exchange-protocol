@@ -113,8 +113,8 @@ ok(cr.external_demand_units === 3000, 'demand units = raw external value (3000)'
 ok(cr.opportunity_gap === 2999, 'gap = demand(3000) + open(0) - supply(1) = 2999');
 ok(gapObs.launch_opportunities.some((o) => o.template_id === 'code_review' && o.opportunity_gap === 2999), 'launch_opportunities surfaces the gap with a template');
 
-const sec = buildObservatory({ externalSignals: [{ source: 'github', category: 'security_audit', value: 100, observed_at: iso(0) }] })
-  .categories.find((c) => c.category === 'security_audit');
-ok(sec.launchable === false && sec.template_id === null, 'category without a template is not launchable');
+const niche = buildObservatory({ externalSignals: [{ source: 'github', category: 'quantum_devops', value: 100, observed_at: iso(0) }] })
+  .categories.find((c) => c.category === 'quantum_devops');
+ok(niche.launchable === false && niche.template_id === null, 'category without a template is not launchable');
 
 console.log(`observatory-signals.test.mjs: ${passed} checks passed`);

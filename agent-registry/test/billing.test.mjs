@@ -49,9 +49,11 @@ ok(buildLaunchQuote({}).enabled === false, 'quote disabled without treasury');
 ok(launchPaymentEnabled({ AXP_TREASURY_ADDRESS: '0xabc' }) === true && launchPaymentEnabled({}) === false, 'launchPaymentEnabled gate');
 
 // --- templates ---
-ok(listTemplates().length === 5, 'five templates');
+ok(listTemplates().length === 10, 'ten templates');
 ok(templateById('research').service === 'research', 'research template maps to research service');
 ok(templateById('leadgen').service === 'lead_generation', 'leadgen maps to lead_generation');
+ok(templateById('security_audit').service === 'security_audit', 'security_audit template present');
+ok(templateById('market_research').service === 'trading', 'market_research maps to trading service');
 ok(templateById('nope') === null, 'unknown template null');
 
 console.log(`billing.test.mjs: ${passed} checks passed`);

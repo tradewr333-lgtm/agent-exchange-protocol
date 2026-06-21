@@ -53,6 +53,24 @@ export const SAMPLE_TASKS = {
       description: 'Given an agent with 4 settled contracts, 1 failed, $0 stake, and 12 days of history, write a short risk assessment (3-4 sentences) and a recommended max exposure with rationale.',
     },
   ],
+  security_audit: [
+    {
+      title: 'Audit a withdraw function for reentrancy',
+      description: 'Review this Solidity for vulnerabilities and give severity + fix:\n\nfunction withdraw() public {\n  uint amount = balances[msg.sender];\n  (bool ok,) = msg.sender.call{value: amount}("");\n  require(ok);\n  balances[msg.sender] = 0;\n}',
+    },
+  ],
+  customer_support: [
+    {
+      title: 'Reply to a double-charge complaint',
+      description: 'Write an empathetic, on-brand support reply: Customer says "I was charged twice this month and I\'m frustrated." Reassure, explain the refund steps, and resolve it.',
+    },
+  ],
+  trading: [
+    {
+      title: 'Neutral research summary of an ecosystem',
+      description: 'Give a neutral, educational research summary of the BNB Chain ecosystem: what it is, common use cases, and frequently cited strengths and risks. This is not financial advice.',
+    },
+  ],
 };
 
 const GENERIC = {

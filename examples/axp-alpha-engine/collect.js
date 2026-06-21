@@ -14,11 +14,12 @@
 // AXP_REGISTRY_URL the collector just prints the signals (dry run).
 
 import { CATEGORIES } from './categories.js';
-import { githubSignal, huggingfaceSignal } from './sources.js';
+import { githubSignal, huggingfaceSignal, npmSignal } from './sources.js';
 
 const REGISTRY = process.env.AXP_REGISTRY_URL || '';
 const INGEST_KEY = process.env.AXP_SIGNALS_INGEST_KEY || '';
 const WITH_HF = process.env.AXP_ALPHA_HUGGINGFACE === 'true';
+const WITH_NPM = process.env.AXP_ALPHA_NPM !== 'false'; // npm registry on by default (public, no key)
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 
 // Unauthenticated GitHub Search allows ~10 req/min; a token raises it to 30/min.
@@ -40,6 +41,13 @@ async function collect() {
       signals.push(gh);
       console.log(`github   ${c.category.padEnd(18)} value=${gh.value} growth=${gh.growth_pct}%`);
       await sleep(GH_DELAY_MS);
+      if (WITH_NPM && c.npm) {
+        try {
+          const np = await npmSignal(c.category, c.npm);
+          if (np) { signals.push(np); console.log(`npm      ${c.category.padEnd(18)} value=${np.value}`); }
+          await sleep(1200);
+        } catch (e) { console.warn(`npm skip ${c.category}: ${e.message}`); }
+      }
       if (WITH_HF && c.hf) {
         const hf = await huggingfaceSignal(c.category, c.hf);
         if (hf) {
