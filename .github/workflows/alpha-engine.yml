@@ -1,0 +1,29 @@
+name: AXP Alpha Engine
+
+# Collects external demand signals (GitHub/HuggingFace) and feeds them to the AXP
+# Observatory on a schedule, so the "where is the money" view stays fresh without
+# anyone running the collector by hand. Runs in GitHub's cloud — no local machine.
+
+on:
+  schedule:
+    # 08:00 and 20:00 UTC daily (= 05:00 / 17:00 in America/Sao_Paulo, UTC-3).
+    - cron: '0 8,20 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Collect & publish external demand signals
+        env:
+          AXP_REGISTRY_URL: https://axp.network
+          # Add this repo secret (Settings -> Secrets and variables -> Actions):
+          AXP_SIGNALS_INGEST_KEY: ${{ secrets.AXP_SIGNALS_INGEST_KEY }}
+          # Provided automatically by Actions — high rate limit, unlocks growth metric.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AXP_ALPHA_HUGGINGFACE: 'true'
+        run: node examples/axp-alpha-engine/collect.js
