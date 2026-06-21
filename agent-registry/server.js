@@ -21,11 +21,19 @@ import {
   settleContract,
 } from './src/contracts.js';
 import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/registry.js';
-import { listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals } from './src/store.js';
+import {
+  listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals,
+  appendTrustEvent, saveSubscription, appendLaunchPayment, launchPaymentExists, updateAgentFields,
+} from './src/store.js';
 import { startSwarmScheduler } from './src/swarm-scheduler.js';
 import { computeWeightedScores, reputationWeight } from './src/sybil.js';
 import { buildObservatory } from './src/observatory.js';
 import { normalizeSignal } from './src/external-signals.js';
+import { getPlanCatalog, planBySku, stripePlanBySku, stripePriceId, computeContractFee } from './src/billing.js';
+import { listTemplates } from './src/agent-templates.js';
+import { launchAgent } from './src/agent-launcher.js';
+import { buildLaunchQuote, verifyLaunchPayment, launchPaymentEnabled } from './src/payments-onchain.js';
+import { stripeEnabled, createSubscriptionCheckout, constructWebhookEvent } from './src/stripe.js';
 import { claimIntent, fulfillIntent, getIntent, getIntentFeed, listIntents, publishIntent } from './src/intents.js';
 import { getOpportunitiesForAgent, getOpportunityGraph } from './src/opportunities.js';
 import { getInbox, postInboxMessage } from './src/inbox.js';
@@ -56,6 +64,15 @@ const server = http.createServer(async (request, response) => {
 
   if (url.pathname === '/network' || url.pathname === '/dashboard') {
     return sendHtml(response, 200, readFileSync(join(publicPath, 'network.html'), 'utf8'));
+  }
+
+  // Agent App Store + agent product pages (single-page; JS reads the path).
+  if (url.pathname === '/store' || url.pathname === '/launch' || /^\/agent\/[^/]+$/.test(url.pathname)) {
+    return sendHtml(response, 200, readFileSync(join(publicPath, 'store.html'), 'utf8'));
+  }
+
+  if (url.pathname === '/store.js') {
+    return sendAsset(response, 'application/javascript; charset=utf-8', readFileSync(join(publicPath, 'store.js'), 'utf8'));
   }
 
   if (url.pathname === '/discovery-engine') {
@@ -367,7 +384,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   const agentMatch = url.pathname.match(/^\/agents\/([^/]+)$/);
-  if (agentMatch) {
+  if (agentMatch && agentMatch[1] !== 'launch') {
     const agent = await getAgent(agentMatch[1]);
     if (!agent) {
       return sendJson(response, 404, { error: 'agent_not_found', agent_id: agentMatch[1] });
@@ -504,6 +521,23 @@ const server = http.createServer(async (request, response) => {
       } catch (error) {
         console.error('discovery_reward_distribution_failed', error);
       }
+      // Protocol revenue: AXP captures 0.5% of every settled contract.
+      try {
+        const gross = Number(result.contract.quote?.requested_capacity ?? 0);
+        const fee = computeContractFee(gross);
+        if (fee > 0) {
+          await appendTrustEvent({
+            event_type: 'protocol_fee',
+            agent_id: result.contract.quote?.provider_agent_id,
+            counterparty_id: result.contract.quote?.requester_agent_id,
+            contract_id: result.contract.contract_id,
+            value_usd: fee,
+            data: { rate: 0.005, gross_usd: gross },
+          });
+        }
+      } catch (error) {
+        console.error('protocol_fee_record_failed', error);
+      }
     }
     return sendJson(response, result.status, result.ok ? result.contract : result);
   }
@@ -568,6 +602,107 @@ const server = http.createServer(async (request, response) => {
       contracts: contractsR.contracts,
       externalSignals,
     }));
+  }
+
+  // -------------------------------------------------------------------------
+  // AXP Marketplace: launch + hosting + pricing ("anyone can own a productive agent")
+  // -------------------------------------------------------------------------
+
+  if (url.pathname === '/billing/plans') {
+    return sendJson(response, 200, {
+      ...getPlanCatalog(),
+      stripe_enabled: stripeEnabled(),
+      launch: { ...getPlanCatalog().launch, quote: buildLaunchQuote() },
+      templates: listTemplates(),
+    });
+  }
+
+  if (request.method === 'POST' && url.pathname === '/billing/checkout') {
+    const body = await readJsonBody(request);
+    const plan = stripePlanBySku(body?.plan_sku);
+    if (!plan) return sendJson(response, 400, { error: 'unknown_or_non_stripe_plan', plan_sku: body?.plan_sku });
+    const priceId = stripePriceId(plan.sku);
+    const base = process.env.AXP_PUBLIC_URL || `https://${request.headers.host || 'axp.network'}`;
+    const result = await createSubscriptionCheckout({
+      priceId,
+      planSku: plan.sku,
+      agentId: typeof body?.agent_id === 'string' ? body.agent_id : '',
+      ownerRef: typeof body?.owner_ref === 'string' ? body.owner_ref : '',
+      customerEmail: typeof body?.email === 'string' ? body.email : undefined,
+      successUrl: `${base}/store?checkout=success`,
+      cancelUrl: `${base}/store?checkout=cancel`,
+    });
+    return sendJson(response, result.status, result);
+  }
+
+  if (request.method === 'POST' && url.pathname === '/billing/webhook') {
+    const raw = await readRawBody(request);
+    const result = await constructWebhookEvent(raw, request.headers['stripe-signature']);
+    if (!result.ok) return sendJson(response, 400, { error: result.error });
+    try {
+      await handleStripeEvent(result.event);
+    } catch (error) {
+      console.error('stripe_webhook_handle_failed', error);
+    }
+    return sendJson(response, 200, { received: true });
+  }
+
+  if (url.pathname === '/agents/launch/quote') {
+    return sendJson(response, 200, { ...buildLaunchQuote(), templates: listTemplates() });
+  }
+
+  if (request.method === 'POST' && url.pathname === '/agents/launch') {
+    const body = await readJsonBody(request);
+    const payment = body?.payment && typeof body.payment === 'object' ? body.payment : null;
+
+    if (launchPaymentEnabled()) {
+      if (!payment?.tx_hash) return sendJson(response, 402, { error: 'launch_payment_required', quote: buildLaunchQuote() });
+      if (await launchPaymentExists(payment.tx_hash)) {
+        return sendJson(response, 409, { error: 'payment_already_used', tx_hash: payment.tx_hash });
+      }
+      const verified = await verifyLaunchPayment(payment);
+      if (!verified.ok) return sendJson(response, verified.status ?? 400, verified);
+      payment.verified = true;
+      payment.amount = verified.amount;
+    } else if (process.env.AXP_LAUNCH_ALLOW_UNPAID !== 'true') {
+      return sendJson(response, 503, { error: 'launch_disabled', hint: 'set AXP_TREASURY_ADDRESS (or AXP_LAUNCH_ALLOW_UNPAID=true for testing)' });
+    }
+
+    const result = await launchAgent({
+      template_id: body?.template_id,
+      owner_address: body?.owner_address,
+      name: body?.name,
+      payment,
+    });
+    if (result.ok && payment?.tx_hash) {
+      try {
+        await appendLaunchPayment({
+          agent_id: result.agent.agent_id, owner_address: body.owner_address,
+          asset: payment.asset, amount: payment.amount ?? null, tx_hash: payment.tx_hash, verified: true,
+        });
+      } catch (error) {
+        console.error('launch_payment_record_failed', error);
+      }
+    }
+    return sendJson(response, result.status, result);
+  }
+
+  if (url.pathname === '/store/agents') {
+    const [agentsR, ranking] = await Promise.all([listAgents({}), getTrustRanking({ limit: 500 })]);
+    const scoreById = new Map(ranking.agents.map((a) => [a.agent_id, a.trust_score ?? a.score ?? a.proof_of_trust_score ?? 0]));
+    const cards = agentsR.agents.map((a) => toAgentCard(a, scoreById.get(a.agent_id)));
+    return sendJson(response, 200, {
+      protocol: 'AXP', schema: 'axp.store_agents.v0', count: cards.length,
+      agents: cards.sort((x, y) => y.revenue_usd - x.revenue_usd),
+    });
+  }
+
+  const agentCardMatch = url.pathname.match(/^\/agents\/([^/]+)\/card$/);
+  if (agentCardMatch) {
+    const [agent, ranking] = await Promise.all([getAgent(agentCardMatch[1]), getTrustRanking({ limit: 500 })]);
+    if (!agent) return sendJson(response, 404, { error: 'agent_not_found', agent_id: agentCardMatch[1] });
+    const score = (ranking.agents.find((a) => a.agent_id === agentCardMatch[1]) || {});
+    return sendJson(response, 200, toAgentCard(agent, score.trust_score ?? score.score ?? score.proof_of_trust_score ?? 0));
   }
 
   // A2A Agent Card — lets Agent2Agent-aware clients discover AXP as a service.
@@ -3110,6 +3245,77 @@ function readJsonBody(request) {
 
     request.on('error', () => resolve(null));
   });
+}
+
+function readRawBody(request) {
+  return new Promise((resolve) => {
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > 1_000_000) { request.destroy(); resolve(body); }
+    });
+    request.on('end', () => resolve(body));
+    request.on('error', () => resolve(body));
+  });
+}
+
+// Map Stripe subscription lifecycle events onto a subscription record + the
+// hosted agent's hosting status (active => the worker keeps it earning).
+async function handleStripeEvent(event) {
+  const type = event.type;
+  const obj = event.data?.object || {};
+  if (type !== 'checkout.session.completed' && !type.startsWith('customer.subscription')) return;
+
+  const meta = obj.metadata || {};
+  const agentId = meta.agent_id || obj.client_reference_id || null;
+  const subId = obj.subscription || (type.startsWith('customer.subscription') ? obj.id : null) || obj.id;
+  let status;
+  if (type === 'customer.subscription.deleted') status = 'canceled';
+  else if (type === 'checkout.session.completed') status = (obj.payment_status === 'paid' || obj.status === 'complete') ? 'active' : 'incomplete';
+  else status = obj.status || 'active';
+
+  const sub = {
+    id: subId,
+    customer: obj.customer || null,
+    agent_id: agentId,
+    plan_sku: meta.plan_sku || null,
+    status,
+    owner_ref: meta.owner_ref || null,
+    current_period_end: obj.current_period_end ? new Date(obj.current_period_end * 1000).toISOString() : null,
+  };
+  await saveSubscription(sub);
+
+  if (agentId) {
+    const active = ['active', 'trialing'].includes(status);
+    await updateAgentFields(agentId, {
+      hosting: { status: active ? 'active' : 'inactive', plan: sub.plan_sku, active, subscription_id: subId },
+    });
+  }
+}
+
+// Public "product card" stats for an agent — the proof that it actually earns.
+function toAgentCard(agent, trustScore) {
+  const tm = agent.trust_metrics || {};
+  const completed = Number(agent.completed_contracts || 0);
+  const failed = Number(agent.failed_contracts || 0);
+  const total = completed + failed;
+  return {
+    agent_id: agent.agent_id,
+    name: agent.name,
+    template: agent.template || null,
+    owner: agent.owner || null,
+    services: agent.services || [],
+    skills: agent.skills || [],
+    status: agent.status,
+    launched: agent.origin === 'launch',
+    hosting: agent.hosting || null,
+    trust_score: Number(trustScore || 0),
+    revenue_usd: Number(tm.settled_volume_usd || 0),
+    contracts: completed,
+    success_rate: total > 0 ? Number((completed / total).toFixed(3)) : Number(tm.success_rate || 0),
+    capacity_usd: Number(agent.available_capacity || 0),
+    public_page: `/agent/${agent.agent_id}`,
+  };
 }
 
 function validateAuthMessageBody(body) {

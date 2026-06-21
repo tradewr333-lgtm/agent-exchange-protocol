@@ -18,6 +18,8 @@ export const paths = {
   discoveryRewards: join(dataDir, 'discovery-rewards.json'),
   growthState: join(dataDir, 'growth-state.json'),
   externalSignals: join(dataDir, 'external-signals.json'),
+  subscriptions: join(dataDir, 'subscriptions.json'),
+  launchPayments: join(dataDir, 'launch-payments.json'),
 };
 
 let poolPromise = null;
@@ -837,6 +839,93 @@ export async function loadExternalSignals({ sinceMs } = {}) {
   let list = readCollection(paths.externalSignals, 'signals');
   if (cutoff) list = list.filter((s) => Date.parse(s.observed_at ?? '') >= cutoff);
   return list;
+}
+
+// ---------------------------------------------------------------------------
+// AXP Marketplace: subscriptions (Stripe hosting), launch payments, agent patch
+// ---------------------------------------------------------------------------
+
+export async function saveSubscription(sub) {
+  const record = { ...sub, updated_at: new Date().toISOString() };
+  if (storageMode() === 'postgres') {
+    await query(
+      `insert into subscriptions (id, customer, agent_id, plan_sku, status, owner_ref, current_period_end, data, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb, now())
+       on conflict (id) do update set
+         customer = excluded.customer, agent_id = excluded.agent_id, plan_sku = excluded.plan_sku,
+         status = excluded.status, owner_ref = excluded.owner_ref,
+         current_period_end = excluded.current_period_end, data = excluded.data, updated_at = now()`,
+      [
+        record.id, record.customer ?? null, record.agent_id ?? null, record.plan_sku ?? null,
+        record.status ?? null, record.owner_ref ?? null, record.current_period_end ?? null,
+        JSON.stringify(record),
+      ],
+    );
+    return record;
+  }
+  const subs = readCollection(paths.subscriptions, 'subscriptions');
+  const i = subs.findIndex((s) => s.id === record.id);
+  if (i >= 0) subs[i] = record; else subs.push(record);
+  writeCollection(paths.subscriptions, 'subscriptions', subs);
+  return record;
+}
+
+export async function loadSubscriptions(filters = {}) {
+  if (storageMode() === 'postgres') {
+    const clauses = [];
+    const params = [];
+    addWhere(clauses, params, 'agent_id', filters.agentId);
+    addWhere(clauses, params, 'status', filters.status);
+    const result = await query(
+      `select data from subscriptions ${clauses.length ? `where ${clauses.join(' and ')}` : ''} order by updated_at desc limit 500`,
+      params,
+    );
+    return result.rows.map((row) => row.data);
+  }
+  let subs = readCollection(paths.subscriptions, 'subscriptions');
+  if (filters.agentId) subs = subs.filter((s) => s.agent_id === filters.agentId);
+  if (filters.status) subs = subs.filter((s) => s.status === filters.status);
+  return subs;
+}
+
+export async function appendLaunchPayment(payment) {
+  const record = { ...payment, created_at: payment.created_at ?? new Date().toISOString() };
+  if (storageMode() === 'postgres') {
+    await query(
+      `insert into launch_payments (agent_id, owner_address, asset, amount, tx_hash, verified, data)
+       values ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
+      [
+        record.agent_id ?? null, record.owner_address ?? null, record.asset ?? null,
+        Number(record.amount ?? 0), record.tx_hash ?? null, Boolean(record.verified), JSON.stringify(record),
+      ],
+    );
+    return record;
+  }
+  const list = readCollection(paths.launchPayments, 'payments');
+  list.push(record);
+  writeCollection(paths.launchPayments, 'payments', list.slice(-5000));
+  return record;
+}
+
+export async function launchPaymentExists(txHash) {
+  if (!txHash) return false;
+  if (storageMode() === 'postgres') {
+    const result = await query('select 1 from launch_payments where tx_hash = $1 limit 1', [txHash]);
+    return result.rows.length > 0;
+  }
+  return readCollection(paths.launchPayments, 'payments').some((p) => p.tx_hash === txHash);
+}
+
+// Patch a single agent's record (e.g. hosting status) in the registry.
+export async function updateAgentFields(agentId, patch) {
+  const registry = await loadAgentsRegistry();
+  const idx = registry.agents.findIndex((a) => a.agent_id === agentId);
+  if (idx < 0) return null;
+  const updated = { ...registry.agents[idx], ...patch };
+  const agents = [...registry.agents];
+  agents[idx] = updated;
+  await saveAgentsRegistry({ ...registry, agents });
+  return updated;
 }
 
 function readCollection(path, key) {

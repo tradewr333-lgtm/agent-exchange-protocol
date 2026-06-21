@@ -15,6 +15,7 @@ import { prepareContract, fundContract, acceptContract, settleContract } from '.
 import { getGrowthMetrics } from './growth.js';
 import { buildObservatory } from './observatory.js';
 import { publishObservatoryOpportunities } from './observatory-publisher.js';
+import { deriveAgentWallet } from './agent-launcher.js';
 import { githubIssuesSource } from '../../examples/axp-opportunity-miner/sources.js';
 import { workItemToIntent } from '../../examples/axp-opportunity-miner/normalize.js';
 
@@ -48,11 +49,57 @@ export function startSwarmScheduler() {
 
   async function sign(action, agentId, scope) {
     const w = await getWallet();
+    return signWith(w, action, agentId, scope);
+  }
+
+  async function signWith(wallet, action, agentId, scope) {
     const nonce = '0x' + randomBytes(16).toString('hex');
     const issued_at = new Date().toISOString();
-    const message = buildAuthMessage({ action, agentId, address: w.address, nonce, issuedAt: issued_at, scope });
-    const signature = await w.signMessage(message);
-    return { agent_id: agentId, address: w.address, signature, nonce, issued_at };
+    const message = buildAuthMessage({ action, agentId, address: wallet.address, nonce, issuedAt: issued_at, scope });
+    const signature = await wallet.signMessage(message);
+    return { agent_id: agentId, address: wallet.address, signature, nonce, issued_at };
+  }
+
+  // Hosting worker: keep PAID, launched agents alive and earning. For each agent
+  // with active hosting, run one work cycle (prepare -> fund -> accept -> settle),
+  // signed by the agent's own derived wallet, then register Proof of Trust.
+  async function runHostedAgents() {
+    if (process.env.AXP_HOSTING_WORKER === 'false') return;
+    const registry = await loadAgentsRegistry();
+    const hosted = registry.agents.filter((a) => a.origin === 'launch' && a.hosting?.active);
+    let processed = 0;
+    for (const agent of hosted) {
+      if (processed >= 5) break;
+      try {
+        await runHostedAgentCycle(agent);
+        processed += 1;
+      } catch (err) {
+        console.error('hosted_agent_cycle_failed', agent.agent_id, err?.message || err);
+      }
+    }
+    if (processed) console.log(`hosting: ran ${processed} hosted agent cycle(s).`);
+  }
+
+  async function runHostedAgentCycle(agent) {
+    const provWallet = await deriveAgentWallet(agent.agent_id);
+    const aid = agent.agent_id;
+    const service = (agent.services && agent.services[0]) || 'research';
+    const cap = 100 + Math.floor(Math.random() * 400);
+
+    const prep = await prepareContract({
+      provider_agent_id: aid, requester_agent_id: requesterId, service,
+      requested_capacity: cap, handshake_mode: 'advisory',
+      auth: await signWith(provWallet, 'contracts.prepare', aid, `provider:${aid}|requester:${requesterId}|service:${service}|capacity:${cap}`),
+    });
+    if (!prep.ok) return;
+    const cid = prep.contract.contract_id;
+    const funded = await fundContract(cid, { payment_asset: 'USDC', auth: await sign('contracts.fund', requesterId, `contract:${cid}|fund:true`) });
+    if (!funded.ok) return;
+    const accepted = await acceptContract(cid, { auth: await signWith(provWallet, 'contracts.accept', aid, `contract:${cid}|accept:true`) });
+    if (!accepted.ok) return;
+    const settled = await settleContract(cid, { outcome: 'settled', auth: await signWith(provWallet, 'contracts.settle', aid, `contract:${cid}|outcome:settled`) });
+    if (!settled.ok || settled.contract?.status !== 'settled') return;
+    await distributeDiscoveryRewards({ contract_id: cid, provider_agent_id: aid, value_usd: cap });
   }
 
   function systemAgent(id, name, services) {
@@ -177,6 +224,7 @@ export function startSwarmScheduler() {
       await mineGithub();
       await topUpFeed();
       await publishObservatory();
+      await runHostedAgents();
       const metrics = await getGrowthMetrics({ autotune: true });
       if ((metrics.population?.scions ?? 0) < maxScions) {
         await spawnAndSettle();

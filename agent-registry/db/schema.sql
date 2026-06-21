@@ -200,3 +200,34 @@ create table if not exists external_signals (
 
 create index if not exists external_signals_cat_observed_idx on external_signals(category, observed_at desc);
 create index if not exists external_signals_observed_idx on external_signals(observed_at desc);
+
+-- AXP Marketplace: hosting subscriptions (Stripe) + one-time launch payments (on-chain)
+
+create table if not exists subscriptions (
+  id text primary key,
+  customer text,
+  agent_id text,
+  plan_sku text,
+  status text,
+  owner_ref text,
+  current_period_end timestamptz,
+  data jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists launch_payments (
+  id bigserial primary key,
+  agent_id text,
+  owner_address text,
+  asset text,
+  amount numeric,
+  tx_hash text,
+  verified boolean not null default false,
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists subscriptions_agent_idx on subscriptions(agent_id);
+create index if not exists subscriptions_status_idx on subscriptions(status);
+create unique index if not exists launch_payments_tx_idx on launch_payments(tx_hash);
