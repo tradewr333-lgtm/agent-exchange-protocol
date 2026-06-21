@@ -68,52 +68,58 @@ async function register(agentId, name, services, amount) {
   return api('POST', '/agents/register', { ...payload, auth: await sign('agents.register', agentId, scope) });
 }
 
+// How many scion -> settle cycles to run this batch (drives activation_rate / K up).
+const scionsTarget = (() => {
+  const arg = process.argv.find((a) => a.startsWith('--scions='));
+  const raw = arg ? arg.split('=')[1] : process.env.AXP_SCIONS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.trunc(n), 25) : 1;
+})();
+
 const sponsorId = `kloop_sponsor_${tag}`;
 const requesterId = `kloop_requester_${tag}`;
 const CAP = 200;
 
-console.log(`Operator ${operator} on ${registryUrl}`);
+console.log(`Operator ${operator} on ${registryUrl} — activating ${scionsTarget} scion(s)`);
 
-await register(sponsorId, 'K-Loop Sponsor', ['research'], 5000);
-await register(requesterId, 'K-Loop Requester', ['task_request'], 2000);
+await register(sponsorId, 'K-Loop Sponsor', ['research'], 100000);
+await register(requesterId, 'K-Loop Requester', ['task_request'], 100000);
 console.log(`Registered sponsor ${sponsorId} and requester ${requesterId}`);
 
-const scion = await api('POST', '/growth/sponsor', {
-  sponsor_agent_id: sponsorId, service: 'research', committed_capacity_usd: 3000,
-});
-const scionId = scion.scion.agent_id;
-console.log(`Spawned scion ${scionId} (operator inherited: ${scion.scion.manifest?.onchain?.operator})`);
+async function activateScion(i) {
+  const scion = await api('POST', '/growth/sponsor', {
+    sponsor_agent_id: sponsorId, service: 'research', committed_capacity_usd: 1000,
+  });
+  const scionId = scion.scion.agent_id;
+  const prepScope = `provider:${scionId}|requester:${requesterId}|service:research|capacity:${CAP}`;
+  const prep = await api('POST', '/contracts/prepare', {
+    provider_agent_id: scionId, requester_agent_id: requesterId, service: 'research',
+    requested_capacity: CAP, handshake_mode: 'advisory',
+    auth: await sign('contracts.prepare', scionId, prepScope),
+  });
+  const cid = prep.contract_id;
+  await api('POST', `/contracts/${cid}/fund`, { payment_asset: 'USDC', auth: await sign('contracts.fund', requesterId, `contract:${cid}|fund:true`) });
+  await api('POST', `/contracts/${cid}/accept`, { auth: await sign('contracts.accept', scionId, `contract:${cid}|accept:true`) });
+  await api('POST', `/contracts/${cid}/settle`, { outcome: 'settled', auth: await sign('contracts.settle', scionId, `contract:${cid}|outcome:settled`) });
+  const m = await api('GET', '/growth/metrics?autotune=false');
+  console.log(`  [${i + 1}/${scionsTarget}] ${scionId} settled — K=${m.k_factor} (${m.viral_status}) · activated ${m.population.activated_scions}/${m.population.scions} · reward x${m.incentive.reward_multiplier}`);
+  return scionId;
+}
 
-const prepScope = `provider:${scionId}|requester:${requesterId}|service:research|capacity:${CAP}`;
-const prep = await api('POST', '/contracts/prepare', {
-  provider_agent_id: scionId, requester_agent_id: requesterId, service: 'research',
-  requested_capacity: CAP, handshake_mode: 'advisory',
-  auth: await sign('contracts.prepare', scionId, prepScope),
-});
-const cid = prep.contract_id;
-console.log(`Prepared contract ${cid}`);
-
-await api('POST', `/contracts/${cid}/fund`, {
-  payment_asset: 'USDC',
-  auth: await sign('contracts.fund', requesterId, `contract:${cid}|fund:true`),
-});
-await api('POST', `/contracts/${cid}/accept`, {
-  auth: await sign('contracts.accept', scionId, `contract:${cid}|accept:true`),
-});
-await api('POST', `/contracts/${cid}/settle`, {
-  outcome: 'settled',
-  auth: await sign('contracts.settle', scionId, `contract:${cid}|outcome:settled`),
-});
-console.log('Contract funded, accepted, and settled.');
+const activated = [];
+for (let i = 0; i < scionsTarget; i += 1) {
+  activated.push(await activateScion(i));
+}
 
 const metrics = await api('GET', '/growth/metrics');
 console.log(JSON.stringify({
   step: 'k_loop_complete',
   sponsor: sponsorId,
-  scion: scionId,
-  contract: cid,
+  scions_activated_this_run: activated.length,
   k_factor: metrics.k_factor,
   viral_status: metrics.viral_status,
   reward_multiplier: metrics.incentive?.reward_multiplier,
+  activated_scions: metrics.population?.activated_scions,
+  total_scions: metrics.population?.scions,
   treasury_spent_axp: metrics.treasury?.spent_axp,
 }, null, 2));
