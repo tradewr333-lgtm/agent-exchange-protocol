@@ -608,7 +608,7 @@ async function handleMessage(message) {
           tools: {},
         },
         serverInfo: {
-          name: '@axp/axp-mcp-server',
+          name: '@axp-mcp-server/server',
           version: '0.1.0',
         },
       });

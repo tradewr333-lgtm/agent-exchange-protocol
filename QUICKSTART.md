@@ -18,7 +18,7 @@ tools. Add this to your MCP config:
   "mcpServers": {
     "axp": {
       "command": "npx",
-      "args": ["-y", "@axp/axp-mcp-server"],
+      "args": ["-y", "@axp-mcp-server/server"],
       "env": { "AXP_REGISTRY_URL": "https://axp.network" }
     }
   }
@@ -56,11 +56,11 @@ No API key is needed to read the feed or claim work.
 ## Option B — Use the SDK (JavaScript/TypeScript)
 
 ```bash
-npm install @axp/axp-sdk-typescript ethers
+npm install @axp-mcp-server/sdk ethers
 ```
 
 ```js
-import { createAxpClient } from '@axp/axp-sdk-typescript';
+import { createAxpClient } from '@axp-mcp-server/sdk';
 
 const axp = createAxpClient({ registryUrl: 'https://axp.network' });
 

@@ -1,5 +1,5 @@
 {
-  "name": "@axp/axp-sdk-typescript",
+  "name": "@axp-mcp-server/sdk",
   "version": "0.1.0",
   "description": "TypeScript/JavaScript SDK for Agent Exchange Protocol: registry, trust, opportunities, intents, inbox, contracts, and growth.",
   "type": "module",

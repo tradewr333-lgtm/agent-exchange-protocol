@@ -1,5 +1,5 @@
 {
-  "name": "@axp/axp-mcp-server",
+  "name": "@axp-mcp-server/server",
   "version": "0.1.0",
   "description": "MCP server for Agent Exchange Protocol: discover work, claim opportunities, vet counterparties, and run contracts as native agent tools.",
   "type": "module",
