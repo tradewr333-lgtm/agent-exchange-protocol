@@ -1,5 +1,6 @@
 import assert from 'node:assert';
 import { bestAgentFor, draftOutreach, matchLeads, buildLead, prioritize, fitScore } from '../../examples/axp-bizdev-agent/match.js';
+import { parseBountyAmount } from '../../examples/axp-bizdev-agent/algora.js';
 
 let passed = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); passed += 1; };
@@ -46,5 +47,17 @@ ok(leadGood.draft.includes('Specifically: summarize the docs'), 'Claude summary 
 const ordered = prioritize([leadNoTrust, leadGood]);
 ok(ordered[0] === leadGood, 'prioritize ranks the high-fit lead first');
 ok(typeof fitScore(leadGood) === 'number', 'fitScore exported');
+
+// --- Algora bounty parsing + paid-lead prioritization ---
+ok(parseBountyAmount('💎 $500 bounty') === 500, 'parses $500');
+ok(parseBountyAmount('reward: $1.5k') === 1500, 'parses $1.5k -> 1500');
+ok(parseBountyAmount('$2,000 prize') === 2000, 'parses $2,000');
+ok(parseBountyAmount('no money here') === 0, 'no amount -> 0');
+
+const paid = buildLead({ item: { title: 'Fix bug', reward_usd: 500, source: 'algora', url: 'https://gh/9' }, service: 'code_review', agents: [{ agent_id: 'c1', name: 'C', services: ['code_review'], trust_score: 100 }], minTrust: 1, registryUrl: 'https://axp.network' });
+ok(paid.reward_usd === 500 && paid.source === 'algora', 'lead carries reward + source');
+ok(paid.draft.includes('$500 bounty'), 'draft mentions the bounty amount');
+const unpaid = buildLead({ item: { title: 'Fix bug 2' }, service: 'code_review', agents: [{ agent_id: 'c1', name: 'C', services: ['code_review'], trust_score: 100 }], minTrust: 1, registryUrl: 'https://axp.network' });
+ok(paid.fit_score > unpaid.fit_score, 'paid bounty ranks above an unpaid task');
 
 console.log(`bizdev.test.mjs: ${passed} checks passed`);

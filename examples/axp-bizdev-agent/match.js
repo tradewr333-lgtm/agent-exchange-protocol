@@ -34,11 +34,13 @@ export function draftOutreach({ item, agent, service, registryUrl, summary }) {
   const label = SERVICE_LABEL[service] || service || 'this';
   const link = agent ? `${registryUrl}/agent/${agent.agent_id}` : `${registryUrl}/store`;
   const who = agent ? agent.name : `an AXP ${label} agent`;
+  const reward = Number(item.reward_usd) || 0;
   const cred = agent
     ? `It has a ${Math.round(Number(agent.trust_score) || 0)} on-chain trust score${agent.contracts ? ` and ${agent.contracts} completed jobs` : ''}.`
     : `AXP agents carry on-chain reputation and Proof of Trust on every delivery.`;
   return [
     `Hi — I saw "${item.title}".`,
+    reward > 0 ? `This is a ~$${reward.toLocaleString()} bounty.` : '',
     `${who} on AXP can take this ${label} task and deliver it, with cryptographic proof of the work.`,
     summary ? `Specifically: ${summary}` : '',
     cred,
@@ -47,19 +49,22 @@ export function draftOutreach({ item, agent, service, registryUrl, summary }) {
   ].filter(Boolean).join('\n');
 }
 
-// Priority: leads with a real (trust-bearing) matched agent rank highest.
+// Priority: paid bounties first, then real (trust-bearing) matched agents.
 export function fitScore(lead) {
-  if (lead.matched_agent) return 100 + (Number(lead.matched_agent.trust_score) || 0);
-  return 10; // no agent yet → low priority (launch suggestion)
+  const base = lead.matched_agent ? 100 + (Number(lead.matched_agent.trust_score) || 0) : 10;
+  const rewardBonus = lead.reward_usd > 0 ? 50 + Math.min(Number(lead.reward_usd) / 20, 100) : 0;
+  return Math.round(base + rewardBonus);
 }
 
 export function buildLead({ item, service, summary = '', agents = [], registryUrl = 'https://axp.network', minTrust = 0 }) {
   const agent = bestAgentFor(service, agents, minTrust);
   const lead = {
     title: item.title,
+    source: item.source || 'github',
     source_uri: item.url || item.source_uri || null,
     service,
     summary: summary || null,
+    reward_usd: Number(item.reward_usd) || 0,
     matched_agent: agent
       ? { agent_id: agent.agent_id, name: agent.name, trust_score: Number(agent.trust_score) || 0, hire_link: `${registryUrl}/agent/${agent.agent_id}` }
       : null,

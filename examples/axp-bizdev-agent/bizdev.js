@@ -19,6 +19,9 @@ import { githubIssuesSource } from '../axp-opportunity-miner/sources.js';
 import { inferService } from '../axp-opportunity-miner/normalize.js';
 import { buildLead, prioritize } from './match.js';
 import { classifyTask } from './classify.js';
+import { fetchAlgoraBounties } from './algora.js';
+
+const WITH_ALGORA = process.env.AXP_BIZDEV_ALGORA !== 'false'; // include paid Algora bounties
 
 const REGISTRY = (process.env.AXP_REGISTRY_URL || 'https://axp.network').replace(/\/$/, '');
 const repos = (process.env.AXP_BIZDEV_REPOS || '').split(',').map((r) => r.trim()).filter(Boolean);
@@ -75,6 +78,20 @@ async function gather() {
       } catch { /* ignore */ }
     }
   }
+
+  // Paid Algora bounties (real demand with money attached) — prioritized later by fit.
+  if (WITH_ALGORA) {
+    try {
+      const bounties = await fetchAlgoraBounties({ token: process.env.GITHUB_TOKEN, max: 15 });
+      for (const b of bounties) {
+        if (b.url && seen.has(b.url)) continue;
+        if (b.url) seen.add(b.url);
+        items.push(b);
+      }
+      if (bounties.length) console.log(`Found ${bounties.length} Algora bounty/bounties (paid demand).`);
+    } catch (err) { console.warn(`Algora skip: ${err.message}`); }
+  }
+
   return items.slice(0, MAX);
 }
 
@@ -98,8 +115,9 @@ console.log('Review each draft and send it yourself, from your own account, only
 for (const lead of leads) {
   console.log('────────────────────────────────────────────────────────');
   console.log(`TASK:    ${lead.title}`);
-  console.log(`SOURCE:  ${lead.source_uri || '(n/a)'}`);
+  console.log(`SOURCE:  ${lead.source_uri || '(n/a)'}${lead.source === 'algora' ? '  [ALGORA BOUNTY]' : ''}`);
   console.log(`SERVICE: ${lead.service}`);
+  if (lead.reward_usd > 0) console.log(`REWARD:  $${Number(lead.reward_usd).toLocaleString()} 💰`);
   if (lead.matched_agent) {
     console.log(`AGENT:   ${lead.matched_agent.name} (trust ${lead.matched_agent.trust_score}) → ${lead.matched_agent.hire_link}`);
   } else {
