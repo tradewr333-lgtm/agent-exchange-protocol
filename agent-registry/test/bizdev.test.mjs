@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { bestAgentFor, draftOutreach, matchLeads, buildLead, prioritize, fitScore } from '../../examples/axp-bizdev-agent/match.js';
-import { parseBountyAmount } from '../../examples/axp-bizdev-agent/algora.js';
+import { parseBountyAmount, ownerFromUrl, DEFAULT_BLOCK_OWNERS } from '../../examples/axp-bizdev-agent/algora.js';
 
 let passed = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); passed += 1; };
@@ -53,6 +53,9 @@ ok(parseBountyAmount('💎 $500 bounty') === 500, 'parses $500');
 ok(parseBountyAmount('reward: $1.5k') === 1500, 'parses $1.5k -> 1500');
 ok(parseBountyAmount('$2,000 prize') === 2000, 'parses $2,000');
 ok(parseBountyAmount('no money here') === 0, 'no amount -> 0');
+ok(ownerFromUrl('https://github.com/SecureBananaLabs/bug-bounty/issues/1772') === 'SecureBananaLabs', 'ownerFromUrl extracts repo owner');
+ok(ownerFromUrl('not a url') === null, 'ownerFromUrl null on junk');
+ok(DEFAULT_BLOCK_OWNERS.includes('securebananalabs') && DEFAULT_BLOCK_OWNERS.includes('xevrion-v2'), 'playground owners blocked by default');
 
 const paid = buildLead({ item: { title: 'Fix bug', reward_usd: 500, source: 'algora', url: 'https://gh/9' }, service: 'code_review', agents: [{ agent_id: 'c1', name: 'C', services: ['code_review'], trust_score: 100 }], minTrust: 1, registryUrl: 'https://axp.network' });
 ok(paid.reward_usd === 500 && paid.source === 'algora', 'lead carries reward + source');

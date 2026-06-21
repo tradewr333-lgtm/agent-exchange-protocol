@@ -29,6 +29,8 @@ jobs:
           # PAID Algora bounties via the real Algora API (console.algora.io/api/orgs/{org}/bounties).
           # Override the org list anytime via repo variable AXP_ALGORA_ORGS="org1,org2,...".
           AXP_ALGORA_ORGS: ${{ vars.AXP_ALGORA_ORGS || '' }}
+          # Skip agent-playground / demo bounty repos (not real paying companies).
+          AXP_ALGORA_BLOCK_OWNERS: ${{ vars.AXP_ALGORA_BLOCK_OWNERS || '' }}
           AXP_BIZDEV_POST: 'true'
           AXP_BIZDEV_MIN_TRUST: ${{ vars.AXP_BIZDEV_MIN_TRUST || '1' }}
           AXP_SIGNALS_INGEST_KEY: ${{ secrets.AXP_SIGNALS_INGEST_KEY }}

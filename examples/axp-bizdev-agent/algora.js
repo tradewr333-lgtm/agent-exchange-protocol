@@ -23,6 +23,16 @@ export const DEFAULT_ALGORA_ORGS = [
   'moonrepo', 'browser-use', 'outerbase', 'thesysdev', 'archestra-ai', 'capgo', 'isaac',
 ];
 
+// Repo OWNERS that are agent-testing playgrounds / demo bounties, not real companies
+// that actually pay. Filtered out by default; override via AXP_ALGORA_BLOCK_OWNERS.
+export const DEFAULT_BLOCK_OWNERS = ['securebananalabs', 'xevrion-v2', 'tine1117'];
+
+// Pull the GitHub repo owner from an issue URL: https://github.com/{owner}/{repo}/...
+export function ownerFromUrl(url = '') {
+  const m = String(url).match(/github\.com\/([^/]+)\//i);
+  return m ? m[1] : null;
+}
+
 // Extract a USD reward from free text like "$500", "$1.5k", "💎 $2,000" (used by the
 // GitHub-label fallback, where the amount is embedded in text rather than structured).
 export function parseBountyAmount(text = '') {
@@ -91,8 +101,13 @@ export async function fetchAlgoraBountiesByLabel({ label = '💎 Bounty', max = 
 
 // Combined: real API across the org list (primary) + label fallback, merged & deduped,
 // sorted by reward desc. `orgs` overrides the default list; `token` is for the fallback.
-export async function fetchAlgoraBounties({ orgs, max = 30, perOrg = 25, token, fetchImpl, withFallback = true } = {}) {
+export async function fetchAlgoraBounties({ orgs, max = 30, perOrg = 25, token, fetchImpl, withFallback = true, blockOwners } = {}) {
   const orgList = (orgs && orgs.length) ? orgs : DEFAULT_ALGORA_ORGS;
+  const blocked = new Set((blockOwners && blockOwners.length ? blockOwners : DEFAULT_BLOCK_OWNERS).map((o) => String(o).trim().toLowerCase()));
+  const isBlocked = (b) => {
+    const owner = (b.org || ownerFromUrl(b.url) || '').toLowerCase();
+    return owner && blocked.has(owner);
+  };
   const seen = new Set();
   const out = [];
 
@@ -100,7 +115,7 @@ export async function fetchAlgoraBounties({ orgs, max = 30, perOrg = 25, token, 
     if (out.length >= max) break;
     const items = await fetchAlgoraBountiesForOrg(org, { limit: perOrg, fetchImpl });
     for (const b of items) {
-      if (!b.url || seen.has(b.url)) continue;
+      if (!b.url || seen.has(b.url) || isBlocked(b)) continue;
       seen.add(b.url);
       out.push(b);
     }
@@ -109,7 +124,7 @@ export async function fetchAlgoraBounties({ orgs, max = 30, perOrg = 25, token, 
   if (withFallback && out.length < max) {
     const fb = await fetchAlgoraBountiesByLabel({ max: max - out.length, token, fetchImpl });
     for (const b of fb) {
-      if (!b.url || seen.has(b.url)) continue;
+      if (!b.url || seen.has(b.url) || isBlocked(b)) continue;
       seen.add(b.url);
       out.push(b);
     }
