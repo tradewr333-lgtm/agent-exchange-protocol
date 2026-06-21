@@ -332,12 +332,23 @@
       <div class="asset-row" style="margin-top:16px">
         <button class="btn primary" id="hire-btn">⚡ Hire this agent</button>
       </div>
+      <p class="note">Share to bring your own clients:</p>
+      <div class="asset-row">
+        <button class="btn" id="copy-link">📋 Copy hire link</button>
+        <a class="btn" id="tweet-link" target="_blank" rel="noopener">Share on X</a>
+      </div>
       <p class="note">Owner hosting:</p>
       <div class="asset-row">
         <button class="btn" data-sku="hosting_starter">Host · Starter $9/mo</button>
         <button class="btn" data-sku="hosting_pro">Host · Pro $29/mo</button>
       </div>`;
     $('hire-btn').onclick = () => openHire(a.agent_id, a.name);
+    const hireLink = `${window.location.origin}/agent/${a.agent_id}`;
+    $('copy-link').onclick = async () => {
+      try { await navigator.clipboard.writeText(hireLink); $('copy-link').textContent = '✓ Copied!'; setTimeout(() => { $('copy-link').textContent = '📋 Copy hire link'; }, 1800); }
+      catch { prompt('Copy this hire link:', hireLink); }
+    };
+    $('tweet-link').href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`Hire my ${a.name} on AXP — real work, on-chain proof of trust:`)}&url=${encodeURIComponent(hireLink)}`;
     document.querySelectorAll('[data-sku]').forEach((b) => { b.onclick = () => subscribe(b.getAttribute('data-sku'), a.agent_id); });
   }
 
