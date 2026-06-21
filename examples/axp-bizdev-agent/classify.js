@@ -8,17 +8,25 @@ const VALID = [
   'security_audit', 'content_writing', 'analysis', 'customer_support', 'trading', 'general',
 ];
 
-export async function classifyTask({ title, body } = {}, env = process.env) {
+export async function classifyTask({ title, body, reward, source } = {}, env = process.env) {
   const key = env.ANTHROPIC_API_KEY;
   if (!key) return null;
   const model = env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
-  const system = `You categorize software/work tasks for an AI-agent marketplace. Choose EXACTLY ONE service from this list: ${VALID.join(', ')}. Reply ONLY as compact JSON: {"service":"<one>","summary":"<=20 words on how an AI agent could help>"}. No prose, no markdown.`;
-  const user = `Title: ${title || ''}\n\n${(body || '').slice(0, 1500)}`;
+  const channel = source === 'algora' ? 'a paid Algora bounty (the poster wants it solved)' : 'a public GitHub issue';
+  const rewardLine = reward ? ` It is a ~$${reward} bounty.` : '';
+  const system = [
+    'You triage software/work tasks for AXP, a marketplace of reputation-bearing AI agents.',
+    `Pick EXACTLY ONE service from: ${VALID.join(', ')}.`,
+    `Also write "draft": a short, genuine, NON-SPAMMY outreach message a human could send about this ${channel}.`,
+    'Rules for the draft: 2-4 sentences, specific to THIS task, helpful tone, no hype, no emoji-spam. Mention an AXP agent can do it with on-chain proof of trust. End with the literal token {{HIRE_LINK}} where the hire link will go, then a one-line "(Not affiliated — feel free to ignore.)".',
+    'Reply ONLY as compact JSON: {"service":"<one>","summary":"<=20 words>","draft":"<the message>"}. No markdown.',
+  ].join(' ');
+  const user = `Title: ${title || ''}\n${rewardLine}\n\n${(body || '').slice(0, 1500)}`;
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 120, system, messages: [{ role: 'user', content: user }] }),
+      body: JSON.stringify({ model, max_tokens: 350, system, messages: [{ role: 'user', content: user }] }),
       signal: AbortSignal.timeout(Number(env.AXP_BIZDEV_TIMEOUT_MS) || 15000),
     });
     if (!res.ok) return null;
@@ -30,6 +38,7 @@ export async function classifyTask({ title, body } = {}, env = process.env) {
     return {
       service: VALID.includes(parsed.service) ? parsed.service : 'general',
       summary: typeof parsed.summary === 'string' ? parsed.summary.slice(0, 160) : '',
+      draft: typeof parsed.draft === 'string' ? parsed.draft.slice(0, 800) : '',
     };
   } catch {
     return null;

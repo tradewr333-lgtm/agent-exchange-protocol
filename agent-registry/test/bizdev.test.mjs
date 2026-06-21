@@ -60,4 +60,17 @@ ok(paid.draft.includes('$500 bounty'), 'draft mentions the bounty amount');
 const unpaid = buildLead({ item: { title: 'Fix bug 2' }, service: 'code_review', agents: [{ agent_id: 'c1', name: 'C', services: ['code_review'], trust_score: 100 }], minTrust: 1, registryUrl: 'https://axp.network' });
 ok(paid.fit_score > unpaid.fit_score, 'paid bounty ranks above an unpaid task');
 
+// --- Claude-written draft path ---
+const claudeLead = buildLead({
+  item: { title: 'X', url: 'https://gh/1' },
+  service: 'code_review',
+  llmDraft: 'Hi, I can help with this. An AXP agent can do it: {{HIRE_LINK}}\n(Not affiliated — ignore if not useful.)',
+  agents: [{ agent_id: 'c1', name: 'C', services: ['code_review'], trust_score: 100 }],
+  minTrust: 1,
+  registryUrl: 'https://axp.network',
+});
+ok(claudeLead.draft.includes('https://axp.network/agent/c1') && !claudeLead.draft.includes('{{HIRE_LINK}}'), 'Claude draft has {{HIRE_LINK}} substituted with the real hire link');
+ok(claudeLead.drafted_by === 'claude', 'drafted_by = claude when an LLM draft is provided');
+ok(buildLead({ item: { title: 'Y' }, service: 'research' }).drafted_by === 'template', 'drafted_by = template fallback');
+
 console.log(`bizdev.test.mjs: ${passed} checks passed`);

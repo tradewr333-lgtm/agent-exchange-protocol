@@ -103,10 +103,11 @@ if (workItems.length) console.log(`Classifying ${workItems.length} task(s)…`);
 const rawLeads = await Promise.all(workItems.map(async (item) => {
   let service;
   let summary = '';
-  const classified = await classifyTask({ title: item.title, body: item.body });
-  if (classified) { service = classified.service; summary = classified.summary; }
+  let llmDraft = '';
+  const classified = await classifyTask({ title: item.title, body: item.body, reward: item.reward_usd, source: item.source });
+  if (classified) { service = classified.service; summary = classified.summary; llmDraft = classified.draft || ''; }
   else { service = inferService(item).service; }
-  return buildLead({ item, service, summary, agents, registryUrl: REGISTRY, minTrust: MIN_TRUST });
+  return buildLead({ item, service, summary, llmDraft, agents, registryUrl: REGISTRY, minTrust: MIN_TRUST });
 }));
 const leads = prioritize(rawLeads);
 

@@ -56,8 +56,13 @@ export function fitScore(lead) {
   return Math.round(base + rewardBonus);
 }
 
-export function buildLead({ item, service, summary = '', agents = [], registryUrl = 'https://axp.network', minTrust = 0 }) {
+export function buildLead({ item, service, summary = '', llmDraft = '', agents = [], registryUrl = 'https://axp.network', minTrust = 0 }) {
   const agent = bestAgentFor(service, agents, minTrust);
+  const link = agent ? `${registryUrl}/agent/${agent.agent_id}` : `${registryUrl}/store`;
+  // Prefer the Claude-written draft (personalized per lead); fall back to the template.
+  const draft = llmDraft
+    ? llmDraft.replaceAll('{{HIRE_LINK}}', link)
+    : draftOutreach({ item, agent, service, registryUrl, summary });
   const lead = {
     title: item.title,
     source: item.source || 'github',
@@ -66,10 +71,11 @@ export function buildLead({ item, service, summary = '', agents = [], registryUr
     summary: summary || null,
     reward_usd: Number(item.reward_usd) || 0,
     matched_agent: agent
-      ? { agent_id: agent.agent_id, name: agent.name, trust_score: Number(agent.trust_score) || 0, hire_link: `${registryUrl}/agent/${agent.agent_id}` }
+      ? { agent_id: agent.agent_id, name: agent.name, trust_score: Number(agent.trust_score) || 0, hire_link: link }
       : null,
     suggested_template: agent ? null : service,
-    draft: draftOutreach({ item, agent, service, registryUrl, summary }),
+    draft,
+    drafted_by: llmDraft ? 'claude' : 'template',
     channel: 'human_review_required',
   };
   lead.fit_score = fitScore(lead);
