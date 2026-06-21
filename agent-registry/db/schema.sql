@@ -182,3 +182,21 @@ create index if not exists lineage_sponsor_idx on agent_lineage(sponsor_agent_id
 create index if not exists lineage_handle_idx on agent_lineage(handle);
 create index if not exists discovery_rewards_beneficiary_idx on discovery_rewards(beneficiary_agent_id, created_at desc);
 create index if not exists discovery_rewards_source_idx on discovery_rewards(source_agent_id);
+
+-- AXP Alpha Engine: external demand signals (GitHub / HuggingFace / MCP registries / marketplaces)
+
+create table if not exists external_signals (
+  id bigserial primary key,
+  source text not null,
+  category text not null,
+  metric text not null default 'count',
+  value numeric not null default 0,
+  growth_pct numeric not null default 0,
+  query text,
+  observed_at timestamptz not null default now(),
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists external_signals_cat_observed_idx on external_signals(category, observed_at desc);
+create index if not exists external_signals_observed_idx on external_signals(observed_at desc);

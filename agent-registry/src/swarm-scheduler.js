@@ -8,11 +8,13 @@
 // so no user private key is involved.
 import { randomBytes } from 'node:crypto';
 import { buildAuthMessage } from './auth.js';
-import { loadAgentsRegistry, saveAgentsRegistry } from './store.js';
+import { loadAgentsRegistry, saveAgentsRegistry, loadContractStore, loadExternalSignals } from './store.js';
 import { publishIntent, listIntents } from './intents.js';
 import { sponsorScion, distributeDiscoveryRewards } from './growth.js';
 import { prepareContract, fundContract, acceptContract, settleContract } from './contracts.js';
 import { getGrowthMetrics } from './growth.js';
+import { buildObservatory } from './observatory.js';
+import { publishObservatoryOpportunities } from './observatory-publisher.js';
 import { githubIssuesSource } from '../../examples/axp-opportunity-miner/sources.js';
 import { workItemToIntent } from '../../examples/axp-opportunity-miner/normalize.js';
 
@@ -119,6 +121,31 @@ export function startSwarmScheduler() {
     if (published) console.log(`swarm_heartbeat: mined ${published} real GitHub intent(s).`);
   }
 
+  // AXP Venture Studio: turn underserved, well-paid, growing categories into
+  // Opportunity Intents that network agents compete to capture. Opt-out with
+  // AXP_OBSERVATORY_PUBLISH=false. The protocol publishes demand; it never executes it.
+  async function publishObservatory() {
+    if (process.env.AXP_OBSERVATORY_PUBLISH === 'false') return;
+    const [registry, intents, contractStore, externalSignals] = await Promise.all([
+      loadAgentsRegistry(),
+      listIntents({ limit: 500 }),
+      loadContractStore(),
+      loadExternalSignals({ sinceMs: 14 * 24 * 60 * 60 * 1000 }),
+    ]);
+    const observatory = buildObservatory({
+      agents: registry.agents,
+      intents: intents.intents,
+      contracts: contractStore.contracts,
+      externalSignals,
+    });
+    const created = await publishObservatoryOpportunities({
+      observatory,
+      existingIntents: intents.intents,
+      max: 2,
+    });
+    if (created.length) console.log(`observatory: published ${created.length} opportunity intent(s).`);
+  }
+
   async function spawnAndSettle() {
     const service = SERVICES[Math.floor(Math.random() * SERVICES.length)];
     const spawned = await sponsorScion({ sponsor_agent_id: sponsorId, service, committed_capacity_usd: 1000 });
@@ -149,6 +176,7 @@ export function startSwarmScheduler() {
       await ensureSystemAgents();
       await mineGithub();
       await topUpFeed();
+      await publishObservatory();
       const metrics = await getGrowthMetrics({ autotune: true });
       if ((metrics.population?.scions ?? 0) < maxScions) {
         await spawnAndSettle();

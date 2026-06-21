@@ -21,10 +21,11 @@ import {
   settleContract,
 } from './src/contracts.js';
 import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/registry.js';
-import { listApiUsage, listTrustEvents } from './src/store.js';
+import { listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals } from './src/store.js';
 import { startSwarmScheduler } from './src/swarm-scheduler.js';
 import { computeWeightedScores, reputationWeight } from './src/sybil.js';
 import { buildObservatory } from './src/observatory.js';
+import { normalizeSignal } from './src/external-signals.js';
 import { claimIntent, fulfillIntent, getIntent, getIntentFeed, listIntents, publishIntent } from './src/intents.js';
 import { getOpportunitiesForAgent, getOpportunityGraph } from './src/opportunities.js';
 import { getInbox, postInboxMessage } from './src/inbox.js';
@@ -520,17 +521,52 @@ const server = http.createServer(async (request, response) => {
   // AXP Agent Economy Layer: Intent Feed + Opportunity Router + Inbox + Growth
   // -------------------------------------------------------------------------
 
-  // Economic Observatory — "where is the money" intelligence over the AXP ledger.
+  // Alpha Engine — ingest external demand signals (GitHub/HuggingFace/MCP/marketplace).
+  // Collectors run off-box and POST here. Gated by a shared ingest key so the feed
+  // can't be spammed: set AXP_SIGNALS_INGEST_KEY in the environment.
+  if (request.method === 'POST' && url.pathname === '/observatory/signals') {
+    const ingestKey = process.env.AXP_SIGNALS_INGEST_KEY;
+    if (!ingestKey) {
+      return sendJson(response, 503, { error: 'signal_ingest_disabled', hint: 'set AXP_SIGNALS_INGEST_KEY' });
+    }
+    if (request.headers['x-axp-ingest-key'] !== ingestKey) {
+      return sendJson(response, 401, { error: 'invalid_ingest_key' });
+    }
+    const body = await readJsonBody(request);
+    const raw = Array.isArray(body?.signals) ? body.signals : (Array.isArray(body) ? body : []);
+    const normalized = raw.map((s) => normalizeSignal(s)).filter(Boolean).slice(0, 200);
+    if (normalized.length === 0) {
+      return sendJson(response, 400, { error: 'no_valid_signals', expected: 'signals:[{source,category,value,growth_pct?}]' });
+    }
+    const accepted = await appendExternalSignals(normalized);
+    return sendJson(response, 201, { ok: true, accepted, schema: 'axp.external_signal_ingest.v0' });
+  }
+
+  if (url.pathname === '/observatory/signals') {
+    const signals = await loadExternalSignals({ sinceMs: 14 * 24 * 60 * 60 * 1000 });
+    return sendJson(response, 200, {
+      protocol: 'AXP',
+      schema: 'axp.external_signals.v0',
+      window_days: 14,
+      count: signals.length,
+      signals: signals.slice(0, 200),
+    });
+  }
+
+  // Economic Observatory — "where is the money" intelligence over the AXP ledger,
+  // enriched with external demand signals from the Alpha Engine.
   if (url.pathname === '/observatory') {
-    const [agentsR, intentsR, contractsR] = await Promise.all([
+    const [agentsR, intentsR, contractsR, externalSignals] = await Promise.all([
       listAgents({}),
       listIntents({ limit: 500 }),
       listPreparedContracts(),
+      loadExternalSignals({ sinceMs: 14 * 24 * 60 * 60 * 1000 }),
     ]);
     return sendJson(response, 200, buildObservatory({
       agents: agentsR.agents,
       intents: intentsR.intents,
       contracts: contractsR.contracts,
+      externalSignals,
     }));
   }
 

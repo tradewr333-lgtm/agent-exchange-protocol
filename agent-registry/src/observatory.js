@@ -6,6 +6,8 @@
 // into a place agents check daily to find their next dollar, not just a trust score.
 // Pure: takes plain arrays so it is deterministically testable.
 
+import { aggregateExternalSignals } from './external-signals.js';
+
 const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 function inWindow(createdAt, from, to) {
@@ -13,7 +15,7 @@ function inWindow(createdAt, from, to) {
   return Number.isFinite(t) && t >= from && t < to;
 }
 
-export function buildObservatory({ agents = [], intents = [], contracts = [] } = {}) {
+export function buildObservatory({ agents = [], intents = [], contracts = [], externalSignals = [] } = {}) {
   const now = Date.now();
   const recentFrom = now - WINDOW_MS;
   const priorFrom = now - 2 * WINDOW_MS;
@@ -60,21 +62,39 @@ export function buildObservatory({ agents = [], intents = [], contracts = [] } =
     c.settled_volume_usd += value;
   }
 
+  // External demand signals (GitHub/HuggingFace/MCP registries/marketplaces).
+  // Categories that exist ONLY externally still get a bucket — that is the most
+  // valuable signal of all: demand forming out there with zero AXP supply yet.
+  const external = aggregateExternalSignals(externalSignals, now);
+  for (const name of external.keys()) cat(name);
+
   const categories = [...cats.values()].map((c) => {
-    const growth = c.intents_prior > 0
+    const ext = external.get(c.category) || { external_demand_index: 0, external_growth_pct: 0, external_sources: [] };
+    const internalGrowth = c.intents_prior > 0
       ? (c.intents_recent - c.intents_prior) / c.intents_prior
       : (c.intents_recent > 0 ? 1 : 0);
-    const demand = c.open_reward_usd + c.open_intents * 50;
-    const growthFactor = 1 + Math.max(-0.9, Math.min(3, growth));
-    // High when well-paid demand is growing and underserved by agents.
+    const externalGrowth = (ext.external_growth_pct || 0) / 100;
+    const blendedGrowth = Math.max(internalGrowth, externalGrowth);
+
+    const internalDemand = c.open_reward_usd + c.open_intents * 50;
+    const externalDemand = ext.external_demand_index * 100; // USD-proxy weight for off-ledger demand
+    const demand = internalDemand + externalDemand;
+    const growthFactor = 1 + Math.max(-0.9, Math.min(3, blendedGrowth));
+    // High when well-paid (internal + external) demand is growing and underserved by agents.
     const opportunityScore = (demand * growthFactor) / (c.active_agents + 1);
+
+    const hasDemand = c.open_intents > 0 || ext.external_demand_index > 0;
     return {
       ...c,
       open_reward_usd: Number(c.open_reward_usd.toFixed(2)),
       settled_volume_usd: Number(c.settled_volume_usd.toFixed(2)),
-      growth_pct: Number((growth * 100).toFixed(1)),
+      growth_pct: Number((internalGrowth * 100).toFixed(1)),
+      external_demand_index: ext.external_demand_index,
+      external_growth_pct: ext.external_growth_pct,
+      external_sources: ext.external_sources,
+      external_only: c.total_intents === 0 && ext.external_demand_index > 0,
       demand_supply_ratio: Number((c.open_intents / (c.active_agents + 1)).toFixed(2)),
-      underserved: c.open_intents > c.active_agents,
+      underserved: hasDemand && c.open_intents >= c.active_agents,
       opportunity_score: Number(opportunityScore.toFixed(2)),
     };
   }).sort((a, b) => b.opportunity_score - a.opportunity_score);
@@ -103,6 +123,8 @@ export function buildObservatory({ agents = [], intents = [], contracts = [] } =
       open_reward_usd: Number(categories.reduce((s, c) => s + c.open_reward_usd, 0).toFixed(2)),
       settled_volume_usd: Number(categories.reduce((s, c) => s + c.settled_volume_usd, 0).toFixed(2)),
       active_agents: agents.filter((a) => a.status === 'active').length,
+      external_signal_categories: external.size,
+      external_only_categories: categories.filter((c) => c.external_only).length,
     },
     categories,
     top_skills_in_demand: topSkills,

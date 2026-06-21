@@ -17,6 +17,7 @@ export const paths = {
   lineage: join(dataDir, 'lineage.json'),
   discoveryRewards: join(dataDir, 'discovery-rewards.json'),
   growthState: join(dataDir, 'growth-state.json'),
+  externalSignals: join(dataDir, 'external-signals.json'),
 };
 
 let poolPromise = null;
@@ -780,6 +781,62 @@ export async function saveGrowthState(state) {
 
   writeJsonAtomic(paths.growthState, updated);
   return updated;
+}
+
+// ---------------------------------------------------------------------------
+// AXP Alpha Engine: external demand signals (GitHub/HuggingFace/MCP/marketplace)
+// ---------------------------------------------------------------------------
+
+export async function appendExternalSignals(signals) {
+  const list = Array.isArray(signals) ? signals : [signals];
+  if (list.length === 0) return 0;
+
+  if (storageMode() === 'postgres') {
+    for (const s of list) {
+      await query(
+        `insert into external_signals (source, category, metric, value, growth_pct, query, observed_at, data)
+         values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+        [
+          s.source,
+          s.category,
+          s.metric ?? 'count',
+          Number(s.value ?? 0),
+          Number(s.growth_pct ?? 0),
+          s.query ?? null,
+          s.observed_at ?? new Date().toISOString(),
+          JSON.stringify(s),
+        ],
+      );
+    }
+    return list.length;
+  }
+
+  const existing = readCollection(paths.externalSignals, 'signals');
+  // Bound the JSON file: keep the most recent 2000 signals.
+  const merged = [...existing, ...list].slice(-2000);
+  writeCollection(paths.externalSignals, 'signals', merged);
+  return list.length;
+}
+
+export async function loadExternalSignals({ sinceMs } = {}) {
+  const cutoff = Number.isFinite(sinceMs) ? Date.now() - sinceMs : null;
+  if (storageMode() === 'postgres') {
+    const params = [];
+    let where = '';
+    if (cutoff) {
+      params.push(new Date(cutoff).toISOString());
+      where = 'where observed_at >= $1';
+    }
+    const result = await query(
+      `select data from external_signals ${where} order by observed_at desc limit 2000`,
+      params,
+    );
+    return result.rows.map((row) => row.data);
+  }
+
+  let list = readCollection(paths.externalSignals, 'signals');
+  if (cutoff) list = list.filter((s) => Date.parse(s.observed_at ?? '') >= cutoff);
+  return list;
 }
 
 function readCollection(path, key) {
