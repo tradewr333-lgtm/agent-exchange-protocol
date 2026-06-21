@@ -27,9 +27,26 @@ AXP_SIGNALS_INGEST_KEY=your-shared-key \
 node examples/axp-alpha-engine/collect.js
 ```
 
-`AXP_SIGNALS_INGEST_KEY` must match the value set on the server (env var of the same
-name). The server rejects ingestion if the key is unset (503) or wrong (401), so the
-signal feed can't be spammed.
+`AXP_SIGNALS_INGEST_KEY` must match the value set **on the server** (env var of the
+same name, e.g. in Render → Environment). The server rejects ingestion if the key is
+unset (**503 `signal_ingest_disabled`**) or wrong (**401**), so the feed can't be
+spammed. Setting it only in your local shell is not enough — the server validates it.
+
+### Avoid GitHub rate limits (recommended)
+
+Unauthenticated GitHub Search is capped at ~10 requests/min, so a full run will hit
+`403 rate limit exceeded`. Set a `GITHUB_TOKEN` (any classic/fine-grained PAT, no
+scopes needed for public search) to get 30 req/min **and** the growth metric:
+
+```bash
+GITHUB_TOKEN=ghp_xxx \
+AXP_REGISTRY_URL=https://axp.network \
+AXP_SIGNALS_INGEST_KEY=your-shared-key \
+node examples/axp-alpha-engine/collect.js
+```
+
+Without a token the collector automatically slows down (1 request/category, no growth)
+so it still completes.
 
 ## What gets sent
 
