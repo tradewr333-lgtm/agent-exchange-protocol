@@ -159,15 +159,29 @@ export function startSwarmScheduler() {
 
   async function ensureSystemAgents() {
     if (ready) return;
-    await getWallet();
+    const w = await getWallet();
+    const operator = (w && w.address) || null;
     const registry = await loadAgentsRegistry();
-    const have = new Set(registry.agents.map((a) => a.agent_id));
-    const toAdd = [];
-    if (!have.has(sponsorId)) toAdd.push(systemAgent(sponsorId, 'AXP Swarm Sponsor', ['research', 'analysis']));
-    if (!have.has(requesterId)) toAdd.push(systemAgent(requesterId, 'AXP Swarm Requester', ['task_request']));
-    if (toAdd.length) {
-      await saveAgentsRegistry({ ...registry, agents: [...registry.agents, ...toAdd] });
-    }
+    const byId = new Map(registry.agents.map((a) => [a.agent_id, a]));
+    // Upsert the system agents AND refresh their on-chain operator to THIS boot's
+    // ephemeral wallet. The wallet is re-minted every boot, so without this the
+    // requester's funding signature fails auth (auth_operator_mismatch) after a
+    // redeploy — which stalls every contract at "prepared" and blocks trust.
+    const refresh = (id, name, services) => {
+      const existing = byId.get(id);
+      if (!existing) return systemAgent(id, name, services);
+      return {
+        ...existing,
+        manifest: {
+          ...(existing.manifest || {}),
+          onchain: { ...((existing.manifest || {}).onchain || {}), operator },
+        },
+      };
+    };
+    const sponsor = refresh(sponsorId, 'AXP Swarm Sponsor', ['research', 'analysis']);
+    const requester = refresh(requesterId, 'AXP Swarm Requester', ['task_request']);
+    const others = registry.agents.filter((a) => a.agent_id !== sponsorId && a.agent_id !== requesterId);
+    await saveAgentsRegistry({ ...registry, agents: [...others, sponsor, requester] });
     ready = true;
   }
 
