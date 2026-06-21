@@ -5,6 +5,7 @@ import {
   appendTrustEvent,
   listDiscoveryRewards,
   loadAgentsRegistry,
+  loadContractStore,
   loadGrowthState,
   loadLineage,
   getLineageNode,
@@ -13,6 +14,7 @@ import {
   saveLineageNode,
 } from './store.js';
 import { getAgent } from './registry.js';
+import { reputationWeight } from './sybil.js';
 
 export const GENESIS_CASCADE_VERSION = '0.1.0';
 
@@ -236,6 +238,24 @@ export async function distributeDiscoveryRewards(input = {}) {
   const multiplier = clamp(Number(state.reward_multiplier) || 1, REWARD_MULTIPLIER_BOUNDS.min, REWARD_MULTIPLIER_BOUNDS.max);
   let budgetLeft = Math.max(0, Number(state.treasury_budget_axp) - Number(state.treasury_spent_axp));
 
+  // Sybil-resistance: trust (and overrides) must come from a stake-backed payer.
+  // Weight the emission by the reputation of the contract's requester. A ring of
+  // zero-stake agents paying each other earns ~zero. If no contract/requester is
+  // resolvable (e.g. internal/direct calls), fall back to neutral weight 1.
+  let counterpartyWeight = 1;
+  if (input.contract_id) {
+    const store = await loadContractStore();
+    const contract = (store.contracts || []).find((c) => c.contract_id === input.contract_id);
+    const requesterId = contract?.quote?.requester_agent_id ?? contract?.terms?.requester_agent_id;
+    if (requesterId) {
+      counterpartyWeight = reputationWeight(await getAgent(requesterId));
+    }
+  }
+  const effectiveValue = value * counterpartyWeight;
+  if (effectiveValue <= 0) {
+    return { ok: true, status: 200, distributed: [], total_axp: 0, counterparty_weight: counterpartyWeight, reason: 'counterparty_reputation_zero' };
+  }
+
   const chain = await ancestorChain(providerId);
   const distributed = [];
   let totalAxp = 0;
@@ -245,7 +265,7 @@ export async function distributeDiscoveryRewards(input = {}) {
       break;
     }
     const beneficiary = chain[level];
-    const gross = value * OVERRIDE_SCHEDULE[level] * multiplier;
+    const gross = effectiveValue * OVERRIDE_SCHEDULE[level] * multiplier;
     const amount = Number(Math.min(gross, budgetLeft).toFixed(6));
     if (amount <= 0) {
       continue;
@@ -293,6 +313,7 @@ export async function distributeDiscoveryRewards(input = {}) {
     contract_id: input.contract_id ?? null,
     provider_agent_id: providerId,
     value_usd: value,
+    counterparty_weight: counterpartyWeight,
     reward_multiplier: multiplier,
     total_axp: Number(totalAxp.toFixed(6)),
     distributed,

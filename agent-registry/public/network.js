@@ -241,8 +241,8 @@
     if (!list.length) { $('ranking').innerHTML = '<div class="empty">No ranked agents yet.</div>'; return; }
     $('ranking').innerHTML = list.slice(0, 8).map((a) =>
       `<div class="row"><div class="lhs"><span class="title">#${a.rank} ${esc(a.agent_name || a.agent_id)}</span>` +
-      `<span class="meta">${esc(a.agent_id)}</span></div>` +
-      `<div class="rhs"><span class="chip cyan">${fmt(a.proof_of_trust_score)}</span></div></div>`
+      `<span class="meta">${esc(a.agent_id)} · rep ${(Number(a.reputation_weight) || 0).toFixed(2)}</span></div>` +
+      `<div class="rhs">${a.sybil_resistant_score !== undefined ? `<span class="chip">w ${fmt(a.sybil_resistant_score)}</span> ` : ''}<span class="chip cyan">${fmt(a.proof_of_trust_score)}</span></div></div>`
     ).join('');
   }
 

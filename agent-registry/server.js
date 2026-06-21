@@ -23,6 +23,7 @@ import {
 import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/registry.js';
 import { listApiUsage, listTrustEvents } from './src/store.js';
 import { startSwarmScheduler } from './src/swarm-scheduler.js';
+import { computeWeightedScores, reputationWeight } from './src/sybil.js';
 import { claimIntent, fulfillIntent, getIntent, getIntentFeed, listIntents, publishIntent } from './src/intents.js';
 import { getOpportunitiesForAgent, getOpportunityGraph } from './src/opportunities.js';
 import { getInbox, postInboxMessage } from './src/inbox.js';
@@ -518,6 +519,71 @@ const server = http.createServer(async (request, response) => {
   // AXP Agent Economy Layer: Intent Feed + Opportunity Router + Inbox + Growth
   // -------------------------------------------------------------------------
 
+  // A2A Agent Card — lets Agent2Agent-aware clients discover AXP as a service.
+  if (url.pathname === '/.well-known/agent-card.json' || url.pathname === '/agent-card.json') {
+    return sendJson(response, 200, {
+      protocolVersion: '0.2.0',
+      name: 'AXP — Agent Exchange Protocol',
+      description: 'Trust + opportunity layer for autonomous agents: Proof-of-Trust scores, risk reports, a live opportunity feed, opportunity routing, and signed contracts.',
+      url: 'https://axp.network',
+      version: '0.1.0',
+      provider: { organization: 'AXP', url: 'https://axp.network' },
+      capabilities: { streaming: false, pushNotifications: false },
+      defaultInputModes: ['application/json'],
+      defaultOutputModes: ['application/json'],
+      skills: [
+        { id: 'trust_score', name: 'Proof of Trust score', description: 'Earned, economically-verified trust score for an agent.', tags: ['trust', 'reputation'] },
+        { id: 'risk_report', name: 'Risk report', description: 'Counterparty risk assessment before delegation or contracting.', tags: ['risk', 'trust'] },
+        { id: 'opportunity_feed', name: 'Opportunity feed', description: 'Live machine-readable work agents can discover and claim.', tags: ['opportunity', 'work'] },
+        { id: 'best_agent', name: 'Best-agent recommendation', description: 'Recommend the most trustworthy agent for a task.', tags: ['routing', 'discovery'] },
+        { id: 'contracts', name: 'Signed contracts', description: 'Quote, prepare, fund, accept and settle agent contracts with escrow.', tags: ['contracts', 'settlement'] },
+      ],
+      documentationUrl: 'https://github.com/tradewr333-lgtm/agent-exchange-protocol/blob/main/QUICKSTART.md',
+    });
+  }
+
+  const erc8004Match = url.pathname.match(/^\/agents\/([^/]+)\/erc8004$/);
+  if (erc8004Match) {
+    const agent = await getAgent(erc8004Match[1]);
+    if (!agent) {
+      return sendJson(response, 404, { error: 'agent_not_found', agent_id: erc8004Match[1] });
+    }
+    const score = await getAgentTrustScore(erc8004Match[1]);
+    const anchor = await getLatestAnchor().catch(() => null);
+    const operator = agent.manifest?.onchain?.operator ?? null;
+    // Map AXP's Proof-of-Trust onto the ERC-8004 three-registry model.
+    return sendJson(response, 200, {
+      protocol: 'AXP',
+      schema: 'axp.erc8004_mapping.v0',
+      note: 'AXP Proof-of-Trust mapped onto the ERC-8004 Identity / Reputation / Validation model. Complements (does not replace) on-chain ERC-8004 registries.',
+      identity: {
+        agent_id: agent.agent_id,
+        did: `did:axp:${agent.agent_id}`,
+        operator,
+        chain_id: agent.manifest?.onchain?.chain_id ?? 56,
+        onchain_registry: '0x5e91402c50EC9D7655617ec787dc8087f7AB4678',
+      },
+      reputation: {
+        schema: 'axp.proof_of_trust.v0',
+        proof_of_trust_score: score?.proof_of_trust_score ?? 0,
+        reputation_weight: reputationWeight(agent),
+        success_rate: score?.success_rate ?? 0,
+        settled_volume_usd: score?.settled_volume_usd ?? 0,
+        counterparty_diversity: score?.counterparty_diversity ?? 0,
+      },
+      validation: {
+        method: 'merkle_anchor_bsc',
+        latest_anchor: anchor && anchor.merkle_root ? {
+          merkle_root: anchor.merkle_root,
+          tx_hash: anchor.tx_hash ?? null,
+          contract_address: anchor.contract_address ?? null,
+          chain_id: anchor.chain_id ?? null,
+          block_number: anchor.block_number ?? null,
+        } : null,
+      },
+    });
+  }
+
   // Public, composed snapshot for the live dashboard (no API key; read-only).
   if (url.pathname === '/network/live') {
     const [agentsResult, eventsResult, rankingResult, opportunities, metrics, lineage, intents, anchor, anchorsResult] = await Promise.all([
@@ -534,6 +600,13 @@ const server = http.createServer(async (request, response) => {
     const gdpUsd = (eventsResult.events || [])
       .filter((event) => event.event_type === 'contract_settled')
       .reduce((sum, event) => sum + (Number(event.value_usd) || 0), 0);
+    // Sybil-resistant weighting over the live ledger, merged into the ranking.
+    const weighted = computeWeightedScores(agentsResult.agents || [], eventsResult.events || []);
+    const rankingAgents = (rankingResult.agents || []).map((a) => ({
+      ...a,
+      reputation_weight: weighted.get(a.agent_id)?.reputation_weight ?? 0,
+      sybil_resistant_score: weighted.get(a.agent_id)?.sybil_resistant_score ?? 0,
+    }));
     return sendJson(response, 200, {
       protocol: 'AXP',
       schema: 'axp.network_live.v0',
@@ -551,7 +624,7 @@ const server = http.createServer(async (request, response) => {
         })),
       },
       events: { count: eventsResult.count, events: eventsResult.events || [] },
-      ranking: { agents: rankingResult.agents || [] },
+      ranking: { agents: rankingAgents },
       opportunities,
       metrics,
       lineage,
