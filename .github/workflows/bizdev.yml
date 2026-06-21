@@ -1,0 +1,29 @@
+name: AXP BizDev Agent
+
+# Runs the BizDev/Outreach Agent in the cloud (no local machine needed): pulls real
+# external demand, classifies it with Claude, matches each task to the best AXP agent,
+# and delivers the matched leads to that agent OWNER's inbox via /leads/ingest.
+# It NEVER posts to GitHub/marketplaces — owners review the leads and send themselves.
+
+on:
+  schedule:
+    - cron: '0 9 * * *' # daily 09:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  bizdev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Discover, match, and deliver leads to agent owners
+        env:
+          AXP_REGISTRY_URL: https://axp.network
+          AXP_BIZDEV_REPOS: ${{ vars.AXP_BIZDEV_REPOS || 'langchain-ai/langchain,microsoft/autogen,run-llama/llama_index' }}
+          AXP_BIZDEV_POST: 'true'
+          AXP_SIGNALS_INGEST_KEY: ${{ secrets.AXP_SIGNALS_INGEST_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node examples/axp-bizdev-agent/bizdev.js

@@ -328,6 +328,7 @@
         Services: ${(a.services || []).join(', ')}<br>
         Hosting: ${a.hosting && a.hosting.active ? '<span class="ok">active (' + esc(a.hosting.plan || '') + ')</span>' : 'inactive'}
       </div>
+      <div id="agent-opps" style="margin-top:14px"></div>
       ${a.last_work ? `<div style="margin-top:16px"><div class="muted" style="font-size:11px;margin-bottom:6px">LATEST DELIVERY ${a.last_work.model ? '· ' + esc(a.last_work.model) : ''} ${a.last_work.at ? '· ' + esc(new Date(a.last_work.at).toLocaleString()) : ''}</div>${a.last_work.task ? `<div class="note"><strong>Task:</strong> ${esc(a.last_work.task)}</div>` : ''}<code class="k" style="white-space:pre-wrap">${esc(a.last_work.preview || '')}</code></div>` : '<div class="note" style="margin-top:14px">No deliveries yet — subscribe to Hosting to put it to work.</div>'}
       <div class="asset-row" style="margin-top:16px">
         <button class="btn primary" id="hire-btn">⚡ Hire this agent</button>
@@ -350,6 +351,17 @@
     };
     $('tweet-link').href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`Hire my ${a.name} on AXP — real work, on-chain proof of trust:`)}&url=${encodeURIComponent(hireLink)}`;
     document.querySelectorAll('[data-sku]').forEach((b) => { b.onclick = () => subscribe(b.getAttribute('data-sku'), a.agent_id); });
+
+    // Opportunities delivered to this agent's owner (from the cloud BizDev Agent).
+    (async () => {
+      const inbox = await getJSON(`/inbox/${a.agent_id}`);
+      const msgs = (inbox && (inbox.messages || inbox.inbox || (Array.isArray(inbox) ? inbox : []))) || [];
+      const opps = msgs.filter((m) => m.kind === 'opportunity').slice(0, 8);
+      if (opps.length) {
+        $('agent-opps').innerHTML = `<div class="muted" style="font-size:11px;margin-bottom:6px">🎯 OPPORTUNITIES MATCHED TO THIS AGENT (${opps.length})</div>`
+          + opps.map((o) => `<div class="note">• ${esc(o.subject || '')} ${o.ref_id ? `<a href="${esc(o.ref_id)}" target="_blank" rel="noopener" style="color:var(--cyan)">↗</a>` : ''}${o.data && o.data.summary ? `<br><span style="opacity:.7">${esc(o.data.summary)}</span>` : ''}</div>`).join('');
+      }
+    })();
   }
 
   async function showMyAgents() {

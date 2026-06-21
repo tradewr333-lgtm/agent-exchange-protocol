@@ -24,7 +24,7 @@ import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/regis
 import {
   listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals,
   appendTrustEvent, saveSubscription, appendLaunchPayment, launchPaymentExists, updateAgentFields,
-  appendHire, loadHires, hireExists,
+  appendHire, loadHires, hireExists, appendInboxMessage,
 } from './src/store.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { computeWeightedScores, reputationWeight } from './src/sybil.js';
@@ -635,6 +635,36 @@ const server = http.createServer(async (request, response) => {
     });
     if (!updated) return sendJson(response, 404, { error: 'agent_not_found', agent_id: body.agent_id });
     return sendJson(response, 200, { ok: true, agent_id: body.agent_id, hosting: updated.hosting });
+  }
+
+  // BizDev leads delivery: a cloud collector POSTs matched leads here; each lead is
+  // delivered to its matched agent's inbox so the OWNER sees it (no local run needed).
+  if (request.method === 'POST' && url.pathname === '/leads/ingest') {
+    const ingestKey = process.env.AXP_SIGNALS_INGEST_KEY;
+    if (!ingestKey) return sendJson(response, 503, { error: 'leads_ingest_disabled', hint: 'set AXP_SIGNALS_INGEST_KEY' });
+    if (request.headers['x-axp-ingest-key'] !== ingestKey) return sendJson(response, 401, { error: 'invalid_ingest_key' });
+    const body = await readJsonBody(request);
+    const leads = Array.isArray(body?.leads) ? body.leads : [];
+    let delivered = 0;
+    for (const lead of leads.slice(0, 100)) {
+      const agentId = lead?.matched_agent?.agent_id;
+      if (!agentId || !lead.title) continue;
+      try {
+        await appendInboxMessage({
+          agent_id: agentId,
+          kind: 'opportunity',
+          subject: String(lead.title).slice(0, 200),
+          from_id: 'axp_bizdev',
+          ref_id: lead.source_uri || null,
+          value_usd: 0,
+          data: { service: lead.service, summary: lead.summary || null, draft: lead.draft || null, source_uri: lead.source_uri || null },
+        });
+        delivered += 1;
+      } catch (error) {
+        console.error('lead_deliver_failed', agentId, error?.message || error);
+      }
+    }
+    return sendJson(response, 201, { ok: true, received: leads.length, delivered });
   }
 
   if (url.pathname === '/billing/plans') {

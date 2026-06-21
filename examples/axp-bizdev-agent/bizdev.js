@@ -116,3 +116,18 @@ console.log(JSON.stringify({
   count: leads.length,
   leads,
 }, null, 2));
+
+// Cloud mode: deliver matched leads to each agent owner's inbox on the server.
+if (process.env.AXP_BIZDEV_POST === 'true' && process.env.AXP_SIGNALS_INGEST_KEY) {
+  const matched = leads.filter((l) => l.matched_agent);
+  try {
+    const res = await fetch(`${REGISTRY}/leads/ingest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-axp-ingest-key': process.env.AXP_SIGNALS_INGEST_KEY },
+      body: JSON.stringify({ leads: matched }),
+    });
+    console.log(`\nPOST /leads/ingest -> ${res.status} ${await res.text()}`);
+  } catch (err) {
+    console.warn(`lead delivery failed: ${err.message}`);
+  }
+}
