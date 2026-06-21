@@ -100,4 +100,21 @@ ok(planHigh.every((p) => p.service !== 'content'), 'low-score categories filtere
 const planCap = planObservatoryOpportunities({ observatory: obs, existingIntents: [], max: 1 });
 ok(planCap.length === 1, 'respects max cap');
 
+// --- opportunity gap + launchable templates ---
+const gapObs = buildObservatory({
+  agents: [{ id: 'a1', status: 'active', services: ['code_review'] }],
+  intents: [],
+  contracts: [],
+  externalSignals: [{ source: 'github', category: 'code_review', value: 3000, growth_pct: 120, observed_at: iso(0) }],
+});
+const cr = gapObs.categories.find((c) => c.category === 'code_review');
+ok(cr.launchable === true && cr.template_id === 'code_review', 'code_review maps to a launchable template');
+ok(cr.external_demand_units === 3000, 'demand units = raw external value (3000)');
+ok(cr.opportunity_gap === 2999, 'gap = demand(3000) + open(0) - supply(1) = 2999');
+ok(gapObs.launch_opportunities.some((o) => o.template_id === 'code_review' && o.opportunity_gap === 2999), 'launch_opportunities surfaces the gap with a template');
+
+const sec = buildObservatory({ externalSignals: [{ source: 'github', category: 'security_audit', value: 100, observed_at: iso(0) }] })
+  .categories.find((c) => c.category === 'security_audit');
+ok(sec.launchable === false && sec.template_id === null, 'category without a template is not launchable');
+
 console.log(`observatory-signals.test.mjs: ${passed} checks passed`);

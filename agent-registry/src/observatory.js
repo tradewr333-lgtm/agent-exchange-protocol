@@ -7,8 +7,12 @@
 // Pure: takes plain arrays so it is deterministically testable.
 
 import { aggregateExternalSignals } from './external-signals.js';
+import { AGENT_TEMPLATES } from './agent-templates.js';
 
 const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+// service category -> launchable template id (so an opportunity becomes one click).
+const SERVICE_TO_TEMPLATE = AGENT_TEMPLATES.reduce((m, t) => { m[t.service] = t.id; return m; }, {});
 
 function inWindow(createdAt, from, to) {
   const t = Date.parse(createdAt ?? '');
@@ -84,20 +88,45 @@ export function buildObservatory({ agents = [], intents = [], contracts = [], ex
     const opportunityScore = (demand * growthFactor) / (c.active_agents + 1);
 
     const hasDemand = c.open_intents > 0 || ext.external_demand_index > 0;
+    const demandUnits = Number(ext.external_demand_units || 0);
+    // Opportunity Gap: real demand (external units + open intents) minus AXP supply.
+    const opportunityGap = Math.max(0, Math.round(demandUnits + c.open_intents - c.active_agents));
+    const templateId = SERVICE_TO_TEMPLATE[c.category] || null;
     return {
       ...c,
       open_reward_usd: Number(c.open_reward_usd.toFixed(2)),
       settled_volume_usd: Number(c.settled_volume_usd.toFixed(2)),
       growth_pct: Number((internalGrowth * 100).toFixed(1)),
       external_demand_index: ext.external_demand_index,
+      external_demand_units: demandUnits,
       external_growth_pct: ext.external_growth_pct,
       external_sources: ext.external_sources,
       external_only: c.total_intents === 0 && ext.external_demand_index > 0,
       demand_supply_ratio: Number((c.open_intents / (c.active_agents + 1)).toFixed(2)),
+      opportunity_gap: opportunityGap,
+      template_id: templateId,
+      launchable: Boolean(templateId),
       underserved: hasDemand && c.open_intents >= c.active_agents,
       opportunity_score: Number(opportunityScore.toFixed(2)),
     };
   }).sort((a, b) => b.opportunity_score - a.opportunity_score);
+
+  // Launch opportunities: underserved/high-gap categories that map to a launchable
+  // template — these power the "Launch X Agent — $49" one-click CTAs.
+  const launchOpportunities = categories
+    .filter((c) => c.launchable && (c.opportunity_gap > 0 || c.underserved))
+    .slice(0, 8)
+    .map((c) => ({
+      category: c.category,
+      template_id: c.template_id,
+      opportunity_gap: c.opportunity_gap,
+      opportunity_score: c.opportunity_score,
+      demand_units: c.external_demand_units,
+      open_intents: c.open_intents,
+      active_agents: c.active_agents,
+      growth_pct: Math.max(c.growth_pct, c.external_growth_pct),
+      external_sources: c.external_sources,
+    }));
 
   const topSkills = [...skillCount.entries()]
     .sort((a, b) => b[1] - a[1]).slice(0, 10)
@@ -127,6 +156,7 @@ export function buildObservatory({ agents = [], intents = [], contracts = [], ex
       external_only_categories: categories.filter((c) => c.external_only).length,
     },
     categories,
+    launch_opportunities: launchOpportunities,
     top_skills_in_demand: topSkills,
     highest_revenue_opportunities: topOpportunities,
   };

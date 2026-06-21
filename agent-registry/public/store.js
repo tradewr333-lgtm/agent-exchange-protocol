@@ -147,6 +147,27 @@
     });
   }
 
+  function renderGaps(opps) {
+    if (!opps || !opps.length) return;
+    $('gaps-section').style.display = '';
+    $('gaps-spacer').style.display = '';
+    $('gaps-tag').textContent = `${opps.length} niches`;
+    $('gaps').innerHTML = opps.map((o) => {
+      const tpl = STATE.templates.find((t) => t.id === o.template_id);
+      const name = tpl ? tpl.name : o.category;
+      const g = o.growth_pct >= 0 ? `+${o.growth_pct}%` : `${o.growth_pct}%`;
+      return `<div class="card">
+        <div class="tname">${esc(name)}</div>
+        <div class="tstats"><span class="chip coral">gap ${Number(o.opportunity_gap).toLocaleString()}</span><span class="chip amber">growth ${g}</span></div>
+        <div class="note">demand ${Number(o.demand_units).toLocaleString()} · supply ${o.active_agents} agents · ${esc((o.external_sources || []).join(', ') || 'on-ledger')}</div>
+        <button class="btn primary block" data-gap-tpl="${esc(o.template_id)}">Launch ${esc(name)} — $49</button>
+      </div>`;
+    }).join('');
+    document.querySelectorAll('[data-gap-tpl]').forEach((b) => {
+      b.onclick = () => { const t = STATE.templates.find((x) => x.id === b.getAttribute('data-gap-tpl')); if (t) openLaunch(t); };
+    });
+  }
+
   function renderHosting(plans, trustApi) {
     const card = (p) => `
       <div class="hostplan">
@@ -342,12 +363,14 @@
   }
 
   async function initStore() {
-    const [quote, plans, agents] = await Promise.all([
+    const [quote, plans, agents, observatory] = await Promise.all([
       getJSON('/agents/launch/quote'),
       getJSON('/billing/plans'),
       getJSON('/store/agents'),
+      getJSON('/observatory'),
     ]);
     if (quote) { STATE.quote = quote; STATE.templates = quote.templates || []; renderTemplates(); }
+    if (observatory) renderGaps(observatory.launch_opportunities || []);
     if (plans) {
       renderHosting(plans.hosting, plans.trust_api);
       if (plans.launch) $('launch-price').textContent = `Launch $${plans.launch.usd} one-time`;

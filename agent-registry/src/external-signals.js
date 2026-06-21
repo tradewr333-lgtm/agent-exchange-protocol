@@ -65,7 +65,7 @@ export function aggregateExternalSignals(signals = [], now = Date.now()) {
     const w = recencyWeight(sig.observed_at, now) * (SOURCE_WEIGHT[sig.source] ?? 0.5);
     if (w <= 0) continue;
     if (!byCat.has(sig.category)) {
-      byCat.set(sig.category, { index: 0, growthNum: 0, growthDen: 0, sources: new Set() });
+      byCat.set(sig.category, { index: 0, growthNum: 0, growthDen: 0, demandUnits: 0, sources: new Set() });
     }
     const c = byCat.get(sig.category);
     // log-scale so a category with 10k repos doesn't dwarf everything; recency/source weighted.
@@ -74,6 +74,8 @@ export function aggregateExternalSignals(signals = [], now = Date.now()) {
     const den = contribution || w;
     c.growthNum += sig.growth_pct * den;
     c.growthDen += den;
+    // Raw demand units (e.g. repos/models found) — the human-readable demand side of the gap.
+    c.demandUnits += sig.value;
     c.sources.add(sig.source);
   }
 
@@ -82,6 +84,7 @@ export function aggregateExternalSignals(signals = [], now = Date.now()) {
     out.set(category, {
       category,
       external_demand_index: Number(c.index.toFixed(4)),
+      external_demand_units: Math.round(c.demandUnits),
       external_growth_pct: c.growthDen > 0 ? Number((c.growthNum / c.growthDen).toFixed(1)) : 0,
       external_sources: [...c.sources].sort(),
     });
