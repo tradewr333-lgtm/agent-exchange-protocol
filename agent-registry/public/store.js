@@ -245,10 +245,15 @@
     if (a.launched) b.push('<span class="chip">launched</span>');
     return b.join(' ');
   }
-  function agentCardHtml(a) {
+  function agentCardHtml(a, bounty) {
+    const b = bounty || { total: 0, count: 0 };
+    const bountyChip = b.total > 0
+      ? `<span class="chip" style="border-color:rgba(246,207,134,.6);color:var(--amber);font-weight:700">💰 ${usd(b.total)} · ${b.count} paid ${b.count === 1 ? 'bounty' : 'bounties'}</span>`
+      : '';
     return `<a class="card" href="/agent/${esc(a.agent_id)}" style="text-decoration:none">
       <div class="tname">${esc(a.name)}</div>
       <div class="tstats">${badges(a)}</div>
+      ${bountyChip ? `<div class="tstats">${bountyChip}</div>` : ''}
       <div class="tstats">
         <span class="chip green">${usd(a.revenue_usd)} settled</span>
         <span class="chip">${a.contracts} interactions</span>
@@ -401,14 +406,25 @@
     (async () => {
       const inbox = await getJSON(`/inbox/${a.agent_id}`);
       const msgs = (inbox && (inbox.messages || inbox.inbox || (Array.isArray(inbox) ? inbox : []))) || [];
-      const opps = dedupeByRef(msgs.filter((m) => m.kind === 'opportunity')).slice(0, 8);
+      const rewardOf = (o) => Number(o.value_usd) || Number(o.data && o.data.reward_usd) || 0;
+      // PAID bounties first (highest $), then unpaid help-wanted.
+      const opps = dedupeByRef(msgs.filter((m) => m.kind === 'opportunity'))
+        .sort((x, y) => rewardOf(y) - rewardOf(x))
+        .slice(0, 10);
       if (opps.length) {
-        const totalReward = opps.reduce((s, o) => s + (Number(o.value_usd) || Number(o.data && o.data.reward_usd) || 0), 0);
-        $('agent-opps').innerHTML = `<div class="muted" style="font-size:11px;margin-bottom:6px">🎯 OPPORTUNITIES MATCHED TO THIS AGENT (${opps.length}${totalReward > 0 ? ` · ${usd(totalReward)} in bounties` : ''})</div>`
+        const totalReward = opps.reduce((s, o) => s + rewardOf(o), 0);
+        const paidCount = opps.filter((o) => rewardOf(o) > 0).length;
+        const head = totalReward > 0
+          ? `💰 ${usd(totalReward)} in ${paidCount} paid ${paidCount === 1 ? 'bounty' : 'bounties'} · ${opps.length} total`
+          : `${opps.length} (help-wanted, unpaid)`;
+        $('agent-opps').innerHTML = `<div class="muted" style="font-size:11px;margin-bottom:6px">🎯 OPPORTUNITIES MATCHED TO THIS AGENT — ${head}</div>`
           + opps.map((o) => {
-            const reward = Number(o.value_usd) || Number(o.data && o.data.reward_usd) || 0;
-            const badge = reward > 0 ? `<span class="chip amber" style="margin-left:6px">💰 ${usd(reward)}</span>` : '';
-            return `<div class="note">• ${esc(o.subject || '')}${badge} ${o.ref_id ? `<a href="${esc(o.ref_id)}" target="_blank" rel="noopener" style="color:var(--cyan)">↗</a>` : ''}${o.data && o.data.summary ? `<br><span style="opacity:.7">${esc(o.data.summary)}</span>` : ''}</div>`;
+            const reward = rewardOf(o);
+            const src = (o.data && o.data.source) || '';
+            const tag = reward > 0
+              ? `<span class="chip" style="border-color:rgba(246,207,134,.6);color:var(--amber);font-weight:700">💰 ${usd(reward)} · ${src === 'algora' ? 'Algora' : 'paid'}</span>`
+              : '<span class="chip" style="opacity:.6">help-wanted</span>';
+            return `<div class="note" style="${reward > 0 ? 'border-left:2px solid var(--amber);padding-left:8px;margin:8px 0' : 'margin:6px 0'}">${tag} ${esc(o.subject || '')} ${o.ref_id ? `<a href="${esc(o.ref_id)}" target="_blank" rel="noopener" style="color:var(--cyan)">open issue ↗</a>` : ''}${o.data && o.data.summary ? `<br><span style="opacity:.7">${esc(o.data.summary)}</span>` : ''}</div>`;
           }).join('');
       }
     })();
@@ -424,29 +440,35 @@
       $('mine-tag').textContent = `${addr.slice(0, 6)}…${addr.slice(-4)}`;
       const data = await getJSON('/store/agents');
       const mine = (data && data.agents ? data.agents : []).filter((a) => (a.owner || '').toLowerCase() === addr.toLowerCase());
-      $('mine-agents').innerHTML = mine.length
-        ? mine.map(agentCardHtml).join('')
-        : '<div class="empty">No agents owned by this wallet yet. Launch one above — then subscribe to Hosting to put it to work.</div>';
-      $('mine-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-      // Aggregate open bounty $ across ALL your agents' inboxes (one fetch each).
-      if (mine.length) {
-        try {
-          const inboxes = await Promise.all(mine.map((a) => getJSON(`/inbox/${a.agent_id}`)));
-          let totalUsd = 0; let count = 0;
-          for (const inbox of inboxes) {
-            const msgs = (inbox && (inbox.messages || [])) || [];
-            const uniq = dedupeByRef(msgs.filter((m) => m.kind === 'opportunity'));
-            for (const m of uniq) {
-              const r = Number(m.value_usd) || Number(m.data && m.data.reward_usd) || 0;
-              if (r > 0) { totalUsd += r; count += 1; }
-            }
-          }
-          if (count > 0) {
-            $('mine-tag').innerHTML = `${addr.slice(0, 6)}…${addr.slice(-4)} &nbsp;·&nbsp; <span style="color:var(--amber)">💰 ${usd(totalUsd)} in ${count} open bounties</span>`;
-          }
-        } catch { /* best effort */ }
+      if (!mine.length) {
+        $('mine-agents').innerHTML = '<div class="empty">No agents owned by this wallet yet. Launch one above — then subscribe to Hosting to put it to work.</div>';
+        $('mine-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
       }
+
+      // Fetch every agent's inbox FIRST so each card can show its own 💰 paid-bounty total.
+      const bountyByAgent = {};
+      let totalUsd = 0; let totalCount = 0;
+      try {
+        const inboxes = await Promise.all(mine.map((a) => getJSON(`/inbox/${a.agent_id}`)));
+        mine.forEach((a, i) => {
+          const msgs = (inboxes[i] && (inboxes[i].messages || [])) || [];
+          const uniq = dedupeByRef(msgs.filter((m) => m.kind === 'opportunity'));
+          let t = 0; let c = 0;
+          for (const m of uniq) {
+            const r = Number(m.value_usd) || Number(m.data && m.data.reward_usd) || 0;
+            if (r > 0) { t += r; c += 1; }
+          }
+          bountyByAgent[a.agent_id] = { total: t, count: c };
+          totalUsd += t; totalCount += c;
+        });
+      } catch { /* best effort */ }
+
+      $('mine-agents').innerHTML = mine.map((a) => agentCardHtml(a, bountyByAgent[a.agent_id])).join('');
+      if (totalCount > 0) {
+        $('mine-tag').innerHTML = `${addr.slice(0, 6)}…${addr.slice(-4)} &nbsp;·&nbsp; <span style="color:var(--amber)">💰 ${usd(totalUsd)} in ${totalCount} open bounties</span>`;
+      }
+      $('mine-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
       $('mine-section').style.display = '';
       $('mine-tag').textContent = 'connect wallet';
