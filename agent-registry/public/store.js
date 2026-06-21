@@ -4,7 +4,7 @@
   const usd = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  const STATE = { quote: null, templates: [] };
+  const STATE = { quote: null, templates: [], agents: [] };
 
   async function getJSON(url) { try { const r = await fetch(url); return await r.json(); } catch { return null; } }
   async function postJSON(url, body) {
@@ -167,19 +167,73 @@
     });
   }
 
+  function ratingStars(a) {
+    if (!a.contracts) return 'new';
+    const r = Math.max(0, Math.min(5, (a.success_rate || 0) * 5));
+    const full = Math.round(r);
+    return '★'.repeat(full) + '☆'.repeat(5 - full) + ` ${r.toFixed(1)}`;
+  }
+  function badges(a) {
+    const b = [];
+    if (a.status === 'active') b.push('<span class="chip green">active</span>');
+    if (a.hosting && a.hosting.active) b.push('<span class="chip cyan">hosted</span>');
+    if ((a.trust_score || 0) >= 50) b.push('<span class="chip amber">verified</span>');
+    if (a.launched) b.push('<span class="chip">launched</span>');
+    return b.join(' ');
+  }
+  function agentCardHtml(a) {
+    return `<a class="card" href="/agent/${esc(a.agent_id)}" style="text-decoration:none">
+      <div class="tname">${esc(a.name)}</div>
+      <div class="tstats">${badges(a)}</div>
+      <div class="tstats">
+        <span class="chip green">${usd(a.revenue_usd)} settled</span>
+        <span class="chip">${a.contracts} interactions</span>
+        <span class="chip amber">trust ${Math.round(a.trust_score)}</span>
+      </div>
+      <div class="note">${(a.services || []).join(', ')} · ${ratingStars(a)} · success ${(a.success_rate * 100).toFixed(0)}%</div>
+      ${a.last_work && a.last_work.preview ? `<div class="note" style="opacity:.75">“${esc(a.last_work.preview.slice(0, 90))}…”</div>` : ''}
+    </a>`;
+  }
   function renderAgents(list) {
-    if (!list || list.length === 0) { $('agents').innerHTML = '<div class="empty">No agents yet — be the first to launch one.</div>'; return; }
-    $('agents-tag').textContent = `${list.length} agents`;
-    $('agents').innerHTML = list.slice(0, 24).map((a) => `
-      <a class="card" href="/agent/${esc(a.agent_id)}" style="text-decoration:none">
-        <div class="tname">${esc(a.name)} ${a.launched ? '<span class="chip cyan">launched</span>' : ''}</div>
-        <div class="tstats">
-          <span class="chip green">${usd(a.revenue_usd)} earned</span>
-          <span class="chip">${a.contracts} contracts</span>
-          <span class="chip amber">trust ${Math.round(a.trust_score)}</span>
-        </div>
-        <div class="note">${(a.services || []).join(', ')} · success ${(a.success_rate * 100).toFixed(0)}% · ${a.hosting && a.hosting.active ? '<span class="ok">hosted</span>' : 'idle'}</div>
-      </a>`).join('');
+    STATE.agents = list || [];
+    const cats = [...new Set(STATE.agents.flatMap((a) => a.services || []))].sort();
+    $('agents').innerHTML = `
+      <div class="dir-controls">
+        <input id="dir-search" placeholder="Search agents…" autocomplete="off">
+        <select id="dir-cat"><option value="">All categories</option>${cats.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}</select>
+        <select id="dir-sort">
+          <option value="settled">Top earning</option>
+          <option value="trust">Highest trust</option>
+          <option value="contracts">Most active</option>
+          <option value="name">Name</option>
+        </select>
+      </div>
+      <div class="cards" id="agents-grid"></div>`;
+    $('dir-search').oninput = renderGrid;
+    $('dir-cat').onchange = renderGrid;
+    $('dir-sort').onchange = renderGrid;
+    renderGrid();
+  }
+  function renderGrid() {
+    const q = ($('dir-search').value || '').toLowerCase();
+    const cat = $('dir-cat').value;
+    const sort = $('dir-sort').value;
+    let items = STATE.agents.filter((a) => {
+      if (cat && !(a.services || []).includes(cat)) return false;
+      if (q && !(`${a.name || ''} ${(a.services || []).join(' ')} ${a.template || ''}`).toLowerCase().includes(q)) return false;
+      return true;
+    });
+    const by = {
+      settled: (x, y) => y.revenue_usd - x.revenue_usd,
+      trust: (x, y) => y.trust_score - x.trust_score,
+      contracts: (x, y) => y.contracts - x.contracts,
+      name: (x, y) => (x.name || '').localeCompare(y.name || ''),
+    };
+    items.sort(by[sort] || by.settled);
+    $('agents-tag').textContent = `${items.length} agents`;
+    $('agents-grid').innerHTML = items.length
+      ? items.slice(0, 48).map(agentCardHtml).join('')
+      : '<div class="empty">No agents match your search.</div>';
   }
 
   // ---- agent product view ----
@@ -193,7 +247,7 @@
     $('agent-status-tag').textContent = a.hosting && a.hosting.active ? 'hosted · earning' : a.status;
     const kpi = (label, val) => `<div class="kpi"><div class="k-value">${val}</div><div class="k-label">${label}</div></div>`;
     $('agent-kpis').innerHTML =
-      kpi('Revenue generated', usd(a.revenue_usd)) +
+      kpi('Settled volume', usd(a.revenue_usd)) +
       kpi('Contracts', a.contracts) +
       kpi('Success rate', (a.success_rate * 100).toFixed(0) + '%') +
       kpi('Trust score', Math.round(a.trust_score)) +

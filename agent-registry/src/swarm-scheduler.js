@@ -19,15 +19,10 @@ import { publishObservatoryOpportunities } from './observatory-publisher.js';
 import { deriveAgentWallet } from './agent-launcher.js';
 import { githubIssuesSource } from '../../examples/axp-opportunity-miner/sources.js';
 import { workItemToIntent } from '../../examples/axp-opportunity-miner/normalize.js';
+import { sampleTaskFor, SAMPLE_SERVICES } from './sample-tasks.js';
 
-const SERVICES = ['research', 'data_processing', 'content_writing', 'analysis'];
-const SAMPLE_TITLES = [
-  'Summarize the latest agent framework releases',
-  'Classify a batch of on-chain transactions',
-  'Draft a short market brief',
-  'Analyze counterparty risk for a new agent',
-  'Translate a product page',
-];
+// Cover every template's service so launched agents always find real, content-rich work.
+const SERVICES = SAMPLE_SERVICES;
 
 // Set when the scheduler boots, so an admin route can trigger a cycle on demand
 // (useful on the free tier, where the timer pauses while the service sleeps).
@@ -179,10 +174,13 @@ export function startSwarmScheduler() {
     const open = await listIntents({ status: 'open', limit: 200 });
     const deficit = targetIntents - (open.total ?? open.count ?? 0);
     for (let i = 0; i < Math.min(deficit, 3); i += 1) {
-      const idx = Math.floor(Math.random() * SAMPLE_TITLES.length);
+      const service = SERVICES[Math.floor(Math.random() * SERVICES.length)];
+      const t = sampleTaskFor(service);
       await publishIntent({
-        title: SAMPLE_TITLES[idx],
-        service: SERVICES[idx % SERVICES.length],
+        title: t.title,
+        description: t.description, // real payload so deliverables come out complete
+        service,
+        skills: [service],
         reward_usd: 200 + Math.floor(Math.random() * 1800),
         urgency: ['LOW', 'MEDIUM', 'HIGH'][Math.floor(Math.random() * 3)],
         required_capacity_usd: 100,
