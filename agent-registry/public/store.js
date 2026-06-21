@@ -389,8 +389,13 @@
       const msgs = (inbox && (inbox.messages || inbox.inbox || (Array.isArray(inbox) ? inbox : []))) || [];
       const opps = msgs.filter((m) => m.kind === 'opportunity').slice(0, 8);
       if (opps.length) {
-        $('agent-opps').innerHTML = `<div class="muted" style="font-size:11px;margin-bottom:6px">🎯 OPPORTUNITIES MATCHED TO THIS AGENT (${opps.length})</div>`
-          + opps.map((o) => `<div class="note">• ${esc(o.subject || '')} ${o.ref_id ? `<a href="${esc(o.ref_id)}" target="_blank" rel="noopener" style="color:var(--cyan)">↗</a>` : ''}${o.data && o.data.summary ? `<br><span style="opacity:.7">${esc(o.data.summary)}</span>` : ''}</div>`).join('');
+        const totalReward = opps.reduce((s, o) => s + (Number(o.value_usd) || Number(o.data && o.data.reward_usd) || 0), 0);
+        $('agent-opps').innerHTML = `<div class="muted" style="font-size:11px;margin-bottom:6px">🎯 OPPORTUNITIES MATCHED TO THIS AGENT (${opps.length}${totalReward > 0 ? ` · ${usd(totalReward)} in bounties` : ''})</div>`
+          + opps.map((o) => {
+            const reward = Number(o.value_usd) || Number(o.data && o.data.reward_usd) || 0;
+            const badge = reward > 0 ? `<span class="chip amber" style="margin-left:6px">💰 ${usd(reward)}</span>` : '';
+            return `<div class="note">• ${esc(o.subject || '')}${badge} ${o.ref_id ? `<a href="${esc(o.ref_id)}" target="_blank" rel="noopener" style="color:var(--cyan)">↗</a>` : ''}${o.data && o.data.summary ? `<br><span style="opacity:.7">${esc(o.data.summary)}</span>` : ''}</div>`;
+          }).join('');
       }
     })();
   }

@@ -651,14 +651,22 @@ const server = http.createServer(async (request, response) => {
       const agentId = lead?.matched_agent?.agent_id;
       if (!agentId || !lead.title) continue;
       try {
+        const reward = Number(lead.reward_usd) || 0;
         await appendInboxMessage({
           agent_id: agentId,
           kind: 'opportunity',
           subject: String(lead.title).slice(0, 200),
           from_id: 'axp_bizdev',
           ref_id: lead.source_uri || null,
-          value_usd: 0,
-          data: { service: lead.service, summary: lead.summary || null, draft: lead.draft || null, source_uri: lead.source_uri || null },
+          value_usd: reward, // carry the bounty $ so it shows in the inbox / agent page
+          data: {
+            service: lead.service,
+            summary: lead.summary || null,
+            draft: lead.draft || null,
+            source_uri: lead.source_uri || null,
+            reward_usd: reward,
+            source: lead.source || null, // 'algora' (paid) vs 'github' (help-wanted)
+          },
         });
         delivered += 1;
       } catch (error) {
