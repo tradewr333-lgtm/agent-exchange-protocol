@@ -30,28 +30,9 @@ export default {
       accounts: mainnetAccounts,
     },
   },
+  // Etherscan v2 unified API: a single key covers all chains (BSC included);
+  // hardhat-verify routes by the network's chainId automatically.
   etherscan: {
-    apiKey: {
-      bscMainnet: process.env.ETHERSCAN_API_KEY ?? process.env.BSCSCAN_API_KEY ?? '',
-      bscTestnet: process.env.ETHERSCAN_API_KEY ?? process.env.BSCSCAN_API_KEY ?? '',
-    },
-    customChains: [
-      {
-        network: 'bscMainnet',
-        chainId: 56,
-        urls: {
-          apiURL: 'https://api.etherscan.io/v2/api?chainid=56',
-          browserURL: 'https://bscscan.com',
-        },
-      },
-      {
-        network: 'bscTestnet',
-        chainId: 97,
-        urls: {
-          apiURL: 'https://api.etherscan.io/v2/api?chainid=97',
-          browserURL: 'https://testnet.bscscan.com',
-        },
-      },
-    ],
+    apiKey: process.env.ETHERSCAN_API_KEY ?? process.env.BSCSCAN_API_KEY ?? '',
   },
 };
