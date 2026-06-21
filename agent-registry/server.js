@@ -24,7 +24,7 @@ import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/regis
 import {
   listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals,
   appendTrustEvent, saveSubscription, appendLaunchPayment, launchPaymentExists, updateAgentFields,
-  appendHire, loadHires, hireExists, appendInboxMessage, loadAgentsRegistry,
+  appendHire, loadHires, hireExists, appendInboxMessage, loadAgentsRegistry, loadSubscriptions,
 } from './src/store.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
@@ -666,6 +666,30 @@ const server = http.createServer(async (request, response) => {
       }
     }
     return sendJson(response, 201, { ok: true, received: leads.length, delivered });
+  }
+
+  // Subscription status for a wallet — powers the live "Pro · N slots" badge.
+  if (url.pathname === '/billing/subscription') {
+    const owner = (url.searchParams.get('owner') || '').trim().toLowerCase();
+    if (!owner) return sendJson(response, 400, { error: 'owner_required' });
+    const subs = (await loadSubscriptions()).filter((s) => String(s.owner_ref || '').toLowerCase() === owner);
+    const rank = { active: 4, trialing: 4, past_due: 3, incomplete: 2, canceled: 1 };
+    let best = null;
+    for (const s of subs) {
+      if (!best || (rank[s.status] ?? 0) > (rank[best.status] ?? 0)) best = s;
+    }
+    const plan = best ? planBySku(best.plan_sku) : null;
+    const active = best ? ['active', 'trialing'].includes(best.status) : false;
+    return sendJson(response, 200, {
+      ok: true,
+      owner,
+      has_subscription: Boolean(best),
+      active,
+      status: best?.status || 'none',
+      plan_sku: best?.plan_sku || null,
+      plan_name: plan?.name || null,
+      slots: plan?.slots || 0,
+    });
   }
 
   if (url.pathname === '/billing/plans') {

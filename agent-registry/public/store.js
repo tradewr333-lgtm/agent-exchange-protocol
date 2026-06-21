@@ -39,6 +39,29 @@
     STATE.wallet = addr || null;
     $('wallet-dot').style.background = addr ? 'var(--green)' : '';
     $('wallet-text').textContent = addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : 'wallet not connected';
+    refreshPlanBadge(addr);
+  }
+
+  // Live hosting-subscription badge: pulsing green when active, red when the card
+  // failed on renewal (past_due/canceled) — i.e. hosting access is suspended.
+  async function refreshPlanBadge(owner) {
+    const el = $('plan-badge');
+    if (!el) return;
+    const txt = $('plan-badge-text');
+    if (!owner) { el.style.display = 'none'; return; }
+    const d = await getJSON(`/billing/subscription?owner=${encodeURIComponent(owner)}`);
+    if (!d || !d.has_subscription) { el.style.display = 'none'; return; }
+    el.style.display = 'inline-flex';
+    if (d.active) {
+      el.className = 'plan-badge ok';
+      const name = (d.plan_name || 'Hosting').replace(' Hosting', '').replace(' + Scale', '');
+      txt.textContent = `${name} · ${d.slots} slot${d.slots === 1 ? '' : 's'} active`;
+      el.title = 'Hosting subscription active';
+    } else {
+      el.className = 'plan-badge bad';
+      txt.textContent = d.status === 'past_due' ? 'Payment failed — hosting suspended' : 'Hosting inactive';
+      el.title = 'Renew your card to restore hosting';
+    }
   }
 
   function toBaseUnits(amount, decimals) {
