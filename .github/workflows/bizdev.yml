@@ -31,6 +31,8 @@ jobs:
           AXP_ALGORA_ORGS: ${{ vars.AXP_ALGORA_ORGS || '' }}
           # Skip agent-playground / demo bounty repos (not real paying companies).
           AXP_ALGORA_BLOCK_OWNERS: ${{ vars.AXP_ALGORA_BLOCK_OWNERS || '' }}
+          # Only surface bounties with NO assignee (still winnable). Set 'false' to see all.
+          AXP_ALGORA_ONLY_FREE: ${{ vars.AXP_ALGORA_ONLY_FREE || 'true' }}
           AXP_BIZDEV_POST: 'true'
           AXP_BIZDEV_MIN_TRUST: ${{ vars.AXP_BIZDEV_MIN_TRUST || '1' }}
           AXP_SIGNALS_INGEST_KEY: ${{ secrets.AXP_SIGNALS_INGEST_KEY }}

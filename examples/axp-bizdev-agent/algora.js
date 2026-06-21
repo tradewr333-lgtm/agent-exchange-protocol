@@ -44,6 +44,12 @@ export function parseBountyAmount(text = '') {
   return Math.round(n);
 }
 
+// How many people are already assigned to an issue (strong "someone's on it" signal).
+function assigneeCount(issue = {}) {
+  if (Array.isArray(issue.assignees)) return issue.assignees.length;
+  return issue.assignee ? 1 : 0;
+}
+
 function normalizeApiBounty(b) {
   const issue = b.issue || {};
   const url = issue.html_url || `https://github.com/${b.repo_owner}/${b.repo_name}/issues/${b.number}`;
@@ -55,6 +61,7 @@ function normalizeApiBounty(b) {
     url,
     reward_usd: Math.round((Number(b.amount) || 0) / 100), // amount is in cents
     org: b.repo_owner || null,
+    assignees: assigneeCount(issue),
     source: 'algora',
   };
 }
@@ -92,7 +99,7 @@ export async function fetchAlgoraBountiesByLabel({ label = '💎 Bounty', max = 
       .map((i) => {
         const labels = (i.labels || []).map((l) => (typeof l === 'string' ? l : l.name));
         const reward = parseBountyAmount(`${i.title} ${labels.join(' ')} ${(i.body || '').slice(0, 600)}`);
-        return { id: `algora:${i.id}`, title: i.title, body: i.body || '', labels, url: i.html_url, reward_usd: reward, source: 'algora' };
+        return { id: `algora:${i.id}`, title: i.title, body: i.body || '', labels, url: i.html_url, reward_usd: reward, assignees: assigneeCount(i), source: 'algora' };
       });
   } catch {
     return [];
@@ -101,13 +108,17 @@ export async function fetchAlgoraBountiesByLabel({ label = '💎 Bounty', max = 
 
 // Combined: real API across the org list (primary) + label fallback, merged & deduped,
 // sorted by reward desc. `orgs` overrides the default list; `token` is for the fallback.
-export async function fetchAlgoraBounties({ orgs, max = 30, perOrg = 25, token, fetchImpl, withFallback = true, blockOwners } = {}) {
+export async function fetchAlgoraBounties({ orgs, max = 30, perOrg = 25, token, fetchImpl, withFallback = true, blockOwners, onlyFree = true } = {}) {
   const orgList = (orgs && orgs.length) ? orgs : DEFAULT_ALGORA_ORGS;
   const blocked = new Set((blockOwners && blockOwners.length ? blockOwners : DEFAULT_BLOCK_OWNERS).map((o) => String(o).trim().toLowerCase()));
   const isBlocked = (b) => {
     const owner = (b.org || ownerFromUrl(b.url) || '').toLowerCase();
     return owner && blocked.has(owner);
   };
+  // "Free" = nobody already assigned. Assignees are the cheap, reliable "someone's on it"
+  // signal in the GitHub issue payload, so we skip them to only surface winnable bounties.
+  const isTaken = (b) => onlyFree && Number(b.assignees || 0) > 0;
+  const skip = (b) => !b.url || seen.has(b.url) || isBlocked(b) || isTaken(b);
   const seen = new Set();
   const out = [];
 
@@ -115,7 +126,7 @@ export async function fetchAlgoraBounties({ orgs, max = 30, perOrg = 25, token, 
     if (out.length >= max) break;
     const items = await fetchAlgoraBountiesForOrg(org, { limit: perOrg, fetchImpl });
     for (const b of items) {
-      if (!b.url || seen.has(b.url) || isBlocked(b)) continue;
+      if (skip(b)) continue;
       seen.add(b.url);
       out.push(b);
     }
@@ -124,7 +135,7 @@ export async function fetchAlgoraBounties({ orgs, max = 30, perOrg = 25, token, 
   if (withFallback && out.length < max) {
     const fb = await fetchAlgoraBountiesByLabel({ max: max - out.length, token, fetchImpl });
     for (const b of fb) {
-      if (!b.url || seen.has(b.url) || isBlocked(b)) continue;
+      if (skip(b)) continue;
       seen.add(b.url);
       out.push(b);
     }

@@ -58,7 +58,8 @@ async function gather() {
     try {
       const orgs = (process.env.AXP_ALGORA_ORGS || '').split(',').map((o) => o.trim()).filter(Boolean);
       const blockOwners = (process.env.AXP_ALGORA_BLOCK_OWNERS || '').split(',').map((o) => o.trim()).filter(Boolean);
-      const found = await fetchAlgoraBounties({ orgs: orgs.length ? orgs : undefined, blockOwners: blockOwners.length ? blockOwners : undefined, token: process.env.GITHUB_TOKEN, max: 30 });
+      const onlyFree = process.env.AXP_ALGORA_ONLY_FREE !== 'false'; // skip bounties already assigned
+      const found = await fetchAlgoraBounties({ orgs: orgs.length ? orgs : undefined, blockOwners: blockOwners.length ? blockOwners : undefined, onlyFree, token: process.env.GITHUB_TOKEN, max: 30 });
       for (const b of found) {
         if (b.url && seen.has(b.url)) continue;
         if (b.url) seen.add(b.url);

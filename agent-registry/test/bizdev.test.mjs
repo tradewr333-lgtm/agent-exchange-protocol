@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { bestAgentFor, draftOutreach, matchLeads, buildLead, prioritize, fitScore } from '../../examples/axp-bizdev-agent/match.js';
-import { parseBountyAmount, ownerFromUrl, DEFAULT_BLOCK_OWNERS } from '../../examples/axp-bizdev-agent/algora.js';
+import { parseBountyAmount, ownerFromUrl, DEFAULT_BLOCK_OWNERS, fetchAlgoraBounties } from '../../examples/axp-bizdev-agent/algora.js';
 
 let passed = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); passed += 1; };
@@ -56,6 +56,19 @@ ok(parseBountyAmount('no money here') === 0, 'no amount -> 0');
 ok(ownerFromUrl('https://github.com/SecureBananaLabs/bug-bounty/issues/1772') === 'SecureBananaLabs', 'ownerFromUrl extracts repo owner');
 ok(ownerFromUrl('not a url') === null, 'ownerFromUrl null on junk');
 ok(DEFAULT_BLOCK_OWNERS.includes('securebananalabs') && DEFAULT_BLOCK_OWNERS.includes('xevrion-v2'), 'playground owners blocked by default');
+
+// --- "only free" filter: drop bounties that already have an assignee ---
+const fakeAlgora = async () => ({
+  ok: true,
+  json: async () => ({ items: [
+    { id: 'free', status: 'active', amount: 10000, repo_owner: 'realco', repo_name: 'x', number: 1, issue: { state: 'open', html_url: 'https://github.com/realco/x/issues/1', title: 'Free bounty', assignees: [] } },
+    { id: 'taken', status: 'active', amount: 20000, repo_owner: 'realco', repo_name: 'x', number: 2, issue: { state: 'open', html_url: 'https://github.com/realco/x/issues/2', title: 'Taken bounty', assignees: [{ login: 'dev' }] } },
+  ] }),
+});
+const freeOnly = await fetchAlgoraBounties({ orgs: ['realco'], fetchImpl: fakeAlgora, withFallback: false, onlyFree: true });
+ok(freeOnly.length === 1 && freeOnly[0].title === 'Free bounty', 'onlyFree drops assigned bounties');
+const allBounties = await fetchAlgoraBounties({ orgs: ['realco'], fetchImpl: fakeAlgora, withFallback: false, onlyFree: false });
+ok(allBounties.length === 2, 'onlyFree=false keeps assigned bounties');
 
 const paid = buildLead({ item: { title: 'Fix bug', reward_usd: 500, source: 'algora', url: 'https://gh/9' }, service: 'code_review', agents: [{ agent_id: 'c1', name: 'C', services: ['code_review'], trust_score: 100 }], minTrust: 1, registryUrl: 'https://axp.network' });
 ok(paid.reward_usd === 500 && paid.source === 'algora', 'lead carries reward + source');
