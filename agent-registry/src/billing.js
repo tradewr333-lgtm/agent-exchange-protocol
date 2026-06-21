@@ -43,12 +43,18 @@ export const HOSTING_PLANS = [
     env_price: 'STRIPE_PRICE_HOSTING_PRO',
     includes: ['Up to 5 hosted agents', 'Up to 1000 tasks/mo', 'Priority matching', 'Everything in Starter'],
   },
+  {
+    sku: 'hosting_scale', name: 'Scale Hosting', kind: 'subscription', rail: 'stripe',
+    usd_month: 99, slots: 100, tasks_month: 20000,
+    env_price: 'STRIPE_PRICE_HOSTING_SCALE',
+    includes: ['Up to 100 hosted agents', 'Trust API access included', 'Priority matching', 'Everything in Pro'],
+  },
 ];
 
 export const TRUST_API = {
   sku: 'trust_api', name: 'Trust API', kind: 'subscription', rail: 'stripe',
   usd_month: 99, env_price: 'STRIPE_PRICE_TRUST_API',
-  includes: ['Programmatic Trust Score + risk reports', 'Best-agent matching', 'Higher rate limits'],
+  includes: ['API & data access (no hosting)', 'Programmatic Trust Score + risk reports', 'Best-agent matching', 'Higher rate limits'],
 };
 
 const ALL_PLANS = [LAUNCH, ...HOSTING_PLANS, TRUST_API];
