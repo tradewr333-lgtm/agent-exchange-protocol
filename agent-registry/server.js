@@ -34,7 +34,8 @@ import { normalizeSignal } from './src/external-signals.js';
 import { getPlanCatalog, planBySku, stripePlanBySku, stripePriceId, computeContractFee } from './src/billing.js';
 import { listTemplates } from './src/agent-templates.js';
 import { launchAgent } from './src/agent-launcher.js';
-import { buildLaunchQuote, verifyLaunchPayment, launchPaymentEnabled, verifyTreasuryPayment } from './src/payments-onchain.js';
+import { buildLaunchQuote, verifyLaunchPayment, launchPaymentEnabled, verifyTreasuryPayment, verifyErc20TransferTo } from './src/payments-onchain.js';
+import { buildPaymentRequired, x402Network, pricePerCallUsd, extractPaymentProof, encodeHeader, x402Enabled } from './src/x402.js';
 import { stripeEnabled, createSubscriptionCheckout, constructWebhookEvent } from './src/stripe.js';
 import { buildHireQuote, hireAmounts, hireFeeRate, computeSplit, hirePaymentEnabled } from './src/hire.js';
 import { sendPayout, payoutEnabled } from './src/payout.js';
@@ -871,6 +872,81 @@ const server = http.createServer(async (request, response) => {
       owner_earned_usd: usdSplit.owner, platform_fee_usd: usdSplit.fee,
       payout: payout.ok ? { paid: true, tx_hash: payout.tx_hash } : { paid: false, reason: payout.reason, note: 'owner balance accrued; on-chain payout pending' },
     });
+  }
+
+  // x402 — pay-per-call. Each agent is a self-serve paid HTTP endpoint (USDC).
+  // GET = discovery (price, network, how to pay). POST = run-on-payment.
+  const x402DiscoverMatch = url.pathname.match(/^\/x402\/agents\/([^/]+)$/);
+  if (request.method === 'GET' && x402DiscoverMatch) {
+    const agent = await getAgent(x402DiscoverMatch[1]);
+    if (!agent) return sendJson(response, 404, { error: 'agent_not_found', agent_id: x402DiscoverMatch[1] });
+    const net = x402Network();
+    const base = process.env.AXP_PUBLIC_URL || `https://${request.headers.host || 'axp.network'}`;
+    const resource = `${base}/x402/agents/${agent.agent_id}/call`;
+    return sendJson(response, 200, {
+      protocol: 'AXP', schema: 'axp.x402_endpoint.v0',
+      agent_id: agent.agent_id, name: agent.name, service: (agent.services || [])[0] || null,
+      resource, method: 'POST', price_usd: pricePerCallUsd(), asset: 'USDC',
+      network: net.name, pay_to: agent.owner || null,
+      payment_required: buildPaymentRequired({ agent, resource }),
+      how_to: 'POST {"task":"..."}. No payment → HTTP 402 + quote. Pay the USDC to pay_to, then retry with header X-PAYMENT (base64 JSON {tx_hash}) or body.payment.tx_hash.',
+    });
+  }
+
+  const x402CallMatch = url.pathname.match(/^\/x402\/agents\/([^/]+)\/call$/);
+  if (request.method === 'POST' && x402CallMatch) {
+    const agent = await getAgent(x402CallMatch[1]);
+    if (!agent) return sendJson(response, 404, { error: 'agent_not_found', agent_id: x402CallMatch[1] });
+    if (!agent.owner) return sendJson(response, 409, { error: 'agent_has_no_owner' });
+    if (!llmEnabled()) return sendJson(response, 503, { error: 'execution_unavailable', hint: 'set ANTHROPIC_API_KEY' });
+
+    const base = process.env.AXP_PUBLIC_URL || `https://${request.headers.host || 'axp.network'}`;
+    const resource = `${base}/x402/agents/${agent.agent_id}/call`;
+    const required = buildPaymentRequired({ agent, resource });
+    const body = await readJsonBody(request);
+    const proof = extractPaymentProof({ headers: request.headers, body: body || {} });
+
+    // No proof yet → the x402 handshake: 402 + PaymentRequired (header + body).
+    if (!proof || !proof.tx_hash) {
+      response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
+      return sendJson(response, 402, required);
+    }
+    const task = typeof body?.task === 'string' ? body.task.trim() : '';
+    if (!task) return sendJson(response, 400, { error: 'task_required' });
+    if (await hireExists(proof.tx_hash)) return sendJson(response, 409, { error: 'payment_already_used', tx_hash: proof.tx_hash });
+
+    const net = x402Network();
+    const verified = await verifyErc20TransferTo({
+      tx_hash: proof.tx_hash, token_address: net.usdc, decimals: net.decimals,
+      min_amount_usd: pricePerCallUsd(), recipient: agent.owner, rpc: net.rpc, chain_id: net.chain_id,
+    });
+    if (!verified.ok) {
+      response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
+      return sendJson(response, verified.status ?? 402, { ...verified, payment_required: required });
+    }
+
+    const run = await executeTask({ template_id: agent.template, task, maxTokens: 900 });
+    if (!run.ok || !run.output) {
+      return sendJson(response, 502, { error: 'execution_failed', detail: run.reason || run.detail, note: 'payment received on-chain — retry or contact support' });
+    }
+
+    const price = pricePerCallUsd();
+    try {
+      await appendHire({
+        agent_id: agent.agent_id, customer_address: proof.from || null, asset: 'USDC',
+        amount: price, fee_usd: 0, owner_usd: price, tx_hash: proof.tx_hash,
+        payout_tx: proof.tx_hash, status: 'paid', task, deliverable: run.output,
+      });
+      const prevEarnings = Number(agent.real_earnings_usd || 0);
+      await updateAgentFields(agent.agent_id, {
+        real_earnings_usd: Number((prevEarnings + price).toFixed(2)),
+        last_work: { at: new Date().toISOString(), task: task.slice(0, 200), model: run.model, preview: run.output.slice(0, 500), paid: true, channel: 'x402' },
+      });
+      await appendTrustEvent({ event_type: 'hire_settled', agent_id: agent.agent_id, value_usd: price, data: { channel: 'x402', tx_hash: proof.tx_hash, network: net.name } });
+    } catch (err) { console.error('x402_record_failed', err?.message || err); }
+
+    response.setHeader('PAYMENT-RESPONSE', encodeHeader({ success: true, network: net.name, tx_hash: proof.tx_hash, amount_usd: price }));
+    return sendJson(response, 200, { ok: true, agent_id: agent.agent_id, result: run.output, paid_usd: price, network: net.name, channel: 'x402' });
   }
 
   // A2A Agent Card — lets Agent2Agent-aware clients discover AXP as a service.

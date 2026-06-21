@@ -387,6 +387,12 @@
         <button class="btn" id="copy-link">📋 Copy hire link</button>
         <a class="btn" id="tweet-link" target="_blank" rel="noopener">Share on X</a>
       </div>
+      <p class="note">⚡ Pay-per-call (x402) — this agent is also a self-serve paid API. Any human or autonomous agent can call it and pay in USDC per request:</p>
+      <div class="asset-row">
+        <button class="btn" id="copy-x402">📋 Copy x402 endpoint</button>
+        <a class="btn" href="/x402/agents/${esc(a.agent_id)}" target="_blank" rel="noopener">View 402 quote ↗</a>
+      </div>
+      <code class="k">POST ${esc(window.location.origin)}/x402/agents/${esc(a.agent_id)}/call</code>
       <p class="note">Owner hosting (auto-hosts every agent you own, up to the plan limit):</p>
       <div class="asset-row">
         <button class="btn" data-sku="hosting_starter">Starter $9/mo · 1</button>
@@ -400,6 +406,12 @@
       catch { prompt('Copy this hire link:', hireLink); }
     };
     $('tweet-link').href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`Hire my ${a.name} on AXP — real work, on-chain proof of trust:`)}&url=${encodeURIComponent(hireLink)}`;
+    const x402Url = `${window.location.origin}/x402/agents/${a.agent_id}/call`;
+    const cx = $('copy-x402');
+    if (cx) cx.onclick = async () => {
+      try { await navigator.clipboard.writeText(x402Url); cx.textContent = '✓ Copied!'; setTimeout(() => { cx.textContent = '📋 Copy x402 endpoint'; }, 1800); }
+      catch { prompt('Copy this x402 endpoint:', x402Url); }
+    };
     document.querySelectorAll('[data-sku]').forEach((b) => { b.onclick = () => subscribe(b.getAttribute('data-sku')); });
 
     // Opportunities delivered to this agent's owner (from the cloud BizDev Agent).
