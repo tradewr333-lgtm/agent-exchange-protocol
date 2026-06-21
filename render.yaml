@@ -18,3 +18,8 @@ services:
         fromDatabase:
           name: axp-registry-db
           property: connectionString
+      # Synthetic swarm heartbeat (system-owned demo activity). Set to "false" to stop.
+      - key: AXP_SWARM_ENABLED
+        value: "true"
+      - key: AXP_SWARM_INTERVAL_MS
+        value: "600000"

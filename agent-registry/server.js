@@ -22,6 +22,7 @@ import {
 } from './src/contracts.js';
 import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/registry.js';
 import { listApiUsage, listTrustEvents } from './src/store.js';
+import { startSwarmScheduler } from './src/swarm-scheduler.js';
 import { claimIntent, fulfillIntent, getIntent, getIntentFeed, listIntents, publishIntent } from './src/intents.js';
 import { getOpportunitiesForAgent, getOpportunityGraph } from './src/opportunities.js';
 import { getInbox, postInboxMessage } from './src/inbox.js';
@@ -735,6 +736,7 @@ const server = http.createServer(async (request, response) => {
 
 server.listen(port, () => {
   console.log(`AXP agent registry running at http://localhost:${port}`);
+  startSwarmScheduler();
 });
 
 function sendJson(response, status, body, extraHeaders = {}) {
