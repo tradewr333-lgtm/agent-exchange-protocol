@@ -1,21 +1,33 @@
 import { ethers } from 'ethers';
+import { loadBlockchainEnv } from './load-env.js';
 
-const registryUrl = (process.env.AXP_REGISTRY_URL ?? 'https://registry.axp.network').replace(/\/$/, '');
+loadBlockchainEnv();
+
+// AXP_ANCHOR_NETWORK = 'testnet' (BSC chainId 97) or 'mainnet' (chainId 56, default).
+const isTestnet = (process.env.AXP_ANCHOR_NETWORK ?? 'mainnet').toLowerCase() === 'testnet';
+const chainId = isTestnet ? 97 : 56;
+
+const registryUrl = (process.env.AXP_REGISTRY_URL ?? 'https://axp.network').replace(/\/$/, '');
 const apiKey = process.env.AXP_API_KEY;
-const privateKey = process.env.BSC_MAINNET_PRIVATE_KEY;
-const rpcUrl = process.env.BSC_MAINNET_RPC_URL ?? 'https://bsc-dataseed.bnbchain.org';
+const privateKey = isTestnet
+  ? (process.env.BSC_TESTNET_PRIVATE_KEY || process.env.AXP_OPERATOR_KEY)
+  : (process.env.BSC_MAINNET_PRIVATE_KEY || process.env.AXP_OPERATOR_KEY);
+const rpcUrl = isTestnet
+  ? (process.env.BSC_TESTNET_RPC_URL ?? 'https://data-seed-prebsc-1-s1.bnbchain.org:8545')
+  : (process.env.BSC_MAINNET_RPC_URL ?? 'https://bsc-dataseed.bnbchain.org');
 const anchorAddress = process.env.AXP_TRUST_ANCHOR_ADDRESS;
 const limit = Number(process.env.AXP_ANCHOR_LIMIT ?? 100);
 
 if (!apiKey) {
-  throw new Error('Missing AXP_API_KEY');
+  throw new Error('Missing AXP_API_KEY (run mint-api-key.js first)');
 }
 if (!privateKey) {
-  throw new Error('Missing BSC_MAINNET_PRIVATE_KEY');
+  throw new Error(`Missing ${isTestnet ? 'BSC_TESTNET_PRIVATE_KEY' : 'BSC_MAINNET_PRIVATE_KEY'}`);
 }
 if (!anchorAddress) {
-  throw new Error('Missing AXP_TRUST_ANCHOR_ADDRESS');
+  throw new Error('Missing AXP_TRUST_ANCHOR_ADDRESS (deploy the contract first)');
 }
+console.log(`Anchoring to BSC ${isTestnet ? 'testnet' : 'mainnet'} (chainId ${chainId}) via ${rpcUrl}`);
 
 const anchorAbi = [
   'function recordAnchor(bytes32 merkleRoot,uint256 fromEventId,uint256 toEventId,uint256 eventCount,string registryUrl,string batchUri) external returns (uint256)',
@@ -23,7 +35,7 @@ const anchorAbi = [
 
 const prepared = await postJson('/anchors/prepare', {
   limit,
-  chain_id: 56,
+  chain_id: chainId,
   contract_address: anchorAddress,
   registry_url: registryUrl,
 });
@@ -60,7 +72,7 @@ const recorded = await postJson('/anchors/record', {
   from_event_id: prepared.from_event_id,
   to_event_id: prepared.to_event_id,
   event_count: prepared.event_count,
-  chain_id: 56,
+  chain_id: chainId,
   contract_address: anchorAddress,
   tx_hash: tx.hash,
   block_number: receipt.blockNumber,
