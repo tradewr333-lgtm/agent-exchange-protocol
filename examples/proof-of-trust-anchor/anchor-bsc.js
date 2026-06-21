@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { loadBlockchainEnv } from './load-env.js';
+import { mintApiKey } from './api-key.js';
 
 loadBlockchainEnv();
 
@@ -8,7 +9,7 @@ const isTestnet = (process.env.AXP_ANCHOR_NETWORK ?? 'mainnet').toLowerCase() ==
 const chainId = isTestnet ? 97 : 56;
 
 const registryUrl = (process.env.AXP_REGISTRY_URL ?? 'https://axp.network').replace(/\/$/, '');
-const apiKey = process.env.AXP_API_KEY;
+let apiKey = process.env.AXP_API_KEY;
 const privateKey = isTestnet
   ? (process.env.BSC_TESTNET_PRIVATE_KEY || process.env.AXP_OPERATOR_KEY)
   : (process.env.BSC_MAINNET_PRIVATE_KEY || process.env.AXP_OPERATOR_KEY);
@@ -18,9 +19,6 @@ const rpcUrl = isTestnet
 const anchorAddress = process.env.AXP_TRUST_ANCHOR_ADDRESS;
 const limit = Number(process.env.AXP_ANCHOR_LIMIT ?? 100);
 
-if (!apiKey) {
-  throw new Error('Missing AXP_API_KEY (run mint-api-key.js first)');
-}
 if (!privateKey) {
   throw new Error(`Missing ${isTestnet ? 'BSC_TESTNET_PRIVATE_KEY' : 'BSC_MAINNET_PRIVATE_KEY'}`);
 }
@@ -33,16 +31,23 @@ const anchorAbi = [
   'function recordAnchor(bytes32 merkleRoot,uint256 fromEventId,uint256 toEventId,uint256 eventCount,string registryUrl,string batchUri) external returns (uint256)',
 ];
 
+const provider = new ethers.JsonRpcProvider(rpcUrl);
+const signer = new ethers.Wallet(privateKey, provider);
+const contract = new ethers.Contract(anchorAddress, anchorAbi, signer);
+
+// No API key supplied? Mint one in-memory from the same wallet — never printed,
+// never pasted. The /anchors/* endpoints need a key; this provisions it silently.
+if (!apiKey) {
+  apiKey = (await mintApiKey({ registryUrl, wallet: signer })).secret;
+  console.log('Auto-minted a temporary AXP API key for this anchor (kept in memory, not printed).');
+}
+
 const prepared = await postJson('/anchors/prepare', {
   limit,
   chain_id: chainId,
   contract_address: anchorAddress,
   registry_url: registryUrl,
 });
-
-const provider = new ethers.JsonRpcProvider(rpcUrl);
-const signer = new ethers.Wallet(privateKey, provider);
-const contract = new ethers.Contract(anchorAddress, anchorAbi, signer);
 
 console.log(JSON.stringify({
   step: 'prepared_anchor_batch',

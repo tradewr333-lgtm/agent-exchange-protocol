@@ -1,14 +1,12 @@
-// Mint an AXP API key by signing a wallet message (EIP-191). The /anchors/* endpoints
-// are gated by an API key; this issues one for your operator wallet. The private key
-// is read locally and only used to sign — it is never sent to the registry.
+// Mint an AXP API key by signing locally with the operator wallet (EIP-191).
+// Note: you usually do NOT need to run this — anchor-bsc.js auto-mints a key
+// in-memory. Use this only if you want a key for your own scripts.
 //
 // Usage (from repo root, with blockchain/.env holding your key):
 //   AXP_REGISTRY_URL=https://axp.network node examples/proof-of-trust-anchor/mint-api-key.js
 import { ethers } from 'ethers';
-import { randomBytes } from 'node:crypto';
 import { loadBlockchainEnv } from './load-env.js';
-import { buildAuthMessage } from '../../agent-registry/src/auth.js';
-import { buildApiKeyScope } from '../../agent-registry/src/api-keys.js';
+import { mintApiKey } from './api-key.js';
 
 loadBlockchainEnv();
 
@@ -26,29 +24,9 @@ rawKey = rawKey.trim();
 if (!rawKey.startsWith('0x')) rawKey = '0x' + rawKey;
 
 const wallet = new ethers.Wallet(rawKey);
-const owner = wallet.address;
-const name = process.env.AXP_KEY_NAME ?? 'axp-anchor-key';
-
-const payload = { name, owner };
-const scope = buildApiKeyScope(payload);
-const nonce = '0x' + randomBytes(16).toString('hex');
-const issued_at = new Date().toISOString();
-const message = buildAuthMessage({ action: 'api_keys.register', agentId: owner, address: owner, nonce, issuedAt: issued_at, scope });
-const signature = await wallet.signMessage(message);
-
-const res = await fetch(`${registryUrl}/api-keys/register`, {
-  method: 'POST',
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ name, owner, auth: { agent_id: owner, address: owner, signature, nonce, issued_at } }),
-});
-const json = await res.json().catch(() => ({}));
-if (!res.ok) {
-  console.error('api-key register failed:', JSON.stringify(json));
-  process.exit(1);
-}
+const { secret, keyId, owner } = await mintApiKey({ registryUrl, wallet, name: process.env.AXP_KEY_NAME ?? 'axp-anchor-key' });
 
 console.log(`Operator ${owner} on ${registryUrl}`);
-console.log('AXP API key (store securely — returned only once):');
-console.log('  ' + json.secret);
-console.log('  key_id:', json.api_key?.key_id);
-console.log('\nNext: set AXP_API_KEY to the value above, then run anchor-bsc.js.');
+console.log('AXP API key (store securely — returned only once; do NOT paste it anywhere public):');
+console.log('  ' + secret);
+console.log('  key_id:', keyId);
