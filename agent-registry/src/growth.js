@@ -146,6 +146,15 @@ export async function sponsorScion(input = {}) {
       identity: `axp:${registry.network ?? 'local-demo'}:${scionId}`,
       origin: 'genesis_cascade',
       sponsor_agent_id: sponsorId,
+      // A scion is operated by its sponsor: inherit the operator so the sponsor's
+      // key can sign accept/settle on the scion's behalf (enables real contracts).
+      onchain: sponsor.manifest?.onchain?.operator
+        ? {
+            network: sponsor.manifest.onchain.network ?? 'BNB Smart Chain',
+            chain_id: sponsor.manifest.onchain.chain_id ?? 56,
+            operator: sponsor.manifest.onchain.operator,
+          }
+        : undefined,
     },
   };
 
