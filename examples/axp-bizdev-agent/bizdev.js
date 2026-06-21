@@ -16,12 +16,15 @@
 // AXP_BIZDEV_LABELS defaults to "help wanted,good first issue,bounty".
 
 import { githubIssuesSource } from '../axp-opportunity-miner/sources.js';
-import { matchLeads } from './match.js';
+import { inferService } from '../axp-opportunity-miner/normalize.js';
+import { buildLead, prioritize } from './match.js';
+import { classifyTask } from './classify.js';
 
 const REGISTRY = (process.env.AXP_REGISTRY_URL || 'https://axp.network').replace(/\/$/, '');
 const repos = (process.env.AXP_BIZDEV_REPOS || '').split(',').map((r) => r.trim()).filter(Boolean);
 const labels = process.env.AXP_BIZDEV_LABELS || 'help wanted,good first issue,bounty';
 const MAX = Number(process.env.AXP_BIZDEV_MAX || 15);
+const MIN_TRUST = Number(process.env.AXP_BIZDEV_MIN_TRUST ?? 1); // skip trust-0 stubs by default
 
 async function fetchAgents() {
   try {
@@ -76,7 +79,18 @@ async function gather() {
 }
 
 const [workItems, agents] = await Promise.all([gather(), fetchAgents()]);
-const leads = matchLeads({ workItems, agents, registryUrl: REGISTRY });
+
+// Classify each task with Claude (accurate) when ANTHROPIC_API_KEY is set; else keyword.
+const rawLeads = [];
+for (const item of workItems) {
+  let service;
+  let summary = '';
+  const classified = await classifyTask({ title: item.title, body: item.body });
+  if (classified) { service = classified.service; summary = classified.summary; }
+  else { service = inferService(item).service; }
+  rawLeads.push(buildLead({ item, service, summary, agents, registryUrl: REGISTRY, minTrust: MIN_TRUST }));
+}
+const leads = prioritize(rawLeads);
 
 console.log(`\n=== AXP BizDev review queue — ${leads.length} lead(s) · HUMAN REVIEW REQUIRED ===`);
 console.log('Review each draft and send it yourself, from your own account, only where appropriate.\n');

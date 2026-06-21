@@ -1,12 +1,9 @@
-// AXP BizDev / Outreach Agent — "the mountain comes to Muhammad".
+// AXP BizDev / Outreach Agent — matching + drafting (pure, testable).
 //
-// Demand exists out there (GitHub issues, bounties, help-wanted). This module matches
-// each real external task to the best AXP agent that can do it, and drafts a short,
-// honest outreach with a direct hire link. It NEVER auto-posts: every lead is marked
-// human_review_required, so a person approves/sends it (auto-mass-posting offers on
-// GitHub/marketplaces is spam and against their terms).
-//
-// Pure module (no IO) so it is deterministically testable.
+// "The mountain comes to Muhammad": match real external tasks to the best AXP agent
+// and draft an honest outreach with a hire link. NEVER auto-posts — every lead is
+// human_review_required. Now with a minimum-trust filter (no offering trust-0 stubs)
+// and a fit score for prioritization.
 
 import { inferService } from '../axp-opportunity-miner/normalize.js';
 
@@ -21,44 +18,68 @@ const SERVICE_LABEL = {
   analysis: 'analysis',
   customer_support: 'support',
   trading: 'market research',
+  general: 'this',
 };
 
-export function bestAgentFor(service, agents = []) {
-  const candidates = agents.filter((a) => Array.isArray(a.services) && a.services.includes(service));
+// Best agent offering the service, above a minimum on-chain trust score.
+export function bestAgentFor(service, agents = [], minTrust = 0) {
+  const candidates = agents.filter((a) => Array.isArray(a.services)
+    && a.services.includes(service)
+    && (Number(a.trust_score) || 0) >= minTrust);
   if (candidates.length === 0) return null;
   return [...candidates].sort((a, b) => (Number(b.trust_score) || 0) - (Number(a.trust_score) || 0))[0];
 }
 
-export function draftOutreach({ item, agent, service, registryUrl }) {
+export function draftOutreach({ item, agent, service, registryUrl, summary }) {
   const label = SERVICE_LABEL[service] || service || 'this';
   const link = agent ? `${registryUrl}/agent/${agent.agent_id}` : `${registryUrl}/store`;
   const who = agent ? agent.name : `an AXP ${label} agent`;
   const cred = agent
-    ? `It carries a ${Math.round(Number(agent.trust_score) || 0)} on-chain trust score${agent.contracts ? ` and ${agent.contracts} completed jobs` : ''}.`
+    ? `It has a ${Math.round(Number(agent.trust_score) || 0)} on-chain trust score${agent.contracts ? ` and ${agent.contracts} completed jobs` : ''}.`
     : `AXP agents carry on-chain reputation and Proof of Trust on every delivery.`;
   return [
     `Hi — I saw "${item.title}".`,
-    `If it helps, ${who} on AXP can take this ${label} task and deliver it, with cryptographic proof of the work.`,
+    `${who} on AXP can take this ${label} task and deliver it, with cryptographic proof of the work.`,
+    summary ? `Specifically: ${summary}` : '',
     cred,
-    `You can hire it directly here: ${link}`,
+    `Hire it here: ${link}`,
     `(Not affiliated with this project — just offering to help. Feel free to ignore.)`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
-export function matchLeads({ workItems = [], agents = [], registryUrl = 'https://axp.network' } = {}) {
-  return workItems.map((item) => {
-    const { service } = inferService(item); // inferService returns { service, skills }
-    const agent = bestAgentFor(service, agents);
-    return {
-      title: item.title,
-      source_uri: item.url || item.source_uri || null,
-      service,
-      matched_agent: agent
-        ? { agent_id: agent.agent_id, name: agent.name, trust_score: Number(agent.trust_score) || 0, hire_link: `${registryUrl}/agent/${agent.agent_id}` }
-        : null,
-      suggested_template: agent ? null : service, // no agent yet → launch one for this niche
-      draft: draftOutreach({ item, agent, service, registryUrl }),
-      channel: 'human_review_required',
-    };
+// Priority: leads with a real (trust-bearing) matched agent rank highest.
+export function fitScore(lead) {
+  if (lead.matched_agent) return 100 + (Number(lead.matched_agent.trust_score) || 0);
+  return 10; // no agent yet → low priority (launch suggestion)
+}
+
+export function buildLead({ item, service, summary = '', agents = [], registryUrl = 'https://axp.network', minTrust = 0 }) {
+  const agent = bestAgentFor(service, agents, minTrust);
+  const lead = {
+    title: item.title,
+    source_uri: item.url || item.source_uri || null,
+    service,
+    summary: summary || null,
+    matched_agent: agent
+      ? { agent_id: agent.agent_id, name: agent.name, trust_score: Number(agent.trust_score) || 0, hire_link: `${registryUrl}/agent/${agent.agent_id}` }
+      : null,
+    suggested_template: agent ? null : service,
+    draft: draftOutreach({ item, agent, service, registryUrl, summary }),
+    channel: 'human_review_required',
+  };
+  lead.fit_score = fitScore(lead);
+  return lead;
+}
+
+export function prioritize(leads) {
+  return [...leads].sort((a, b) => (b.fit_score || 0) - (a.fit_score || 0));
+}
+
+// Keyword-only path (no LLM) — used as a fallback and in tests.
+export function matchLeads({ workItems = [], agents = [], registryUrl = 'https://axp.network', minTrust = 0 } = {}) {
+  const leads = workItems.map((item) => {
+    const { service } = inferService(item);
+    return buildLead({ item, service, agents, registryUrl, minTrust });
   });
+  return prioritize(leads);
 }

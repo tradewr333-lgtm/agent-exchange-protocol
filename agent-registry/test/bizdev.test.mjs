@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { bestAgentFor, draftOutreach, matchLeads } from '../../examples/axp-bizdev-agent/match.js';
+import { bestAgentFor, draftOutreach, matchLeads, buildLead, prioritize, fitScore } from '../../examples/axp-bizdev-agent/match.js';
 
 let passed = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); passed += 1; };
@@ -28,5 +28,23 @@ ok(leads[0].channel === 'human_review_required', 'every lead requires human revi
 ok(typeof leads[0].service === 'string' && leads[0].service.length > 0, 'lead has an inferred service');
 ok(typeof leads[0].draft === 'string' && leads[0].draft.length > 20, 'lead carries a ready-to-send draft');
 ok(leads[0].matched_agent || leads[0].suggested_template, 'lead has either a matched agent or a launch suggestion');
+
+// --- minimum-trust filter (no offering trust-0 stubs) ---
+ok(bestAgentFor('translation', agents, 60).agent_id === 'a2', 'minTrust keeps only agents above the floor');
+ok(bestAgentFor('translation', agents, 95) === null, 'minTrust above all => null (suggest launch instead)');
+
+// --- buildLead + fit score + prioritization ---
+const stubs = [{ agent_id: 's1', name: 'Stub', services: ['research'], trust_score: 0 }];
+const leadNoTrust = buildLead({ item: { title: 'Research X' }, service: 'research', agents: stubs, minTrust: 1, registryUrl: 'https://axp.network' });
+ok(leadNoTrust.matched_agent === null && leadNoTrust.suggested_template === 'research', 'trust-0 stub is not matched; suggests launching');
+ok(leadNoTrust.fit_score === 10, 'unmatched lead has low fit score');
+
+const leadGood = buildLead({ item: { title: 'Research Y' }, service: 'research', summary: 'summarize the docs', agents: [{ agent_id: 'r1', name: 'R', services: ['research'], trust_score: 200 }], minTrust: 1, registryUrl: 'https://axp.network' });
+ok(leadGood.matched_agent && leadGood.fit_score === 300, 'matched lead scores 100 + trust');
+ok(leadGood.draft.includes('Specifically: summarize the docs'), 'Claude summary woven into the draft');
+
+const ordered = prioritize([leadNoTrust, leadGood]);
+ok(ordered[0] === leadGood, 'prioritize ranks the high-fit lead first');
+ok(typeof fitScore(leadGood) === 'number', 'fitScore exported');
 
 console.log(`bizdev.test.mjs: ${passed} checks passed`);
