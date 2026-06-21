@@ -15,10 +15,12 @@ const UA = { 'User-Agent': 'axp-bizdev', Accept: 'application/json' };
 
 // Best-effort default orgs with active Algora bounty programs. Override via env
 // AXP_ALGORA_ORGS="org1,org2,...". (Org slugs are Algora handles, usually = GitHub org.)
+// Confirmed-active Algora org slugs (from algora.io/bounties, June 2026). Mostly dev-tool
+// / data / infra OSS — i.e. issues that classify as code_review / data_processing / security.
 export const DEFAULT_ALGORA_ORGS = [
-  'tldraw', 'documenso', 'calcom', 'twentyhq', 'triggerdotdev', 'highlight',
-  'formbricks', 'novuhq', 'windmill-labs', 'coollabsio', 'tegonhq', 'remotion-dev',
-  'PostHog', 'appwrite', 'ente-io', 'mendableai', 'aptos-labs', 'zio',
+  'twentyhq', 'keephq', 'triggerdotdev', 'windmill-labs', 'coollabsio', 'highlight',
+  'mendableai', 'trieve', 'onyx-dot-app', 'dittofeed', 'panoratech', 'traceloop',
+  'moonrepo', 'browser-use', 'outerbase', 'thesysdev', 'archestra-ai', 'capgo', 'isaac',
 ];
 
 // Extract a USD reward from free text like "$500", "$1.5k", "💎 $2,000" (used by the
