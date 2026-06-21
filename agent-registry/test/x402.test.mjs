@@ -2,6 +2,7 @@ import assert from 'node:assert';
 import {
   buildPaymentRequired, x402Network, pricePerCallUsd, toAtomic,
   encodeHeader, decodeHeader, extractPaymentProof, x402Enabled,
+  isSignedPayload, facilitatorEnabled, verifyViaFacilitator, settleViaFacilitator,
 } from '../src/x402.js';
 
 let passed = 0;
@@ -47,5 +48,31 @@ ok(extractPaymentProof({ headers: { 'payment-signature': enc }, body: {} }).tx_h
 ok(extractPaymentProof({ headers: {}, body: { payment: { tx_hash: '0x9' } } }).tx_hash === '0x9', 'proof from body.payment');
 ok(extractPaymentProof({ headers: {}, body: { tx_hash: '0x7' } }).tx_hash === '0x7', 'proof from body.tx_hash');
 ok(extractPaymentProof({ headers: {}, body: {} }) === null, 'no proof → null');
+
+// --- Phase 2: facilitator ---
+ok(facilitatorEnabled({}) === false, 'no facilitator by default');
+ok(facilitatorEnabled({ AXP_X402_FACILITATOR_URL: 'https://x402.org/facilitator' }) === true, 'facilitator enabled via env');
+ok(isSignedPayload({ scheme: 'exact', payload: { signature: '0x', authorization: {} } }) === true, 'signed payload detected');
+ok(isSignedPayload({ tx_hash: '0x1' }) === false, 'bare tx_hash is not a signed payload');
+ok(isSignedPayload(null) === false, 'null is not a signed payload');
+
+const facEnv = { AXP_X402_FACILITATOR_URL: 'https://fac.example' };
+const okFetch = async (url) => ({
+  ok: true, status: 200,
+  json: async () => (String(url).endsWith('/verify')
+    ? { isValid: true, payer: '0xpayer' }
+    : { success: true, transaction: '0xsettled', payer: '0xpayer' }),
+});
+const vr = await verifyViaFacilitator({ paymentPayload: {}, paymentRequirements: {}, env: facEnv, fetchImpl: okFetch });
+ok(vr.ok && vr.payer === '0xpayer', 'facilitator /verify ok → payer returned');
+const sr = await settleViaFacilitator({ paymentPayload: {}, paymentRequirements: {}, env: facEnv, fetchImpl: okFetch });
+ok(sr.ok && sr.transaction === '0xsettled', 'facilitator /settle ok → tx returned');
+
+const invalidFetch = async () => ({ ok: true, status: 200, json: async () => ({ isValid: false, invalidReason: 'insufficient_funds' }) });
+const vbad = await verifyViaFacilitator({ paymentPayload: {}, paymentRequirements: {}, env: facEnv, fetchImpl: invalidFetch });
+ok(!vbad.ok && vbad.invalidReason === 'insufficient_funds', 'facilitator /verify invalid → reason surfaced');
+
+const noFac = await verifyViaFacilitator({ paymentPayload: {}, paymentRequirements: {}, env: {}, fetchImpl: okFetch });
+ok(!noFac.ok, 'verify without facilitator url → not ok');
 
 console.log(`x402.test.mjs: ${passed} checks passed`);

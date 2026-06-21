@@ -35,7 +35,7 @@ import { getPlanCatalog, planBySku, stripePlanBySku, stripePriceId, computeContr
 import { listTemplates } from './src/agent-templates.js';
 import { launchAgent } from './src/agent-launcher.js';
 import { buildLaunchQuote, verifyLaunchPayment, launchPaymentEnabled, verifyTreasuryPayment, verifyErc20TransferTo } from './src/payments-onchain.js';
-import { buildPaymentRequired, x402Network, pricePerCallUsd, extractPaymentProof, encodeHeader, x402Enabled } from './src/x402.js';
+import { buildPaymentRequired, x402Network, pricePerCallUsd, extractPaymentProof, encodeHeader, x402Enabled, isSignedPayload, facilitatorEnabled, verifyViaFacilitator, settleViaFacilitator } from './src/x402.js';
 import { stripeEnabled, createSubscriptionCheckout, constructWebhookEvent } from './src/stripe.js';
 import { buildHireQuote, hireAmounts, hireFeeRate, computeSplit, hirePaymentEnabled } from './src/hire.js';
 import { sendPayout, payoutEnabled } from './src/payout.js';
@@ -906,46 +906,84 @@ const server = http.createServer(async (request, response) => {
     const body = await readJsonBody(request);
     const proof = extractPaymentProof({ headers: request.headers, body: body || {} });
 
-    // No proof yet → the x402 handshake: 402 + PaymentRequired (header + body).
-    if (!proof || !proof.tx_hash) {
+    // No proof at all → the x402 handshake: 402 + PaymentRequired (header + body).
+    if (!proof) {
       response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
       return sendJson(response, 402, required);
     }
     const task = typeof body?.task === 'string' ? body.task.trim() : '';
     if (!task) return sendJson(response, 400, { error: 'task_required' });
-    if (await hireExists(proof.tx_hash)) return sendJson(response, 409, { error: 'payment_already_used', tx_hash: proof.tx_hash });
-
     const net = x402Network();
+    const price = pricePerCallUsd();
+    const selected = required.accepts[0];
+
+    const recordEarning = async ({ txId, payer }) => {
+      try {
+        await appendHire({
+          agent_id: agent.agent_id, customer_address: payer || proof.from || null, asset: 'USDC',
+          amount: price, fee_usd: 0, owner_usd: price, tx_hash: txId,
+          payout_tx: txId, status: 'paid', task, deliverable: '__x402__',
+        });
+        const prevEarnings = Number(agent.real_earnings_usd || 0);
+        await updateAgentFields(agent.agent_id, {
+          real_earnings_usd: Number((prevEarnings + price).toFixed(2)),
+          last_work: { at: new Date().toISOString(), task: task.slice(0, 200), model: 'claude-haiku-4-5-20251001', preview: '', paid: true, channel: 'x402' },
+        });
+        await appendTrustEvent({ event_type: 'hire_settled', agent_id: agent.agent_id, value_usd: price, data: { channel: 'x402', tx_hash: txId, network: net.name } });
+      } catch (err) { console.error('x402_record_failed', err?.message || err); }
+    };
+
+    // ----- PHASE 2: facilitator flow (autonomous, single round-trip) -----
+    // A signed PaymentPayload + a configured facilitator = verify → work → settle.
+    if (isSignedPayload(proof)) {
+      if (!facilitatorEnabled()) {
+        response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
+        return sendJson(response, 402, { error: 'facilitator_not_configured', hint: 'set AXP_X402_FACILITATOR_URL to accept signed payments', payment_required: required });
+      }
+      const v = await verifyViaFacilitator({ paymentPayload: proof, paymentRequirements: selected });
+      if (!v.ok) {
+        response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
+        return sendJson(response, 402, { error: 'payment_invalid', reason: v.invalidReason || v.error || null, payment_required: required });
+      }
+      const run = await executeTask({ template_id: agent.template, task, maxTokens: 900 });
+      if (!run.ok || !run.output) return sendJson(response, 502, { error: 'execution_failed', detail: run.reason || run.detail });
+      // Settle on-chain via the facilitator AFTER the work is produced.
+      const s = await settleViaFacilitator({ paymentPayload: proof, paymentRequirements: selected });
+      const txId = s.transaction || `x402:${Date.now()}`;
+      if (s.ok) await recordEarning({ txId, payer: v.payer });
+      response.setHeader('PAYMENT-RESPONSE', encodeHeader({ success: s.ok, transaction: s.transaction, network: net.name, payer: v.payer }));
+      return sendJson(response, 200, {
+        ok: true, agent_id: agent.agent_id, result: run.output, paid_usd: price, network: net.name, channel: 'x402',
+        settlement: { settled: s.ok, transaction: s.transaction, error: s.ok ? null : (s.errorReason || s.error) },
+      });
+    }
+
+    // ----- PHASE 1 fallback: caller already paid; verify the tx hash on-chain -----
+    if (!proof.tx_hash) {
+      response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
+      return sendJson(response, 402, required);
+    }
+    if (await hireExists(proof.tx_hash)) return sendJson(response, 409, { error: 'payment_already_used', tx_hash: proof.tx_hash });
     const verified = await verifyErc20TransferTo({
       tx_hash: proof.tx_hash, token_address: net.usdc, decimals: net.decimals,
-      min_amount_usd: pricePerCallUsd(), recipient: agent.owner, rpc: net.rpc, chain_id: net.chain_id,
+      min_amount_usd: price, recipient: agent.owner, rpc: net.rpc, chain_id: net.chain_id,
     });
     if (!verified.ok) {
       response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
       return sendJson(response, verified.status ?? 402, { ...verified, payment_required: required });
     }
-
     const run = await executeTask({ template_id: agent.template, task, maxTokens: 900 });
     if (!run.ok || !run.output) {
       return sendJson(response, 502, { error: 'execution_failed', detail: run.reason || run.detail, note: 'payment received on-chain — retry or contact support' });
     }
-
-    const price = pricePerCallUsd();
+    await recordEarning({ txId: proof.tx_hash, payer: proof.from });
+    // overwrite the deliverable placeholder with the real output for the phase-1 record path
     try {
-      await appendHire({
-        agent_id: agent.agent_id, customer_address: proof.from || null, asset: 'USDC',
-        amount: price, fee_usd: 0, owner_usd: price, tx_hash: proof.tx_hash,
-        payout_tx: proof.tx_hash, status: 'paid', task, deliverable: run.output,
-      });
-      const prevEarnings = Number(agent.real_earnings_usd || 0);
       await updateAgentFields(agent.agent_id, {
-        real_earnings_usd: Number((prevEarnings + price).toFixed(2)),
         last_work: { at: new Date().toISOString(), task: task.slice(0, 200), model: run.model, preview: run.output.slice(0, 500), paid: true, channel: 'x402' },
       });
-      await appendTrustEvent({ event_type: 'hire_settled', agent_id: agent.agent_id, value_usd: price, data: { channel: 'x402', tx_hash: proof.tx_hash, network: net.name } });
-    } catch (err) { console.error('x402_record_failed', err?.message || err); }
-
-    response.setHeader('PAYMENT-RESPONSE', encodeHeader({ success: true, network: net.name, tx_hash: proof.tx_hash, amount_usd: price }));
+    } catch { /* best-effort */ }
+    response.setHeader('PAYMENT-RESPONSE', encodeHeader({ success: true, network: net.name, transaction: proof.tx_hash, amount_usd: price }));
     return sendJson(response, 200, { ok: true, agent_id: agent.agent_id, result: run.output, paid_usd: price, network: net.name, channel: 'x402' });
   }
 

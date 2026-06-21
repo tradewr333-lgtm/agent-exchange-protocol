@@ -82,7 +82,8 @@ export function buildPaymentRequired({ agent, resource, env = process.env } = {}
 }
 
 // Pull the payment proof from x402 headers (v2 `PAYMENT-SIGNATURE`, v1 `X-PAYMENT`) or
-// a JSON body fallback. AXP accepts a settled on-chain tx hash as proof (MVP).
+// a JSON body fallback. The proof is EITHER a signed PaymentPayload (facilitator flow,
+// Phase 2) OR a settled on-chain tx hash (self-verify flow, Phase 1).
 export function extractPaymentProof({ headers = {}, body = {} } = {}) {
   const raw = headers['payment-signature'] || headers['x-payment'] || null;
   if (raw) {
@@ -91,4 +92,52 @@ export function extractPaymentProof({ headers = {}, body = {} } = {}) {
   }
   if (body && (body.tx_hash || body.payment)) return body.payment || body;
   return null;
+}
+
+// A signed x402 PaymentPayload (scheme `exact` = EIP-3009 transferWithAuthorization),
+// as opposed to a bare { tx_hash }. The facilitator verifies + settles these.
+export function isSignedPayload(proof) {
+  return Boolean(proof && proof.scheme && (proof.payload || proof.authorization));
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — facilitator: verify + settle a signed payment in ONE round trip,
+// so a caller (human or autonomous agent) pays without any pre-funded tx.
+// Configure AXP_X402_FACILITATOR_URL (e.g. testnet https://x402.org/facilitator,
+// or a Base mainnet facilitator). Optional AXP_X402_FACILITATOR_KEY for hosted ones.
+// ---------------------------------------------------------------------------
+export function facilitatorUrl(env = process.env) {
+  return (env.AXP_X402_FACILITATOR_URL || '').replace(/\/$/, '') || null;
+}
+export function facilitatorEnabled(env = process.env) {
+  return Boolean(facilitatorUrl(env));
+}
+
+async function postFacilitator(path, payload, env, fetchImpl) {
+  const url = facilitatorUrl(env);
+  if (!url) return { ok: false, error: 'facilitator_not_configured' };
+  const doFetch = fetchImpl ?? globalThis.fetch;
+  const headers = { 'Content-Type': 'application/json' };
+  if (env.AXP_X402_FACILITATOR_KEY) headers.Authorization = `Bearer ${env.AXP_X402_FACILITATOR_KEY}`;
+  try {
+    const res = await doFetch(`${url}${path}`, { method: 'POST', headers, body: JSON.stringify(payload) });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  } catch (err) {
+    return { ok: false, error: 'facilitator_unreachable', detail: String(err?.message || err) };
+  }
+}
+
+export async function verifyViaFacilitator({ paymentPayload, paymentRequirements, env = process.env, fetchImpl } = {}) {
+  const r = await postFacilitator('/verify', { x402Version: X402_VERSION, paymentPayload, paymentRequirements }, env, fetchImpl);
+  if (!r.ok) return { ok: false, status: r.status || 502, error: r.error || 'verify_failed', detail: r.detail, data: r.data };
+  const isValid = Boolean(r.data?.isValid);
+  return { ok: isValid, isValid, invalidReason: r.data?.invalidReason || null, payer: r.data?.payer || null, data: r.data };
+}
+
+export async function settleViaFacilitator({ paymentPayload, paymentRequirements, env = process.env, fetchImpl } = {}) {
+  const r = await postFacilitator('/settle', { x402Version: X402_VERSION, paymentPayload, paymentRequirements }, env, fetchImpl);
+  if (!r.ok) return { ok: false, status: r.status || 502, error: r.error || 'settle_failed', detail: r.detail, data: r.data };
+  const success = Boolean(r.data?.success);
+  return { ok: success, success, transaction: r.data?.transaction || null, payer: r.data?.payer || null, errorReason: r.data?.errorReason || null, data: r.data };
 }
