@@ -617,6 +617,22 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, result.ok ? 200 : 503, result);
   }
 
+  // Admin: manually set an agent's hosting status (fallback if a Stripe webhook
+  // was missed, e.g. the free instance was asleep when Stripe tried to deliver).
+  if (request.method === 'POST' && url.pathname === '/admin/set-hosting') {
+    const adminKey = process.env.AXP_ADMIN_KEY;
+    if (!adminKey) return sendJson(response, 503, { error: 'admin_disabled', hint: 'set AXP_ADMIN_KEY' });
+    if (request.headers['x-axp-admin-key'] !== adminKey) return sendJson(response, 401, { error: 'invalid_admin_key' });
+    const body = await readJsonBody(request);
+    if (!body?.agent_id) return sendJson(response, 400, { error: 'agent_id_required' });
+    const active = body.active !== false;
+    const updated = await updateAgentFields(body.agent_id, {
+      hosting: { status: active ? 'active' : 'inactive', plan: body.plan || 'hosting_starter', active, subscription_id: body.subscription_id || 'manual' },
+    });
+    if (!updated) return sendJson(response, 404, { error: 'agent_not_found', agent_id: body.agent_id });
+    return sendJson(response, 200, { ok: true, agent_id: body.agent_id, hosting: updated.hosting });
+  }
+
   if (url.pathname === '/billing/plans') {
     return sendJson(response, 200, {
       ...getPlanCatalog(),
