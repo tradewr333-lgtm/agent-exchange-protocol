@@ -50,7 +50,25 @@ async function gather() {
   // time (OR) and dedupe so we actually find help-wanted/bounty issues.
   const labelList = labels.split(',').map((l) => l.trim()).filter(Boolean);
   const seen = new Set();
-  const items = [];
+
+  // PAID Algora bounties FIRST — they have money attached, so they get priority for the
+  // MAX slots. (Previously GitHub help-wanted filled the cap and truncated the bounties.)
+  const bounties = [];
+  if (WITH_ALGORA) {
+    try {
+      const orgs = (process.env.AXP_ALGORA_ORGS || '').split(',').map((o) => o.trim()).filter(Boolean);
+      const found = await fetchAlgoraBounties({ orgs: orgs.length ? orgs : undefined, token: process.env.GITHUB_TOKEN, max: 30 });
+      for (const b of found) {
+        if (b.url && seen.has(b.url)) continue;
+        if (b.url) seen.add(b.url);
+        bounties.push(b);
+      }
+      if (found.length) console.log(`Found ${found.length} Algora bounty/bounties (paid demand).`);
+    } catch (err) { console.warn(`Algora skip: ${err.message}`); }
+  }
+
+  // GitHub help-wanted demand (unpaid) fills the remaining slots.
+  const ghItems = [];
   for (const repo of repos) {
     let foundForRepo = 0;
     for (const label of labelList) {
@@ -59,7 +77,7 @@ async function gather() {
         for (const it of found) {
           if (it.url && seen.has(it.url)) continue;
           if (it.url) seen.add(it.url);
-          items.push(it);
+          ghItems.push(it);
           foundForRepo += 1;
         }
       } catch (err) {
@@ -73,27 +91,14 @@ async function gather() {
         for (const it of recent.slice(0, 5)) {
           if (it.url && seen.has(it.url)) continue;
           if (it.url) seen.add(it.url);
-          items.push(it);
+          ghItems.push(it);
         }
       } catch { /* ignore */ }
     }
   }
 
-  // Paid Algora bounties (real demand with money attached) — prioritized later by fit.
-  if (WITH_ALGORA) {
-    try {
-      const orgs = (process.env.AXP_ALGORA_ORGS || '').split(',').map((o) => o.trim()).filter(Boolean);
-      const bounties = await fetchAlgoraBounties({ orgs: orgs.length ? orgs : undefined, token: process.env.GITHUB_TOKEN, max: 30 });
-      for (const b of bounties) {
-        if (b.url && seen.has(b.url)) continue;
-        if (b.url) seen.add(b.url);
-        items.push(b);
-      }
-      if (bounties.length) console.log(`Found ${bounties.length} Algora bounty/bounties (paid demand).`);
-    } catch (err) { console.warn(`Algora skip: ${err.message}`); }
-  }
-
-  return items.slice(0, MAX);
+  // Paid bounties take priority; GitHub demand fills whatever slots remain.
+  return [...bounties, ...ghItems].slice(0, MAX);
 }
 
 const [workItems, agents] = await Promise.all([gather(), fetchAgents()]);
