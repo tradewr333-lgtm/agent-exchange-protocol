@@ -13,7 +13,7 @@ const registryUrl = (process.env.AXP_REGISTRY_URL ?? 'https://axp.network').repl
 let apiKey = (process.env.AXP_API_KEY || '').startsWith('axp_live_') ? process.env.AXP_API_KEY : undefined;
 const privateKey = isTestnet
   ? (process.env.BSC_TESTNET_PRIVATE_KEY || process.env.AXP_OPERATOR_KEY)
-  : (process.env.BSC_MAINNET_PRIVATE_KEY || process.env.AXP_OPERATOR_KEY);
+  : (process.env.BSC_MAINNET_PRIVATE_KEY || process.env.BSC_TESTNET_PRIVATE_KEY || process.env.AXP_OPERATOR_KEY);
 const rpcUrl = isTestnet
   ? (process.env.BSC_TESTNET_RPC_URL ?? 'https://data-seed-prebsc-1-s1.bnbchain.org:8545')
   : (process.env.BSC_MAINNET_RPC_URL ?? 'https://bsc-dataseed.bnbchain.org');

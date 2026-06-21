@@ -257,6 +257,29 @@
     ).join('');
   }
 
+  function renderAnchor(anchor) {
+    const tag = $('anchor-tag');
+    if (!anchor || !anchor.merkle_root) {
+      tag.textContent = 'not yet anchored';
+      $('anchor').innerHTML = '<div class="empty">No on-chain anchor recorded yet. Run the anchor flow to commit a Merkle root of the trust-event ledger to BSC.</div>';
+      return;
+    }
+    const isTestnet = Number(anchor.chain_id) === 97;
+    const scan = isTestnet ? 'https://testnet.bscscan.com' : 'https://bscscan.com';
+    tag.textContent = anchor.status || 'recorded';
+    const rows = [
+      ['Merkle root', `<span class="hash">${esc(anchor.merkle_root)}</span>`],
+      ['Events covered', `${esc(anchor.event_count)} (ids ${esc(anchor.from_event_id)}–${esc(anchor.to_event_id)})`],
+      ['Network', isTestnet ? 'BSC testnet (97)' : 'BSC mainnet (56)'],
+    ];
+    if (anchor.tx_hash) rows.push(['Transaction', `<a href="${scan}/tx/${esc(anchor.tx_hash)}" target="_blank" rel="noopener">${shortHash(anchor.tx_hash)} ↗</a>`]);
+    if (anchor.contract_address) rows.push(['Anchor contract', `<a href="${scan}/address/${esc(anchor.contract_address)}" target="_blank" rel="noopener">${shortHash(anchor.contract_address)} ↗</a>`]);
+    if (anchor.block_number) rows.push(['Block', esc(anchor.block_number)]);
+    $('anchor').innerHTML = '<div class="rows">' + rows.map(([k, v]) =>
+      `<div class="row"><div class="lhs"><span class="title">${k}</span></div><div class="rhs">${v}</div></div>`
+    ).join('') + '</div>';
+  }
+
   function setStatus(d) {
     const dot = $('status-dot'), text = $('status-text');
     const ok = d.agents || d.metrics;
@@ -284,11 +307,13 @@
       lineage: live.lineage,
       intents: live.intents,
       gdp_usd: live.gdp_usd,
+      anchor: live.anchor,
     };
     setStatus(d);
     renderKpis(d);
     renderGauge(d.metrics);
     renderTreasury(d.metrics);
+    renderAnchor(d.anchor);
     renderOpportunities(d.opportunities);
     renderLedger(d.events);
     renderRanking(d.ranking);

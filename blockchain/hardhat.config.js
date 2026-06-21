@@ -2,7 +2,9 @@ import '@nomicfoundation/hardhat-toolbox';
 import 'dotenv/config';
 
 const testnetPrivateKey = process.env.BSC_TESTNET_PRIVATE_KEY;
-const mainnetPrivateKey = process.env.BSC_MAINNET_PRIVATE_KEY;
+// Same wallet for both networks: fall back to the testnet key for mainnet if a
+// dedicated mainnet key is not set (the address is identical).
+const mainnetPrivateKey = process.env.BSC_MAINNET_PRIVATE_KEY || process.env.BSC_TESTNET_PRIVATE_KEY;
 const testnetAccounts = testnetPrivateKey ? [testnetPrivateKey] : [];
 const mainnetAccounts = mainnetPrivateKey ? [mainnetPrivateKey] : [];
 
