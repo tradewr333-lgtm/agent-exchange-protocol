@@ -25,7 +25,7 @@ export const DEFAULT_ALGORA_ORGS = [
 
 // Repo OWNERS that are agent-testing playgrounds / demo bounties, not real companies
 // that actually pay. Filtered out by default; override via AXP_ALGORA_BLOCK_OWNERS.
-export const DEFAULT_BLOCK_OWNERS = ['securebananalabs', 'xevrion-v2', 'tine1117'];
+export const DEFAULT_BLOCK_OWNERS = ['securebananalabs', 'xevrion-v2', 'tine1117', 'willsmithte'];
 
 // Pull the GitHub repo owner from an issue URL: https://github.com/{owner}/{repo}/...
 export function ownerFromUrl(url = '') {
