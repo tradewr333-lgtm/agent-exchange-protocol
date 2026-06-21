@@ -19,17 +19,27 @@ import { githubSignal, huggingfaceSignal } from './sources.js';
 const REGISTRY = process.env.AXP_REGISTRY_URL || '';
 const INGEST_KEY = process.env.AXP_SIGNALS_INGEST_KEY || '';
 const WITH_HF = process.env.AXP_ALPHA_HUGGINGFACE === 'true';
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+
+// Unauthenticated GitHub Search allows ~10 req/min; a token raises it to 30/min.
+// Without a token we do ONE request per category (no growth) and space them out so
+// the run still completes. With a token we fetch growth too and run much faster.
+const WITH_GROWTH = Boolean(GITHUB_TOKEN);
+const GH_DELAY_MS = GITHUB_TOKEN ? 2500 : 9000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function collect() {
+  if (!GITHUB_TOKEN) {
+    console.log('No GITHUB_TOKEN set — running slow (1 req/category, no growth). Set GITHUB_TOKEN for 30 req/min + growth.\n');
+  }
   const signals = [];
   for (const c of CATEGORIES) {
     try {
-      const gh = await githubSignal(c.category, c.github);
+      const gh = await githubSignal(c.category, c.github, { token: GITHUB_TOKEN, withGrowth: WITH_GROWTH });
       signals.push(gh);
       console.log(`github   ${c.category.padEnd(18)} value=${gh.value} growth=${gh.growth_pct}%`);
-      await sleep(7000); // stay under unauthenticated GitHub search rate limits
+      await sleep(GH_DELAY_MS);
       if (WITH_HF && c.hf) {
         const hf = await huggingfaceSignal(c.category, c.hf);
         if (hf) {

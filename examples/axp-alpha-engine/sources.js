@@ -13,28 +13,37 @@ async function getJson(url, headers = {}) {
   return res.json();
 }
 
-// GitHub repositories matching a query, plus a growth proxy: the share of matching
-// repos created in the last 90 days (a rough "is this niche heating up?" signal).
-export async function githubSignal(category, query) {
+// GitHub repositories matching a query, plus an optional growth proxy: the share of
+// matching repos created in the last 90 days (a rough "is this niche heating up?").
+//
+// Pass a token to authenticate (Search API: 30 req/min vs 10 req/min unauthenticated)
+// — that also unlocks the second (growth) request without tripping the rate limit.
+export async function githubSignal(category, query, { token, withGrowth = true } = {}) {
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const q = encodeURIComponent(query);
-  const total = await getJson(`https://api.github.com/search/repositories?q=${q}&per_page=1`);
+  const total = await getJson(`https://api.github.com/search/repositories?q=${q}&per_page=1`, headers);
   const value = Number(total.total_count) || 0;
 
-  const since = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
-  const recent = await getJson(
-    `https://api.github.com/search/repositories?q=${q}+created:>=${since}&per_page=1`,
-  );
-  const recentCount = Number(recent.total_count) || 0;
-  // Annualized-ish growth proxy: recent 90d share extrapolated vs the rest.
-  const baseline = Math.max(1, value - recentCount);
-  const growthPct = Number((((recentCount * 4) / baseline) * 100).toFixed(1));
+  let growthPct = 0;
+  if (withGrowth) {
+    const since = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+    const recent = await getJson(
+      `https://api.github.com/search/repositories?q=${q}+created:>=${since}&per_page=1`,
+      headers,
+    );
+    const recentCount = Number(recent.total_count) || 0;
+    // Annualized-ish growth proxy: recent 90d share extrapolated vs the rest.
+    const baseline = Math.max(1, value - recentCount);
+    const g = ((recentCount * 4) / baseline) * 100;
+    growthPct = Number.isFinite(g) ? Number(Math.min(g, 500).toFixed(1)) : 0;
+  }
 
   return {
     source: 'github',
     category,
     metric: 'repositories',
     value,
-    growth_pct: Number.isFinite(growthPct) ? Math.min(growthPct, 500) : 0,
+    growth_pct: growthPct,
     query,
     observed_at: new Date().toISOString(),
   };
