@@ -23,6 +23,7 @@ jobs:
           AXP_REGISTRY_URL: https://axp.network
           AXP_BIZDEV_REPOS: ${{ vars.AXP_BIZDEV_REPOS || 'langchain-ai/langchain,microsoft/autogen,run-llama/llama_index' }}
           AXP_BIZDEV_POST: 'true'
+          AXP_BIZDEV_MIN_TRUST: ${{ vars.AXP_BIZDEV_MIN_TRUST || '1' }}
           AXP_SIGNALS_INGEST_KEY: ${{ secrets.AXP_SIGNALS_INGEST_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

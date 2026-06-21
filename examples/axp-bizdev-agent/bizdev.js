@@ -42,9 +42,9 @@ async function fetchAgents() {
 
 async function gather() {
   if (repos.length === 0) {
-    console.log('No AXP_BIZDEV_REPOS set. Example:');
+    console.log('No AXP_BIZDEV_REPOS set — skipping GitHub help-wanted demand.');
+    console.log('  (Algora paid bounties are still fetched. To add GitHub demand:)');
     console.log('  AXP_BIZDEV_REPOS="langchain-ai/langchain,openai/openai-cookbook" node examples/axp-bizdev-agent/bizdev.js');
-    return [];
   }
   // GitHub treats labels=a,b,c as AND (issue must have ALL). Query one label at a
   // time (OR) and dedupe so we actually find help-wanted/bounty issues.
