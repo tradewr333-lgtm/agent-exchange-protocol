@@ -9,7 +9,8 @@ const isTestnet = (process.env.AXP_ANCHOR_NETWORK ?? 'mainnet').toLowerCase() ==
 const chainId = isTestnet ? 97 : 56;
 
 const registryUrl = (process.env.AXP_REGISTRY_URL ?? 'https://axp.network').replace(/\/$/, '');
-let apiKey = process.env.AXP_API_KEY;
+// Ignore any placeholder / non-real value so we auto-mint instead of 401-ing.
+let apiKey = (process.env.AXP_API_KEY || '').startsWith('axp_live_') ? process.env.AXP_API_KEY : undefined;
 const privateKey = isTestnet
   ? (process.env.BSC_TESTNET_PRIVATE_KEY || process.env.AXP_OPERATOR_KEY)
   : (process.env.BSC_MAINNET_PRIVATE_KEY || process.env.AXP_OPERATOR_KEY);
@@ -22,8 +23,8 @@ const limit = Number(process.env.AXP_ANCHOR_LIMIT ?? 100);
 if (!privateKey) {
   throw new Error(`Missing ${isTestnet ? 'BSC_TESTNET_PRIVATE_KEY' : 'BSC_MAINNET_PRIVATE_KEY'}`);
 }
-if (!anchorAddress) {
-  throw new Error('Missing AXP_TRUST_ANCHOR_ADDRESS (deploy the contract first)');
+if (!/^0x[a-fA-F0-9]{40}$/.test(anchorAddress || '')) {
+  throw new Error(`AXP_TRUST_ANCHOR_ADDRESS must be a real deployed 0x address (got: ${anchorAddress ?? 'unset'}). Deploy the contract first.`);
 }
 console.log(`Anchoring to BSC ${isTestnet ? 'testnet' : 'mainnet'} (chainId ${chainId}) via ${rpcUrl}`);
 
