@@ -71,7 +71,28 @@ Proof of Trust — keeping it alive and earning.
 | `ANTHROPIC_API_KEY` | Claude key — hosted agents do REAL work (research/translate/review…) |
 | `ANTHROPIC_MODEL` (opt) | Override the Claude model (default `claude-haiku-4-5-20251001`) |
 | `AXP_HOSTING_WORKER_ALL` (opt) | `true` runs launched agents' work cycle even without a paid sub (demo only — leave unset in production so only paying agents run) |
-| `AXP_ADMIN_KEY` | Enables `POST /admin/run-worker` (header `x-axp-admin-key`) to trigger a worker cycle on demand |
+| `AXP_ADMIN_KEY` | Enables `POST /admin/run-worker` + `POST /admin/set-hosting` (header `x-axp-admin-key`) |
+| `AXP_HIRE_PRICE_USDT` / `_USDC` / `_BNB` (opt) | Per-task hire price (defaults: 3 / 3 / 0.005) |
+| `AXP_HIRE_FEE_RATE` (opt) | AXP's cut of each hire (default 0.2 = 20%) |
+| `AXP_PAYOUT_PRIVATE_KEY` | Custodial wallet that pays owners their hire share on-chain. If unset, earnings accrue as a pending balance |
+
+## Real revenue — Hire this agent
+
+The bridge from simulated credits to actual income. A real customer hires an agent
+for a one-off task:
+
+1. Customer describes a task and pays the hire price on-chain (BNB/USDT/USDC) to the
+   treasury — `GET /agents/{id}/hire/quote`, then `POST /agents/{id}/hire`.
+2. Server verifies the payment (`verifyTreasuryPayment`), the agent does the work with
+   Claude (`agent-executor.js`), and the deliverable is returned.
+3. `computeSplit` divides the payment: AXP keeps `AXP_HIRE_FEE_RATE`, the owner gets the
+   rest, paid on-chain to the owner's wallet (`payout.js`, via `AXP_PAYOUT_PRIVATE_KEY`).
+   Without a payout key, the owner's share accrues as `real_earnings_usd` (pending).
+4. The job is recorded in `hires`; the agent's `real_earnings_usd` and a `hire_settled`
+   ledger event reflect REAL income (distinct from the simulated `settled_volume`).
+
+`real_earnings_usd` (real money to the owner) is shown separately from `settled_volume`
+(reputation/track-record from internal cycles), so the distinction is never misleading.
 
 ## Real execution (Claude)
 

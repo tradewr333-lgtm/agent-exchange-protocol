@@ -4,7 +4,7 @@
   const usd = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  const STATE = { quote: null, templates: [], agents: [] };
+  const STATE = { quote: null, templates: [], agents: [], hireQuote: null };
 
   async function getJSON(url) { try { const r = await fetch(url); return await r.json(); } catch { return null; } }
   async function postJSON(url, body) {
@@ -236,6 +236,53 @@
       : '<div class="empty">No agents match your search.</div>';
   }
 
+  // ---- hire this agent (REAL paid job) ----
+  async function openHire(agentId, name) {
+    const q = await getJSON(`/agents/${agentId}/hire/quote`);
+    if (!q || !q.enabled) { openModal('Hire agent', '<p class="note err">Hiring is not configured on this server yet.</p>'); return; }
+    if (!q.llm_ready) { openModal('Hire agent', '<p class="note err">This agent can\'t execute right now (LLM not configured on the server).</p>'); return; }
+    STATE.hireQuote = q;
+    const assets = q.options.map((o) => `<button class="btn asset-h" data-asset="${o.asset}">${o.asset} · ${o.amount}</button>`).join('');
+    openModal(`Hire ${name}`, `
+      <p class="note">Describe your task. You pay ~$${q.usd}; the owner keeps ${Math.round((1 - q.fee_rate) * 100)}%, AXP keeps ${Math.round(q.fee_rate * 100)}%. The agent does the work with AI and returns the result here.</p>
+      <textarea id="hire-task" rows="4" placeholder="e.g. Translate to Spanish: 'Welcome to our product...'" style="width:100%;background:rgba(150,200,214,0.05);border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--text);font:inherit;font-size:13px"></textarea>
+      <p class="note" style="margin-top:8px">Pay & run:</p>
+      <div class="asset-row">${assets}</div>
+      <div id="hire-status" class="note"></div>
+      <div id="hire-result"></div>`);
+    document.querySelectorAll('.asset-h').forEach((b) => { b.onclick = () => doHire(agentId, b.getAttribute('data-asset')); });
+  }
+
+  async function doHire(agentId, asset) {
+    const st = $('hire-status');
+    const task = ($('hire-task').value || '').trim();
+    if (!task) { st.innerHTML = '<span class="err">Describe the task first.</span>'; return; }
+    const opt = STATE.hireQuote.options.find((o) => o.asset === asset);
+    try {
+      st.innerHTML = 'Connecting wallet…';
+      const from = await connectWallet();
+      await ensureBSC();
+      st.innerHTML = `Paying ${opt.amount} ${asset} — confirm in your wallet…`;
+      const tx = asset === 'BNB'
+        ? await payBNB(from, STATE.hireQuote.treasury, opt.amount)
+        : await payToken(from, opt.token_address, STATE.hireQuote.treasury, opt.amount, opt.decimals);
+      st.innerHTML = 'Payment sent — waiting for confirmation on BSC…';
+      const rec = await waitReceipt(tx);
+      if (!rec) { st.innerHTML = '<span class="err">Timed out waiting for confirmation. If it confirmed, retry.</span>'; return; }
+      st.innerHTML = 'Confirmed. The agent is working…';
+      const res = await postJSON(`/agents/${agentId}/hire`, { task, payment: { tx_hash: tx, asset }, customer_address: from });
+      if (res.ok) {
+        const pay = res.payout && res.payout.paid ? `Owner paid on-chain ✓ (${res.payout.tx_hash.slice(0, 12)}…)` : 'Owner balance accrued (payout pending).';
+        st.innerHTML = `<span class="ok">Done! Owner earned ${res.owner_earned} ${res.asset} · AXP fee ${res.platform_fee} ${res.asset}. ${pay}</span>`;
+        $('hire-result').innerHTML = `<div class="muted" style="font-size:11px;margin-top:12px">DELIVERABLE</div><code class="k" style="white-space:pre-wrap">${esc(res.deliverable)}</code>`;
+      } else {
+        st.innerHTML = `<span class="err">${esc(res.error || 'failed')}${res.detail ? ' — ' + esc(res.detail) : ''}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="err">${esc(e.message || String(e))}</span>`;
+    }
+  }
+
   // ---- agent product view ----
   async function renderAgentView(agentId) {
     $('view-store').style.display = 'none';
@@ -247,6 +294,7 @@
     $('agent-status-tag').textContent = a.hosting && a.hosting.active ? 'hosted · earning' : a.status;
     const kpi = (label, val) => `<div class="kpi"><div class="k-value">${val}</div><div class="k-label">${label}</div></div>`;
     $('agent-kpis').innerHTML =
+      kpi('Real earnings', usd(a.real_earnings_usd)) +
       kpi('Settled volume', usd(a.revenue_usd)) +
       kpi('Contracts', a.contracts) +
       kpi('Success rate', (a.success_rate * 100).toFixed(0) + '%') +
@@ -260,10 +308,15 @@
         Hosting: ${a.hosting && a.hosting.active ? '<span class="ok">active (' + esc(a.hosting.plan || '') + ')</span>' : 'inactive'}
       </div>
       ${a.last_work ? `<div style="margin-top:16px"><div class="muted" style="font-size:11px;margin-bottom:6px">LATEST DELIVERY ${a.last_work.model ? '· ' + esc(a.last_work.model) : ''} ${a.last_work.at ? '· ' + esc(new Date(a.last_work.at).toLocaleString()) : ''}</div>${a.last_work.task ? `<div class="note"><strong>Task:</strong> ${esc(a.last_work.task)}</div>` : ''}<code class="k" style="white-space:pre-wrap">${esc(a.last_work.preview || '')}</code></div>` : '<div class="note" style="margin-top:14px">No deliveries yet — subscribe to Hosting to put it to work.</div>'}
-      <div class="asset-row" style="margin-top:14px">
-        <button class="btn primary" data-sku="hosting_starter">Host · Starter $9/mo</button>
+      <div class="asset-row" style="margin-top:16px">
+        <button class="btn primary" id="hire-btn">⚡ Hire this agent</button>
+      </div>
+      <p class="note">Owner hosting:</p>
+      <div class="asset-row">
+        <button class="btn" data-sku="hosting_starter">Host · Starter $9/mo</button>
         <button class="btn" data-sku="hosting_pro">Host · Pro $29/mo</button>
       </div>`;
+    $('hire-btn').onclick = () => openHire(a.agent_id, a.name);
     document.querySelectorAll('[data-sku]').forEach((b) => { b.onclick = () => subscribe(b.getAttribute('data-sku'), a.agent_id); });
   }
 

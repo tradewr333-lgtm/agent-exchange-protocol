@@ -10,7 +10,7 @@
 const BSC_CHAIN_ID = 56;
 
 // BEP-20 stablecoins on BSC (both 18 decimals on BSC).
-const TOKENS = {
+export const TOKENS = {
   USDT: { address: '0x55d398326f99059fF775485246999027B3197955', decimals: 18 },
   USDC: { address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', decimals: 18 },
 };
@@ -58,10 +58,10 @@ function toBaseUnits(amount, decimals) {
   return BigInt(`${whole}${fracPadded}`);
 }
 
-// Verify a launch payment on BSC. Returns { ok, verified, reason, asset, amount }.
-export async function verifyLaunchPayment({ tx_hash, asset } = {}, env = process.env) {
+// Generic: verify a payment to the AXP treasury on BSC for required per-asset amounts.
+export async function verifyTreasuryPayment({ tx_hash, asset, amounts } = {}, env = process.env) {
   const treasury = env.AXP_TREASURY_ADDRESS;
-  if (!treasury) return { ok: false, status: 503, error: 'launch_payments_disabled' };
+  if (!treasury) return { ok: false, status: 503, error: 'treasury_not_configured' };
   if (typeof tx_hash !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(tx_hash)) {
     return { ok: false, status: 400, error: 'tx_hash_invalid' };
   }
@@ -79,7 +79,6 @@ export async function verifyLaunchPayment({ tx_hash, asset } = {}, env = process
     return { ok: false, status: 503, error: 'rpc_unavailable' };
   }
 
-  const amounts = launchAmounts(env);
   const treasuryLc = treasury.toLowerCase();
 
   try {
@@ -112,4 +111,10 @@ export async function verifyLaunchPayment({ tx_hash, asset } = {}, env = process
   } catch (err) {
     return { ok: false, status: 502, error: 'verification_failed', detail: err?.message || String(err) };
   }
+}
+
+// Verify a launch payment (uses the configured launch amounts).
+export async function verifyLaunchPayment(payment = {}, env = process.env) {
+  if (!env.AXP_TREASURY_ADDRESS) return { ok: false, status: 503, error: 'launch_payments_disabled' };
+  return verifyTreasuryPayment({ ...payment, amounts: launchAmounts(env) }, env);
 }

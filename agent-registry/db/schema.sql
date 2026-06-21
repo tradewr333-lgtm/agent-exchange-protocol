@@ -231,3 +231,25 @@ create table if not exists launch_payments (
 create index if not exists subscriptions_agent_idx on subscriptions(agent_id);
 create index if not exists subscriptions_status_idx on subscriptions(status);
 create unique index if not exists launch_payments_tx_idx on launch_payments(tx_hash);
+
+-- Hire-this-agent: real paid one-off jobs (customer pays -> agent works -> owner paid)
+
+create table if not exists hires (
+  id bigserial primary key,
+  agent_id text,
+  customer_address text,
+  asset text,
+  amount numeric,
+  fee_usd numeric,
+  owner_usd numeric,
+  tx_hash text,
+  payout_tx text,
+  status text,
+  task text,
+  deliverable text,
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists hires_agent_idx on hires(agent_id, created_at desc);
+create unique index if not exists hires_tx_idx on hires(tx_hash);

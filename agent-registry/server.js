@@ -24,6 +24,7 @@ import { getAgent, getCapabilities, listAgents, readJsonFile } from './src/regis
 import {
   listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals,
   appendTrustEvent, saveSubscription, appendLaunchPayment, launchPaymentExists, updateAgentFields,
+  appendHire, loadHires, hireExists,
 } from './src/store.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { computeWeightedScores, reputationWeight } from './src/sybil.js';
@@ -32,8 +33,11 @@ import { normalizeSignal } from './src/external-signals.js';
 import { getPlanCatalog, planBySku, stripePlanBySku, stripePriceId, computeContractFee } from './src/billing.js';
 import { listTemplates } from './src/agent-templates.js';
 import { launchAgent } from './src/agent-launcher.js';
-import { buildLaunchQuote, verifyLaunchPayment, launchPaymentEnabled } from './src/payments-onchain.js';
+import { buildLaunchQuote, verifyLaunchPayment, launchPaymentEnabled, verifyTreasuryPayment } from './src/payments-onchain.js';
 import { stripeEnabled, createSubscriptionCheckout, constructWebhookEvent } from './src/stripe.js';
+import { buildHireQuote, hireAmounts, hireFeeRate, computeSplit, hirePaymentEnabled } from './src/hire.js';
+import { sendPayout, payoutEnabled } from './src/payout.js';
+import { executeTask, llmEnabled } from './src/agent-executor.js';
 import { claimIntent, fulfillIntent, getIntent, getIntentFeed, listIntents, publishIntent } from './src/intents.js';
 import { getOpportunitiesForAgent, getOpportunityGraph } from './src/opportunities.js';
 import { getInbox, postInboxMessage } from './src/inbox.js';
@@ -728,6 +732,69 @@ const server = http.createServer(async (request, response) => {
     if (!agent) return sendJson(response, 404, { error: 'agent_not_found', agent_id: agentCardMatch[1] });
     const score = (ranking.agents.find((a) => a.agent_id === agentCardMatch[1]) || {});
     return sendJson(response, 200, toAgentCard(agent, score.trust_score ?? score.score ?? score.proof_of_trust_score ?? 0));
+  }
+
+  // Hire-this-agent: REAL paid jobs. Customer pays on-chain, agent works (Claude),
+  // owner is paid their share on-chain, AXP keeps a platform fee.
+  const hireQuoteMatch = url.pathname.match(/^\/agents\/([^/]+)\/hire\/quote$/);
+  if (hireQuoteMatch) {
+    const agent = await getAgent(hireQuoteMatch[1]);
+    if (!agent) return sendJson(response, 404, { error: 'agent_not_found', agent_id: hireQuoteMatch[1] });
+    return sendJson(response, 200, {
+      ...buildHireQuote(),
+      llm_ready: llmEnabled(),
+      agent: { agent_id: agent.agent_id, name: agent.name, service: (agent.services || [])[0] || null },
+    });
+  }
+
+  const hireMatch = url.pathname.match(/^\/agents\/([^/]+)\/hire$/);
+  if (request.method === 'POST' && hireMatch) {
+    const agentId = hireMatch[1];
+    if (!hirePaymentEnabled()) return sendJson(response, 503, { error: 'hiring_disabled', hint: 'set AXP_TREASURY_ADDRESS' });
+    if (!llmEnabled()) return sendJson(response, 503, { error: 'execution_unavailable', hint: 'set ANTHROPIC_API_KEY' });
+    const agent = await getAgent(agentId);
+    if (!agent) return sendJson(response, 404, { error: 'agent_not_found', agent_id: agentId });
+    if (!agent.owner) return sendJson(response, 409, { error: 'agent_has_no_owner' });
+
+    const body = await readJsonBody(request);
+    const task = typeof body?.task === 'string' ? body.task.trim() : '';
+    if (!task) return sendJson(response, 400, { error: 'task_required' });
+    const payment = body?.payment && typeof body.payment === 'object' ? body.payment : null;
+    if (!payment?.tx_hash) return sendJson(response, 402, { error: 'payment_required', quote: buildHireQuote() });
+    if (await hireExists(payment.tx_hash)) return sendJson(response, 409, { error: 'payment_already_used', tx_hash: payment.tx_hash });
+
+    const verified = await verifyTreasuryPayment({ tx_hash: payment.tx_hash, asset: payment.asset, amounts: hireAmounts() });
+    if (!verified.ok) return sendJson(response, verified.status ?? 400, verified);
+
+    const run = await executeTask({ template_id: agent.template, task, maxTokens: 900 });
+    if (!run.ok || !run.output) {
+      return sendJson(response, 502, { error: 'execution_failed', detail: run.reason || run.detail, note: 'payment received — contact support for a refund' });
+    }
+
+    const split = computeSplit(verified.amount, hireFeeRate());
+    let payout = { ok: false, reason: 'payout_not_configured' };
+    if (payoutEnabled()) payout = await sendPayout({ to: agent.owner, asset: verified.asset, amount: split.owner });
+
+    await appendHire({
+      agent_id: agentId, customer_address: body.customer_address || null, asset: verified.asset,
+      amount: verified.amount, fee_usd: split.fee, owner_usd: split.owner, tx_hash: payment.tx_hash,
+      payout_tx: payout.ok ? payout.tx_hash : null, status: payout.ok ? 'paid' : 'payout_pending',
+      task, deliverable: run.output,
+    });
+    const prevEarnings = Number(agent.real_earnings_usd || 0);
+    await updateAgentFields(agentId, {
+      real_earnings_usd: Number((prevEarnings + split.owner).toFixed(2)),
+      last_work: { at: new Date().toISOString(), task: task.slice(0, 200), model: run.model, preview: run.output.slice(0, 500), paid: true },
+    });
+    try {
+      await appendTrustEvent({ event_type: 'hire_settled', agent_id: agentId, value_usd: verified.amount, data: { asset: verified.asset, owner_usd: split.owner, fee_usd: split.fee, payout_tx: payout.ok ? payout.tx_hash : null } });
+    } catch { /* ledger best-effort */ }
+
+    return sendJson(response, 200, {
+      ok: true, agent_id: agentId, deliverable: run.output,
+      amount: verified.amount, asset: verified.asset, owner_earned: split.owner, platform_fee: split.fee,
+      payout: payout.ok ? { paid: true, tx_hash: payout.tx_hash } : { paid: false, reason: payout.reason, note: 'owner balance accrued; on-chain payout pending' },
+    });
   }
 
   // A2A Agent Card — lets Agent2Agent-aware clients discover AXP as a service.
@@ -3336,6 +3403,7 @@ function toAgentCard(agent, trustScore) {
     hosting: agent.hosting || null,
     trust_score: Number(trustScore || 0),
     revenue_usd: Number(tm.settled_volume_usd || 0),
+    real_earnings_usd: Number(agent.real_earnings_usd || 0),
     contracts: completed,
     success_rate: total > 0 ? Number((completed / total).toFixed(3)) : Number(tm.success_rate || 0),
     capacity_usd: Number(agent.available_capacity || 0),

@@ -20,6 +20,7 @@ export const paths = {
   externalSignals: join(dataDir, 'external-signals.json'),
   subscriptions: join(dataDir, 'subscriptions.json'),
   launchPayments: join(dataDir, 'launch-payments.json'),
+  hires: join(dataDir, 'hires.json'),
 };
 
 let poolPromise = null;
@@ -914,6 +915,53 @@ export async function launchPaymentExists(txHash) {
     return result.rows.length > 0;
   }
   return readCollection(paths.launchPayments, 'payments').some((p) => p.tx_hash === txHash);
+}
+
+export async function appendHire(record) {
+  const stored = { ...record, created_at: record.created_at ?? new Date().toISOString() };
+  if (storageMode() === 'postgres') {
+    await query(
+      `insert into hires (agent_id, customer_address, asset, amount, fee_usd, owner_usd, tx_hash, payout_tx, status, task, deliverable, data)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+      [
+        stored.agent_id ?? null, stored.customer_address ?? null, stored.asset ?? null,
+        Number(stored.amount ?? 0), Number(stored.fee_usd ?? 0), Number(stored.owner_usd ?? 0),
+        stored.tx_hash ?? null, stored.payout_tx ?? null, stored.status ?? null,
+        (stored.task ?? '').slice(0, 4000), (stored.deliverable ?? '').slice(0, 8000),
+        JSON.stringify(stored),
+      ],
+    );
+    return stored;
+  }
+  const list = readCollection(paths.hires, 'hires');
+  list.push(stored);
+  writeCollection(paths.hires, 'hires', list.slice(-5000));
+  return stored;
+}
+
+export async function loadHires(filters = {}) {
+  if (storageMode() === 'postgres') {
+    const clauses = [];
+    const params = [];
+    addWhere(clauses, params, 'agent_id', filters.agentId);
+    const result = await query(
+      `select data from hires ${clauses.length ? `where ${clauses.join(' and ')}` : ''} order by created_at desc limit 200`,
+      params,
+    );
+    return result.rows.map((row) => row.data);
+  }
+  let list = readCollection(paths.hires, 'hires');
+  if (filters.agentId) list = list.filter((h) => h.agent_id === filters.agentId);
+  return list.slice(-200).reverse();
+}
+
+export async function hireExists(txHash) {
+  if (!txHash) return false;
+  if (storageMode() === 'postgres') {
+    const result = await query('select 1 from hires where tx_hash = $1 limit 1', [txHash]);
+    return result.rows.length > 0;
+  }
+  return readCollection(paths.hires, 'hires').some((h) => h.tx_hash === txHash);
 }
 
 // Patch a single agent's record (e.g. hosting status) in the registry.
