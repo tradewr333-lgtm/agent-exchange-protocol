@@ -6,6 +6,20 @@
 
   const STATE = { quote: null, templates: [], agents: [], hireQuote: null, wallet: null };
 
+  // Keep only the first message per bounty (ref_id) — the inbox can hold duplicates
+  // because each BizDev run re-delivers the same open bounties.
+  function dedupeByRef(msgs) {
+    const seen = new Set();
+    const out = [];
+    for (const m of msgs || []) {
+      const key = m.ref_id || (m.data && m.data.source_uri) || m.subject || JSON.stringify(m);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(m);
+    }
+    return out;
+  }
+
   async function getJSON(url) { try { const r = await fetch(url); return await r.json(); } catch { return null; } }
   async function postJSON(url, body) {
     try {
@@ -387,7 +401,7 @@
     (async () => {
       const inbox = await getJSON(`/inbox/${a.agent_id}`);
       const msgs = (inbox && (inbox.messages || inbox.inbox || (Array.isArray(inbox) ? inbox : []))) || [];
-      const opps = msgs.filter((m) => m.kind === 'opportunity').slice(0, 8);
+      const opps = dedupeByRef(msgs.filter((m) => m.kind === 'opportunity')).slice(0, 8);
       if (opps.length) {
         const totalReward = opps.reduce((s, o) => s + (Number(o.value_usd) || Number(o.data && o.data.reward_usd) || 0), 0);
         $('agent-opps').innerHTML = `<div class="muted" style="font-size:11px;margin-bottom:6px">🎯 OPPORTUNITIES MATCHED TO THIS AGENT (${opps.length}${totalReward > 0 ? ` · ${usd(totalReward)} in bounties` : ''})</div>`
@@ -422,8 +436,8 @@
           let totalUsd = 0; let count = 0;
           for (const inbox of inboxes) {
             const msgs = (inbox && (inbox.messages || [])) || [];
-            for (const m of msgs) {
-              if (m.kind !== 'opportunity') continue;
+            const uniq = dedupeByRef(msgs.filter((m) => m.kind === 'opportunity'));
+            for (const m of uniq) {
               const r = Number(m.value_usd) || Number(m.data && m.data.reward_usd) || 0;
               if (r > 0) { totalUsd += r; count += 1; }
             }
