@@ -1,9 +1,11 @@
 {
   "name": "@axp/axp-sdk-typescript",
   "version": "0.1.0",
-  "description": "TypeScript/JavaScript SDK for Agent Exchange Protocol registry, agents, capacity, and contracts.",
-  "private": true,
+  "description": "TypeScript/JavaScript SDK for Agent Exchange Protocol: registry, trust, opportunities, intents, inbox, contracts, and growth.",
   "type": "module",
+  "keywords": ["axp", "ai-agents", "sdk", "trust", "agent-economy", "bsc"],
+  "homepage": "https://axp.network",
+  "repository": { "type": "git", "url": "https://github.com/tradewr333-lgtm/agent-exchange-protocol", "directory": "packages/axp-sdk-typescript" },
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "exports": {
@@ -12,8 +14,10 @@
       "import": "./src/index.js"
     }
   },
+  "files": ["src", "README.md"],
   "scripts": {
     "check": "node --check src/index.js"
   },
+  "publishConfig": { "access": "public" },
   "license": "MIT"
 }

@@ -13,6 +13,8 @@ import { publishIntent, listIntents } from './intents.js';
 import { sponsorScion, distributeDiscoveryRewards } from './growth.js';
 import { prepareContract, fundContract, acceptContract, settleContract } from './contracts.js';
 import { getGrowthMetrics } from './growth.js';
+import { githubIssuesSource } from '../../examples/axp-opportunity-miner/sources.js';
+import { workItemToIntent } from '../../examples/axp-opportunity-miner/normalize.js';
 
 const SERVICES = ['research', 'data_processing', 'content_writing', 'analysis'];
 const SAMPLE_TITLES = [
@@ -93,6 +95,30 @@ export function startSwarmScheduler() {
     }
   }
 
+  // Optional: pull REAL demand from GitHub issues onto the live feed.
+  // Enable by setting AXP_MINE_GITHUB_REPOS="owner/repo,owner/repo".
+  async function mineGithub() {
+    const repos = (process.env.AXP_MINE_GITHUB_REPOS || '').split(',').map((r) => r.trim()).filter(Boolean);
+    if (!repos.length) return;
+    const labels = process.env.AXP_MINE_GITHUB_LABELS ?? 'bounty,help wanted';
+    const existing = await listIntents({ status: 'open', limit: 300 });
+    const seen = new Set((existing.intents || []).map((i) => i.source_uri).filter(Boolean));
+    let published = 0;
+    for (const repo of repos) {
+      if (published >= 5) break;
+      const items = await githubIssuesSource({ repo, labels });
+      for (const item of items) {
+        if (published >= 5) break;
+        const intent = workItemToIntent(item);
+        if (!intent || !intent.source_uri || seen.has(intent.source_uri)) continue;
+        await publishIntent(intent);
+        seen.add(intent.source_uri);
+        published += 1;
+      }
+    }
+    if (published) console.log(`swarm_heartbeat: mined ${published} real GitHub intent(s).`);
+  }
+
   async function spawnAndSettle() {
     const service = SERVICES[Math.floor(Math.random() * SERVICES.length)];
     const spawned = await sponsorScion({ sponsor_agent_id: sponsorId, service, committed_capacity_usd: 1000 });
@@ -121,6 +147,7 @@ export function startSwarmScheduler() {
   async function tick() {
     try {
       await ensureSystemAgents();
+      await mineGithub();
       await topUpFeed();
       const metrics = await getGrowthMetrics({ autotune: true });
       if ((metrics.population?.scions ?? 0) < maxScions) {

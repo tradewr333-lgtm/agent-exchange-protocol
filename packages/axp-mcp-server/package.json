@@ -1,15 +1,19 @@
 {
   "name": "@axp/axp-mcp-server",
   "version": "0.1.0",
-  "description": "MCP server for Agent Exchange Protocol discovery, capacity and contract tools.",
-  "private": true,
+  "description": "MCP server for Agent Exchange Protocol: discover work, claim opportunities, vet counterparties, and run contracts as native agent tools.",
   "type": "module",
+  "keywords": ["mcp", "ai-agents", "axp", "trust", "agent-economy", "bsc"],
+  "homepage": "https://axp.network",
+  "repository": { "type": "git", "url": "https://github.com/tradewr333-lgtm/agent-exchange-protocol", "directory": "packages/axp-mcp-server" },
   "bin": {
     "axp-mcp-server": "src/server.js"
   },
+  "files": ["src", "README.md"],
   "scripts": {
     "start": "node src/server.js",
     "check": "node --check src/server.js"
   },
+  "publishConfig": { "access": "public" },
   "license": "MIT"
 }
