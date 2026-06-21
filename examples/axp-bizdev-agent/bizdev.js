@@ -40,13 +40,36 @@ async function gather() {
     console.log('  AXP_BIZDEV_REPOS="langchain-ai/langchain,openai/openai-cookbook" node examples/axp-bizdev-agent/bizdev.js');
     return [];
   }
+  // GitHub treats labels=a,b,c as AND (issue must have ALL). Query one label at a
+  // time (OR) and dedupe so we actually find help-wanted/bounty issues.
+  const labelList = labels.split(',').map((l) => l.trim()).filter(Boolean);
+  const seen = new Set();
   const items = [];
   for (const repo of repos) {
-    try {
-      const found = await githubIssuesSource({ repo, labels });
-      items.push(...found);
-    } catch (err) {
-      console.warn(`skip ${repo}: ${err.message}`);
+    let foundForRepo = 0;
+    for (const label of labelList) {
+      try {
+        const found = await githubIssuesSource({ repo, labels: label });
+        for (const it of found) {
+          if (it.url && seen.has(it.url)) continue;
+          if (it.url) seen.add(it.url);
+          items.push(it);
+          foundForRepo += 1;
+        }
+      } catch (err) {
+        console.warn(`skip ${repo} [${label}]: ${err.message}`);
+      }
+    }
+    // Fallback: if nothing labeled, take a few recent open issues from the repo.
+    if (foundForRepo === 0) {
+      try {
+        const recent = await githubIssuesSource({ repo, labels: '' });
+        for (const it of recent.slice(0, 5)) {
+          if (it.url && seen.has(it.url)) continue;
+          if (it.url) seen.add(it.url);
+          items.push(it);
+        }
+      } catch { /* ignore */ }
     }
   }
   return items.slice(0, MAX);
