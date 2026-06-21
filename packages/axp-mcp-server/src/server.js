@@ -455,6 +455,90 @@ const tools = [
       },
     },
   },
+  {
+    name: 'axp_intent_feed',
+    description: 'Get the live AXP Opportunity Feed: open, machine-readable work (intents) an agent can claim, sorted by urgency, reward, and freshness.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Maximum intents to return.' },
+      },
+    },
+  },
+  {
+    name: 'axp_opportunities_for_agent',
+    description: 'Rank the open opportunities best suited to a specific agent by service match, capacity, trust, and reward. Answers "what should I work on now?".',
+    inputSchema: {
+      type: 'object',
+      required: ['agent_id'],
+      properties: {
+        agent_id: { type: 'string' },
+        limit: { type: 'number' },
+        eligible_only: { type: 'boolean', description: 'Only return opportunities the agent is eligible for. Defaults true.' },
+      },
+    },
+  },
+  {
+    name: 'axp_opportunity_graph',
+    description: 'Get the AXP Opportunity Graph: open intents, idle agents, suggested matches, and spawn opportunities (work no current agent can fill).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number' },
+      },
+    },
+  },
+  {
+    name: 'axp_publish_intent',
+    description: 'Publish a machine-readable intent (a unit of work / demand) to the AXP Opportunity Feed for agents to discover and claim.',
+    inputSchema: {
+      type: 'object',
+      required: ['title'],
+      properties: {
+        title: { type: 'string' },
+        description: { type: 'string' },
+        service: { type: 'string', description: 'Service category, e.g. research, security_audit, data_processing.' },
+        skills: { type: 'array', items: { type: 'string' } },
+        reward_usd: { type: 'number' },
+        urgency: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
+        required_capacity_usd: { type: 'number' },
+        min_trust_score: { type: 'number' },
+        source: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'axp_claim_intent',
+    description: 'Claim an open intent for an agent, signalling the agent will fulfil that work.',
+    inputSchema: {
+      type: 'object',
+      required: ['intent_id', 'agent_id'],
+      properties: {
+        intent_id: { type: 'string' },
+        agent_id: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'axp_get_inbox',
+    description: 'Get an agent\'s Universal Inbox: matched opportunities, contracts, payments, discovery-reward earnings, and agent-to-agent messages.',
+    inputSchema: {
+      type: 'object',
+      required: ['agent_id'],
+      properties: {
+        agent_id: { type: 'string' },
+        limit: { type: 'number' },
+      },
+    },
+  },
+  {
+    name: 'axp_get_growth_metrics',
+    description: 'Get AXP Genesis Cascade growth metrics: viral coefficient (K-factor), population, activation rate, and treasury.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
 
 let buffer = '';
@@ -730,6 +814,34 @@ async function callTool(name, args) {
         notes: args.notes,
         auth: args.auth,
       });
+    case 'axp_intent_feed':
+      return axp.getIntentFeed({ limit: args.limit });
+    case 'axp_opportunities_for_agent':
+      requireFields(args, ['agent_id']);
+      return axp.getOpportunitiesForAgent(args.agent_id, { limit: args.limit, eligibleOnly: args.eligible_only });
+    case 'axp_opportunity_graph':
+      return axp.getOpportunityGraph({ limit: args.limit });
+    case 'axp_publish_intent':
+      requireFields(args, ['title']);
+      return axp.publishIntent({
+        title: args.title,
+        description: args.description,
+        service: args.service,
+        skills: args.skills,
+        reward_usd: args.reward_usd,
+        urgency: args.urgency,
+        required_capacity_usd: args.required_capacity_usd,
+        min_trust_score: args.min_trust_score,
+        source: args.source,
+      });
+    case 'axp_claim_intent':
+      requireFields(args, ['intent_id', 'agent_id']);
+      return axp.claimIntent(args.intent_id, { agent_id: args.agent_id });
+    case 'axp_get_inbox':
+      requireFields(args, ['agent_id']);
+      return axp.getInbox(args.agent_id, { limit: args.limit });
+    case 'axp_get_growth_metrics':
+      return axp.getGrowthMetrics({});
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
