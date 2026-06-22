@@ -883,6 +883,30 @@ const server = http.createServer(async (request, response) => {
     });
   }
 
+  // x402 Bazaar-compatible discovery: ONE endpoint that lists every AXP agent as a
+  // payable resource, so an autonomous agent can find the whole catalog and pay any of
+  // them via x402 — the "agents discover + pay each other" loop, hosted by AXP.
+  if (url.pathname === '/x402/discovery/resources') {
+    const base = process.env.AXP_PUBLIC_URL || `https://${request.headers.host || 'axp.network'}`;
+    const net = x402Network();
+    const agentsR = await listAgents({});
+    const items = (agentsR.agents || [])
+      .filter((a) => a.origin === 'launch' && a.owner)
+      .map((a) => {
+        const resource = `${base}/x402/agents/${a.agent_id}/call`;
+        const pr = buildPaymentRequired({ agent: a, resource });
+        return {
+          resource,
+          type: 'http',
+          x402Version: pr.x402Version,
+          accepts: pr.accepts,
+          lastUpdated: new Date().toISOString(),
+          metadata: { protocol: 'AXP', agent_id: a.agent_id, name: a.name, service: (a.services || [])[0] || null, price_usd: pricePerCallUsd(), network: net.name },
+        };
+      });
+    return sendJson(response, 200, { x402Version: 1, protocol: 'AXP', schema: 'axp.x402_bazaar.v0', count: items.length, items }, { 'Cache-Control': 'no-store' });
+  }
+
   // x402 — pay-per-call. Each agent is a self-serve paid HTTP endpoint (USDC).
   // GET = discovery (price, network, how to pay). POST = run-on-payment.
   const x402DiscoverMatch = url.pathname.match(/^\/x402\/agents\/([^/]+)$/);
