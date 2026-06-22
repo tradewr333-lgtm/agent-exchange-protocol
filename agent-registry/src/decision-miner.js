@@ -11,7 +11,7 @@
 //
 // HONEST: top-of-book bid/ask is close to executable but still ignores size/liquidity,
 // withdrawal time and venue fees. This is a consensus + monitoring signal, not a guarantee.
-import { appendObservations, loadAgentsRegistry, saveAgentsRegistry, loadPredictions, savePredictions, loadRecentObservations } from './store.js';
+import { appendObservations, loadAgentsRegistry, saveAgentsRegistry, loadPredictions, savePredictions, loadRecentObservations, updateAgentFields } from './store.js';
 import { normalizeSymbol, computeDecision, consensusBySymbol, scorePredictions } from './decision.js';
 
 export const SYSTEM_MINER_ID = 'system_decision_miner';
@@ -115,6 +115,8 @@ export async function runDecisionMineOnce(env = process.env) {
   if (!all.length) { console.warn('[auto-miner] no venues reachable this cycle'); return { ok: false, accepted: 0 }; }
   const accepted = await appendObservations(all);
   const venues = [...new Set(all.map((o) => o.source))];
+  const symbols = [...new Set(all.map((o) => o.symbol))];
+  try { await updateAgentFields(SYSTEM_MINER_ID, { last_mine: { at: new Date(now).toISOString(), count: accepted, symbols, venues } }); } catch { /* best-effort */ }
   const score = await scoreAndSnapshot({ now });
   console.log(`[auto-miner] ${accepted} obs · ${venues.length} venues (${venues.join(',')}) · scored ${score.scoredNow}`);
   return { ok: true, accepted, venues, ...score };
