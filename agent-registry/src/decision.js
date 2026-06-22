@@ -225,6 +225,26 @@ export function trackRecordStats(predictions = []) {
   };
 }
 
+// Build the coverage map from registered miner agents: which agent "owns" (and earns
+// from) each symbol. First claim wins, so user miners extend NEW coverage rather than
+// duplicating existing pairs. Returns { symbolOwner, bases }.
+export function buildCoverage(minerAgents = []) {
+  const symbolOwner = {};
+  const bases = new Set();
+  for (const m of minerAgents) {
+    const syms = (m.miner_config && Array.isArray(m.miner_config.symbols)) ? m.miner_config.symbols : [];
+    for (const s of syms) {
+      const sym = normalizeSymbol(s);
+      if (!sym.includes('/')) continue;
+      if (!symbolOwner[sym]) {
+        symbolOwner[sym] = { agent_id: m.agent_id, owner: m.owner || null };
+        bases.add(sym.split('/')[0]);
+      }
+    }
+  }
+  return { symbolOwner, bases: [...bases] };
+}
+
 // Public "teaser" — action + confidence only, no executable prices. Free preview.
 export function teaser(decision) {
   return {

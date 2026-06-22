@@ -12,7 +12,13 @@
 // HONEST: top-of-book bid/ask is close to executable but still ignores size/liquidity,
 // withdrawal time and venue fees. This is a consensus + monitoring signal, not a guarantee.
 import { appendObservations, loadAgentsRegistry, saveAgentsRegistry, loadPredictions, savePredictions, loadRecentObservations, updateAgentFields } from './store.js';
-import { normalizeSymbol, computeDecision, consensusBySymbol, scorePredictions } from './decision.js';
+import { normalizeSymbol, computeDecision, consensusBySymbol, scorePredictions, buildCoverage } from './decision.js';
+
+function defaultBases(env = process.env) {
+  return (env.AXP_DECISION_BASES || env.AXP_DECISION_COINS || 'BTC,ETH,SOL')
+    .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+    .map((s) => ({ BITCOIN: 'BTC', ETHEREUM: 'ETH', SOLANA: 'SOL' }[s] || s));
+}
 
 export const SYSTEM_MINER_ID = 'system_decision_miner';
 
@@ -46,13 +52,13 @@ async function fetchJson(url, ms = 8000) {
 }
 
 // Fetch one base across every exchange; tolerate per-venue failures.
-export async function fetchBaseObservations(base, { now = Date.now(), env = process.env } = {}) {
-  const owner = minerOwner(env);
+// Returns raw quotes (no miner attribution — the caller stamps the owning agent).
+export async function fetchBaseObservations(base, { now = Date.now() } = {}) {
   const results = await Promise.allSettled(EXCHANGES.map(async (ex) => {
     const j = await fetchJson(ex.url(base));
     const { bid, ask } = ex.parse(j);
     if (!Number.isFinite(bid) || !Number.isFinite(ask) || bid <= 0 || ask <= 0) throw new Error('bad quote');
-    return { symbol: `${base}/USD`, source: ex.name, bid, ask, price: (bid + ask) / 2, ts: now, agent_id: SYSTEM_MINER_ID, owner };
+    return { symbol: `${base}/USD`, source: ex.name, bid, ask, price: (bid + ask) / 2, ts: now };
   }));
   return results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
 }
@@ -74,7 +80,8 @@ export async function ensureMinerAgent(env = process.env) {
   const agent = {
     agent_id: SYSTEM_MINER_ID, name: 'AXP Auto-Miner', role: 'provider', status: 'active',
     services: ['price_feed'], skills: ['price_tracker'], reputation: 0, owner,
-    origin: 'system_miner', miner: true, miner_config: { auto: true, registered_at: new Date().toISOString() },
+    origin: 'system_miner', miner: true,
+    miner_config: { auto: true, symbols: defaultBases(env).map((b) => `${b}/USD`), registered_at: new Date().toISOString() },
     real_earnings_usd: 0, created_at: new Date().toISOString(),
   };
   await saveAgentsRegistry({ ...registry, agents: [...registry.agents, agent] });
@@ -101,25 +108,38 @@ export async function scoreAndSnapshot({ now = Date.now() } = {}) {
 }
 
 export async function runDecisionMineOnce(env = process.env) {
-  const bases = (env.AXP_DECISION_BASES || env.AXP_DECISION_COINS || 'BTC,ETH,SOL')
-    .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
-    // accept CoinGecko-style ids too (bitcoin→BTC) for back-compat
-    .map((s) => ({ BITCOIN: 'BTC', ETHEREUM: 'ETH', SOLANA: 'SOL' }[s] || s));
   await ensureMinerAgent(env);
+  // Coverage = every registered miner agent's claimed symbols (first claim wins).
+  let registry;
+  try { registry = await loadAgentsRegistry(); } catch { registry = { agents: [] }; }
+  const miners = (registry.agents || []).filter((a) => a.miner);
+  const { symbolOwner, bases } = buildCoverage(miners);
+  const baseList = bases.length ? bases : defaultBases(env);
   const now = Date.now();
+
   let all = [];
-  for (const base of bases) {
-    try { all = all.concat(await fetchBaseObservations(base, { now, env })); }
-    catch (err) { console.warn('decision_mine_fetch', base, err?.message || err); }
+  for (const base of baseList) {
+    try {
+      const quotes = await fetchBaseObservations(base, { now });
+      for (const q of quotes) {
+        const owner = symbolOwner[normalizeSymbol(q.symbol)] || { agent_id: SYSTEM_MINER_ID, owner: minerOwner(env) };
+        all.push({ ...q, agent_id: owner.agent_id, owner: owner.owner });
+      }
+    } catch (err) { console.warn('decision_mine_fetch', base, err?.message || err); }
   }
   if (!all.length) { console.warn('[auto-miner] no venues reachable this cycle'); return { ok: false, accepted: 0 }; }
   const accepted = await appendObservations(all);
   const venues = [...new Set(all.map((o) => o.source))];
-  const symbols = [...new Set(all.map((o) => o.symbol))];
-  try { await updateAgentFields(SYSTEM_MINER_ID, { last_mine: { at: new Date(now).toISOString(), count: accepted, symbols, venues } }); } catch { /* best-effort */ }
+
+  // Update last_mine per contributing miner agent.
+  const byAgent = {};
+  for (const o of all) { (byAgent[o.agent_id] ||= { count: 0, symbols: new Set(), venues: new Set() }); byAgent[o.agent_id].count++; byAgent[o.agent_id].symbols.add(o.symbol); byAgent[o.agent_id].venues.add(o.source); }
+  for (const [agentId, s] of Object.entries(byAgent)) {
+    try { await updateAgentFields(agentId, { last_mine: { at: new Date(now).toISOString(), count: s.count, symbols: [...s.symbols], venues: [...s.venues] } }); } catch { /* best-effort */ }
+  }
   const score = await scoreAndSnapshot({ now });
-  console.log(`[auto-miner] ${accepted} obs · ${venues.length} venues (${venues.join(',')}) · scored ${score.scoredNow}`);
-  return { ok: true, accepted, venues, ...score };
+  console.log(`[auto-miner] ${accepted} obs · ${venues.length} venues · ${baseList.length} bases · ${miners.length} miners · scored ${score.scoredNow}`);
+  return { ok: true, accepted, venues, bases: baseList, miners: miners.length, ...score };
 }
 
 let timer = null;

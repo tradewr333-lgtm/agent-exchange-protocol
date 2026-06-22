@@ -253,3 +253,32 @@ create table if not exists hires (
 
 create index if not exists hires_agent_idx on hires(agent_id, created_at desc);
 create unique index if not exists hires_tx_idx on hires(tx_hash);
+
+-- Decision API credits: buyers top up (crypto/Stripe) and spend per /decision call.
+
+create table if not exists credits (
+  owner text primary key,
+  balance_usd numeric not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists credit_ledger (
+  id bigserial primary key,
+  owner text not null,
+  usd numeric not null,
+  type text not null,
+  source text,
+  ref text,
+  data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists credit_ledger_owner_idx on credit_ledger(owner, created_at desc);
+create unique index if not exists credit_ledger_topup_ref_idx on credit_ledger(ref) where type = 'topup';
+
+create table if not exists credit_keys (
+  key_hash text primary key,
+  owner text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists credit_keys_owner_idx on credit_keys(owner);

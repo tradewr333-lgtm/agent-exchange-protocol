@@ -25,9 +25,10 @@ import {
   listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals,
   appendTrustEvent, saveSubscription, appendLaunchPayment, launchPaymentExists, updateAgentFields,
   appendHire, loadHires, hireExists, appendInboxMessage, loadAgentsRegistry, loadSubscriptions,
-  appendObservations, loadRecentObservations, loadPredictions,
+  appendObservations, loadRecentObservations, loadPredictions, addAgent,
+  getCreditBalance, creditTxUsed, addCredit, spendCredit, issueCreditKey, resolveCreditKey,
 } from './src/store.js';
-import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, DECISION_VERSION } from './src/decision.js';
+import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, buildCoverage, DECISION_VERSION } from './src/decision.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { startDecisionMiner, runDecisionMineOnce, decisionMineEnabled } from './src/decision-miner.js';
@@ -37,7 +38,7 @@ import { normalizeSignal } from './src/external-signals.js';
 import { getPlanCatalog, planBySku, stripePlanBySku, stripePriceId, computeContractFee } from './src/billing.js';
 import { listTemplates } from './src/agent-templates.js';
 import { launchAgent } from './src/agent-launcher.js';
-import { buildLaunchQuote, verifyLaunchPayment, launchPaymentEnabled, verifyTreasuryPayment, verifyErc20TransferTo } from './src/payments-onchain.js';
+import { buildLaunchQuote, verifyLaunchPayment, launchPaymentEnabled, verifyTreasuryPayment, verifyErc20TransferTo, TOKENS } from './src/payments-onchain.js';
 import { buildPaymentRequired, x402Network, x402NetworkList, pricePerCallUsd, extractPaymentProof, encodeHeader, x402Enabled, isSignedPayload, facilitatorEnabled, verifyViaFacilitator, settleViaFacilitator } from './src/x402.js';
 import { stripeEnabled, createSubscriptionCheckout, constructWebhookEvent } from './src/stripe.js';
 import { buildHireQuote, hireAmounts, hireFeeRate, computeSplit, hirePaymentEnabled } from './src/hire.js';
@@ -78,6 +79,11 @@ const server = http.createServer(async (request, response) => {
   // Decision Loop dashboard — REAL metrics (reads /loop/metrics live).
   if (url.pathname === '/loop') {
     return sendHtml(response, 200, readFileSync(join(publicPath, 'loop.html'), 'utf8'));
+  }
+
+  // Buy Decision API credits (crypto / card).
+  if (url.pathname === '/credits' || url.pathname === '/buy') {
+    return sendHtml(response, 200, readFileSync(join(publicPath, 'credits.html'), 'utf8'));
   }
 
   // Agent App Store + agent product pages (single-page; JS reads the path).
@@ -1100,6 +1106,72 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 201, { ok: true, accepted: count }, apiKey.headers);
   }
 
+  // ---- API CREDITS: buyers top up (crypto), then spend per /decision call ----
+  // Buy credits with on-chain USDT/USDC/BNB to the AXP treasury. 1:1 USD.
+  if (request.method === 'POST' && url.pathname === '/credits/buy') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
+    const asset = String(body?.asset || '').toUpperCase();
+    const amount = Number(body?.amount);
+    const tx_hash = body?.tx_hash;
+    if (!owner) return sendJson(response, 400, { error: 'valid_owner_wallet_required' });
+    if (!['USDT', 'USDC'].includes(asset)) return sendJson(response, 400, { error: 'credits_require_stablecoin', hint: 'pay in USDT or USDC (1:1 USD); BNB needs a price oracle' });
+    if (!(amount > 0)) return sendJson(response, 400, { error: 'amount_required' });
+    if (await creditTxUsed(tx_hash)) return sendJson(response, 409, { error: 'tx_already_credited', tx_hash });
+    const verified = await verifyTreasuryPayment({ tx_hash, asset, amounts: { [asset]: amount } });
+    if (!verified.ok) return sendJson(response, verified.status ?? 402, verified);
+    const credited = await addCredit(owner, amount, { source: `crypto:${asset}`, ref: tx_hash, data: { asset, amount } });
+    if (!credited.ok) return sendJson(response, 409, credited);
+    const credit_key = await issueCreditKey(owner);
+    return sendJson(response, 200, { ok: true, owner, credited_usd: amount, balance_usd: credited.balance, asset, tx_hash, credit_key, how_to: 'Call POST /x402/decision/call with header X-AXP-CREDIT-KEY and body {"symbol":"BTC/USD"}. Save this key — it is shown once.' }, { 'Cache-Control': 'no-store' });
+  }
+
+  // Payment config for the buy page (treasury + BSC token addresses + packs).
+  if (request.method === 'GET' && url.pathname === '/credits/config') {
+    const treasury = process.env.AXP_TREASURY_ADDRESS || null;
+    return sendJson(response, 200, {
+      enabled: Boolean(treasury), treasury, chain_id: 56, network: 'bsc',
+      tokens: { USDT: TOKENS.USDT, USDC: TOKENS.USDC },
+      price_per_decision_usd: decisionPriceUsd(),
+      packs: [20, 50],
+    }, { 'Cache-Control': 'no-store' });
+  }
+
+  // Check a wallet's credit balance.
+  if (request.method === 'GET' && url.pathname === '/credits/balance') {
+    const owner = (url.searchParams.get('owner') || '').trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(owner)) return sendJson(response, 400, { error: 'valid_owner_required' });
+    return sendJson(response, 200, { owner, balance_usd: await getCreditBalance(owner), price_per_decision_usd: decisionPriceUsd() }, { 'Cache-Control': 'no-store' });
+  }
+
+  // One-click DEPLOY a miner: create an agent already registered as a miner for the
+  // chosen NEW symbols. AXP's infra fetches those pairs on the agent's behalf and the
+  // agent earns the miner share whenever its coverage forms a paid decision.
+  if (request.method === 'POST' && url.pathname === '/miners/deploy') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
+    if (!owner) return sendJson(response, 400, { error: 'valid_owner_wallet_required', hint: 'body.owner = 0x… (40 hex)' });
+    const requested = Array.isArray(body?.symbols) ? [...new Set(body.symbols.map(normalizeSymbol))].filter((s) => /^[A-Z0-9]+\/USD$/.test(s)) : [];
+    if (!requested.length) return sendJson(response, 400, { error: 'symbols_required', example: ['ADA/USD', 'LINK/USD'] });
+    if (requested.length > 6) return sendJson(response, 400, { error: 'too_many_symbols', max: 6 });
+    // Reject symbols already covered by a DIFFERENT owner (first claim wins → new coverage only).
+    const reg = await listAgents({});
+    const existingMiners = (reg.agents || []).filter((a) => a.miner);
+    const { symbolOwner } = buildCoverage(existingMiners);
+    const taken = requested.filter((s) => symbolOwner[s] && (symbolOwner[s].owner || '').toLowerCase() !== owner.toLowerCase());
+    if (taken.length) return sendJson(response, 409, { error: 'symbols_already_covered', taken, hint: 'pick pairs not yet covered to extend the network' });
+    const id = `miner_${Math.random().toString(36).slice(2, 10)}`;
+    const agent = await addAgent({
+      agent_id: id,
+      name: body?.name ? String(body.name).slice(0, 40) : `Miner · ${requested.map((s) => s.split('/')[0]).join('/')}`,
+      role: 'provider', status: 'active', services: ['price_feed'], skills: ['price_tracker'], reputation: 0,
+      owner, origin: 'user_miner', miner: true,
+      miner_config: { symbols: requested, registered_at: new Date().toISOString() },
+      real_earnings_usd: 0, created_at: new Date().toISOString(),
+    });
+    return sendJson(response, 201, { ok: true, agent_id: agent.agent_id, name: agent.name, symbols: requested, owner, note: 'AXP infra now mines these pairs on your agent\'s behalf; it earns the miner share when its data forms a paid decision. Appears in the fleet within one mining cycle.' }, { 'Cache-Control': 'no-store' });
+  }
+
   // FREE teaser — action + confidence only (no executable venues/prices).
   if (request.method === 'GET' && url.pathname === '/decision') {
     const symbol = url.searchParams.get('symbol');
@@ -1125,6 +1197,45 @@ const server = http.createServer(async (request, response) => {
     const svcAgent = { name: 'AXP Decision API', owner: resolvedPayTo, services: ['decision'], template: 'decision' };
     const required = buildPaymentRequired({ agent: svcAgent, resource, env: { ...process.env, AXP_X402_PRICE_USD: String(price) } });
     const body = await readJsonBody(request);
+
+    // ---- CREDITS path: a prepaid balance spends $0.01/call ----
+    // The easy SaaS rail for humans/institutions (no per-call signing). Buy at /credits.
+    // Auth via X-AXP-CREDIT-KEY (issued at purchase) or a signed X-AXP-API-Key.
+    const creditKeyHdr = request.headers['x-axp-credit-key'];
+    if (creditKeyHdr || request.headers['x-axp-api-key']) {
+      let owner = null; let ak = { headers: {} };
+      if (creditKeyHdr) {
+        owner = await resolveCreditKey(creditKeyHdr);
+        if (!owner) return sendJson(response, 401, { error: 'invalid_credit_key', buy: '/credits' });
+      } else {
+        ak = await requireApiKey(request, 'decision_call', { path: url.pathname });
+        if (!ak.ok) return sendJson(response, ak.status, ak, ak.headers);
+        owner = ak.key.owner;
+      }
+      const symbolC = typeof body?.symbol === 'string' ? body.symbol.trim() : '';
+      if (!symbolC) return sendJson(response, 400, { error: 'symbol_required' }, ak.headers);
+      const spend = await spendCredit(owner, price, { ref: `decision:${Date.now()}` });
+      if (!spend.ok) return sendJson(response, 402, { error: 'insufficient_credits', balance_usd: await getCreditBalance(owner), buy: '/credits' }, ak.headers);
+      const observations = await loadRecentObservations({ maxAgeMs: 5 * 60 * 1000 });
+      const decision = computeDecision({ symbol: symbolC, observations });
+      const share = minerRewardShare();
+      const contributors = decision.contributors || [];
+      const poolUsd = Number((price * share).toFixed(6));
+      const perMiner = contributors.length ? Number((poolUsd / contributors.length).toFixed(6)) : 0;
+      const settleTx = `credit:${owner}:${Date.now()}`;
+      try {
+        for (const c of contributors) {
+          if (!c.agent_id || perMiner <= 0) continue;
+          await appendHire({ agent_id: c.agent_id, customer_address: owner, asset: 'CREDIT', amount: perMiner, fee_usd: 0, owner_usd: perMiner, tx_hash: `${settleTx}:${c.agent_id}`, payout_tx: settleTx, status: 'reward', task: `decision:${decision.asset}`, deliverable: '__decision_reward__' });
+          const cur = (await getAgent(c.agent_id))?.real_earnings_usd || 0;
+          await updateAgentFields(c.agent_id, { real_earnings_usd: Number((Number(cur) + perMiner).toFixed(4)) });
+          await appendTrustEvent({ event_type: 'decision_reward', agent_id: c.agent_id, value_usd: perMiner, data: { channel: 'credits', asset: decision.asset } });
+        }
+        await appendTrustEvent({ event_type: 'decision_served', agent_id: 'decision_api', value_usd: price, data: { asset: decision.asset, action: decision.decision.action, confidence: decision.decision.confidence, contributors: contributors.length, channel: 'credits' } });
+      } catch (err) { console.error('decision_reward_failed', err?.message || err); }
+      return sendJson(response, 200, { ok: true, channel: 'credits', paid_usd: price, balance_usd: spend.balance, ...decision, reward_split: { share, pool_usd: poolUsd, per_miner_usd: perMiner, miners_credited: contributors.length } }, ak.headers);
+    }
+
     const proof = extractPaymentProof({ headers: request.headers, body: body || {} });
     if (!proof) { response.setHeader('PAYMENT-REQUIRED', encodeHeader(required)); return sendJson(response, 402, required); }
     const symbol = typeof body?.symbol === 'string' ? body.symbol.trim() : '';
@@ -1199,7 +1310,7 @@ const server = http.createServer(async (request, response) => {
       protocol: 'AXP', schema: 'axp.decision_loop.v0', decisionVersion: DECISION_VERSION,
       generated_at: new Date().toISOString(),
       price_per_decision_usd: decisionPriceUsd(), miner_reward_share: minerRewardShare(),
-      miners: { total: miners.length, list: miners.map((m) => ({ agent_id: m.agent_id, name: m.name, last_mine: m.last_mine || null, real_earnings_usd: Number(m.real_earnings_usd || 0) })) },
+      miners: { total: miners.length, list: miners.map((m) => ({ agent_id: m.agent_id, name: m.name, owner: m.owner || null, origin: m.origin || null, symbols: (m.miner_config && m.miner_config.symbols) || [], last_mine: m.last_mine || null, real_earnings_usd: Number(m.real_earnings_usd || 0) })) },
       observations_window_5m: { count: obs.length, symbols, sources },
       decisions: { computed_count: predictions.length, served_count: served.length, revenue_usd: revenueUsd, miner_rewards_paid_usd: rewardsPaidUsd },
       track_record: track,

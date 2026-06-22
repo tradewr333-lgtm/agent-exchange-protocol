@@ -23,6 +23,7 @@ export const paths = {
   hires: join(dataDir, 'hires.json'),
   observations: join(dataDir, 'observations.json'),
   predictions: join(dataDir, 'predictions.json'),
+  credits: join(dataDir, 'credits.json'),
 };
 
 let poolPromise = null;
@@ -81,6 +82,18 @@ export async function saveAgentsRegistry(registry) {
 
   writeJsonAtomic(paths.agents, updatedRegistry);
   return updatedRegistry;
+}
+
+// Append a single new agent to the registry (used by miner deploy). Resilient to a
+// missing agents file (fresh install).
+export async function addAgent(agent) {
+  let registry;
+  try { registry = await loadAgentsRegistry(); }
+  catch { registry = { schema: 'axp.agent_registry.v0', agents: [] }; }
+  if (!Array.isArray(registry.agents)) registry.agents = [];
+  if (registry.agents.some((a) => a.agent_id === agent.agent_id)) return agent;
+  await saveAgentsRegistry({ ...registry, agents: [...registry.agents, agent] });
+  return agent;
 }
 
 export async function loadApiKeyRegistry() {
@@ -994,6 +1007,98 @@ export async function loadPredictions() {
 export async function savePredictions(list = []) {
   writeCollection(paths.predictions, 'predictions', list.slice(-5000));
   return list.length;
+}
+
+// --- Decision API credits (REAL money — persisted in Postgres when available) ---
+const creditOwner = (o) => String(o || '').toLowerCase();
+function loadCreditsJson() {
+  if (!existsSync(paths.credits)) return { schema: 'axp.credits.v0', balances: {}, ledger: [], keys: {} };
+  try { const j = readJsonFile(paths.credits); return { balances: j.balances || {}, ledger: j.ledger || [], keys: j.keys || {} }; }
+  catch { return { balances: {}, ledger: [], keys: {} }; }
+}
+function saveCreditsJson(store) {
+  writeJsonAtomic(paths.credits, { schema: 'axp.credits.v0', updated_at: new Date().toISOString(), balances: store.balances, ledger: store.ledger.slice(-5000), keys: store.keys || {} });
+}
+const saveCreditsJsonFull = saveCreditsJson;
+
+export async function getCreditBalance(owner) {
+  const o = creditOwner(owner);
+  if (storageMode() === 'postgres') {
+    const r = await query('select balance_usd from credits where owner = $1', [o]);
+    return r.rows.length ? Number(r.rows[0].balance_usd) : 0;
+  }
+  return Number(loadCreditsJson().balances[o] || 0);
+}
+
+export async function creditTxUsed(ref) {
+  if (!ref) return false;
+  if (storageMode() === 'postgres') {
+    const r = await query("select 1 from credit_ledger where ref = $1 and type = 'topup' limit 1", [ref]);
+    return r.rows.length > 0;
+  }
+  return loadCreditsJson().ledger.some((e) => e.ref === ref && e.type === 'topup');
+}
+
+export async function addCredit(owner, usd, { source = null, ref = null, data = {} } = {}) {
+  const o = creditOwner(owner); const amount = Number(usd);
+  if (!(amount > 0)) return { ok: false, error: 'invalid_amount' };
+  if (storageMode() === 'postgres') {
+    if (ref && await creditTxUsed(ref)) return { ok: false, error: 'already_credited' };
+    const r = await query(
+      `insert into credits (owner, balance_usd) values ($1, $2)
+       on conflict (owner) do update set balance_usd = credits.balance_usd + $2, updated_at = now()
+       returning balance_usd`, [o, amount]);
+    await query('insert into credit_ledger (owner, usd, type, source, ref, data) values ($1,$2,$3,$4,$5,$6::jsonb)',
+      [o, amount, 'topup', source, ref, JSON.stringify(data)]);
+    return { ok: true, balance: Number(r.rows[0].balance_usd) };
+  }
+  const store = loadCreditsJson();
+  if (ref && store.ledger.some((e) => e.ref === ref && e.type === 'topup')) return { ok: false, error: 'already_credited' };
+  store.balances[o] = Number(store.balances[o] || 0) + amount;
+  store.ledger.push({ owner: o, usd: amount, type: 'topup', source, ref, at: new Date().toISOString() });
+  saveCreditsJson(store);
+  return { ok: true, balance: store.balances[o] };
+}
+
+// Atomic spend: only succeeds if balance covers it.
+export async function spendCredit(owner, usd, { ref = null } = {}) {
+  const o = creditOwner(owner); const amount = Number(usd);
+  if (!(amount > 0)) return { ok: false, error: 'invalid_amount' };
+  if (storageMode() === 'postgres') {
+    const r = await query('update credits set balance_usd = balance_usd - $2, updated_at = now() where owner = $1 and balance_usd >= $2 returning balance_usd', [o, amount]);
+    if (!r.rows.length) return { ok: false, error: 'insufficient_credits' };
+    await query('insert into credit_ledger (owner, usd, type, ref) values ($1,$2,$3,$4)', [o, -amount, 'spend', ref]);
+    return { ok: true, balance: Number(r.rows[0].balance_usd) };
+  }
+  const store = loadCreditsJson();
+  const bal = Number(store.balances[o] || 0);
+  if (bal < amount) return { ok: false, error: 'insufficient_credits' };
+  store.balances[o] = bal - amount;
+  store.ledger.push({ owner: o, usd: -amount, type: 'spend', ref, at: new Date().toISOString() });
+  saveCreditsJson(store);
+  return { ok: true, balance: store.balances[o] };
+}
+
+// Credit keys — bearer secrets to spend a wallet's credits (issued at purchase).
+export async function issueCreditKey(owner) {
+  const o = creditOwner(owner);
+  const secret = `axpc_${createHash('sha256').update(`${o}:${Date.now()}:${Math.random()}`).digest('hex').slice(0, 40)}`;
+  const hash = createHash('sha256').update(secret).digest('hex');
+  if (storageMode() === 'postgres') {
+    await query('insert into credit_keys (key_hash, owner) values ($1,$2) on conflict (key_hash) do nothing', [hash, o]);
+  } else {
+    const store = loadCreditsJson(); store.keys = store.keys || {}; store.keys[hash] = o; saveCreditsJsonFull(store);
+  }
+  return secret;
+}
+export async function resolveCreditKey(secret) {
+  if (!secret) return null;
+  const hash = createHash('sha256').update(String(secret)).digest('hex');
+  if (storageMode() === 'postgres') {
+    const r = await query('select owner from credit_keys where key_hash = $1', [hash]);
+    return r.rows.length ? r.rows[0].owner : null;
+  }
+  return (loadCreditsJson().keys || {})[hash] || null;
 }
 
 // Patch a single agent's record (e.g. hosting status) in the registry.

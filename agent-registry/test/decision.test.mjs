@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { computeDecision, teaser, normalizeSymbol, decisionPriceUsd, minerRewardShare, consensusBySymbol, scorePredictions, trackRecordStats } from '../src/decision.js';
+import { computeDecision, teaser, normalizeSymbol, decisionPriceUsd, minerRewardShare, consensusBySymbol, scorePredictions, trackRecordStats, buildCoverage } from '../src/decision.js';
 
 let passed = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); passed += 1; };
@@ -115,5 +115,17 @@ ok(Math.abs(stats.hit_rate - 0.6667) < 0.01, 'hit_rate 2/3');
 ok(Math.abs(stats.mean_abs_error_pct - 0.3667) < 0.01, 'mean abs error averaged');
 ok(stats.by_symbol['BTC/USD'].scored === 2, 'per-symbol breakdown');
 ok(trackRecordStats([]).scored_count === 0, 'empty track record → zero, no crash');
+
+// --- coverage attribution (multi-miner) ---
+const cov = buildCoverage([
+  { agent_id: 'sys', owner: '0xSYS', miner_config: { symbols: ['BTC/USD', 'ETH/USD', 'SOL/USD'] } },
+  { agent_id: 'u1', owner: '0xUSER', miner_config: { symbols: ['ADA/USDT', 'LINK/USD'] } },
+  { agent_id: 'u2', owner: '0xLATE', miner_config: { symbols: ['ADA/USD'] } }, // BTC/ADA already claimed → ignored
+]);
+ok(cov.symbolOwner['BTC/USD'].agent_id === 'sys', 'system owns BTC');
+ok(cov.symbolOwner['ADA/USD'].agent_id === 'u1', 'ADA/USDT normalizes to ADA/USD and u1 claims it first');
+ok(cov.symbolOwner['LINK/USD'].owner === '0xUSER', 'user owns LINK');
+ok(cov.bases.includes('ADA') && cov.bases.includes('LINK') && cov.bases.includes('BTC'), 'bases include all claimed');
+ok(cov.bases.length === 5, 'five distinct bases (BTC,ETH,SOL,ADA,LINK)');
 
 console.log(`decision.test.mjs: ${passed} checks passed`);

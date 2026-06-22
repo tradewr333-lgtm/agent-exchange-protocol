@@ -96,9 +96,27 @@
   .fleet .unit{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
   .av{width:34px;height:34px;border-radius:8px;image-rendering:pixelated;border:1px solid var(--line)}
   .deploy{margin-top:12px;border:1px dashed var(--line);border-radius:12px;padding:14px;background:rgba(57,217,255,.04)}
-  .btn{display:inline-block;margin-top:10px;background:linear-gradient(90deg,#1d6bff,var(--cyan));color:#021;
+  .btn{display:inline-block;margin-top:10px;background:linear-gradient(90deg,#1d6bff,var(--cyan));color:#021;cursor:pointer;
     font-weight:700;letter-spacing:.5px;padding:9px 16px;border-radius:10px;text-decoration:none;box-shadow:var(--glow)}
   code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px;font-size:12px;font-family:ui-monospace,monospace}
+  .back{color:var(--dim);text-decoration:none;font-size:12px;letter-spacing:1px;border:1px solid var(--line);border-radius:8px;padding:5px 10px;margin-right:6px}
+  .back:hover{color:var(--cyan);border-color:var(--cyan)}
+  .btn.sm{margin:0;padding:6px 12px;font-size:12px}
+  .mybar{margin-top:14px;border:1px solid var(--line);border-radius:16px;background:var(--panel);backdrop-filter:blur(8px);padding:16px}
+  .myhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .myhead h3{margin:0;font-size:13px;letter-spacing:1.6px;color:var(--cyan)}
+  .walletcluster{display:flex;align-items:center;gap:10px}
+  .plan{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:12px;color:var(--dim)}
+  .pdot{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red)}
+  .pdot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
+  .myagents{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+  .magent{border:1px solid var(--line);border-radius:12px;padding:12px;background:rgba(57,217,255,.04)}
+  .magent .nm{color:var(--ink);font-weight:600;font-size:13px}
+  .magent .tags{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}
+  .tg{font-size:10px;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.06);color:var(--dim);font-family:ui-monospace,monospace}
+  .pairpick{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+  .winput{width:100%;background:#0a142e;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:9px 11px;font-size:12px;margin-bottom:10px}
+  .pill[data-p]{cursor:pointer;user-select:none}
   .disc{margin-top:16px;font-size:11.5px;color:var(--dim);border-left:3px solid var(--amber);padding:10px 14px;background:rgba(255,204,85,.05);border-radius:0 10px 10px 0}
   a{color:var(--cyan)}
 </style>
@@ -108,12 +126,35 @@
 
 <div class="wrap">
   <div class="hud">
-    <div class="brand"><span class="reactor-dot" id="dot"></span><b class="mono">◈ AXP DECISION CORE</b></div>
+    <div class="brand">
+      <a href="/" class="back mono" title="Back to home">‹ HOME</a>
+      <span class="reactor-dot" id="dot"></span><b class="mono">◈ AXP DECISION CORE</b>
+    </div>
     <div class="meta mono">
       <span>STATUS <b id="status">BOOTING…</b></span>
       <span>PRICE/CALL <b id="price">—</b></span>
-      <span>MINER SHARE <b id="share">—</b></span>
+      <span>SHARE <b id="share">—</b></span>
       <span class="chip" id="clock">--:--:--</span>
+    </div>
+  </div>
+
+  <div class="mybar" id="mybar">
+    <div class="myhead">
+      <h3 class="mono">◢ MY DECISION CORE</h3>
+      <div class="walletcluster">
+        <a class="btn sm" href="/credits" style="background:transparent;border:1px solid var(--cyan);color:var(--cyan);box-shadow:none">Buy API credits</a>
+        <span class="plan mono" id="planchip"><span class="pdot" id="pdot"></span><span id="plantxt">not connected</span></span>
+        <a class="btn sm" id="connect">Connect wallet</a>
+      </div>
+    </div>
+    <div id="myagents" class="myagents"><div class="sub">Connect your wallet to see your miners, plan and earnings.</div></div>
+    <div class="deploy" id="deploybox">
+      <div style="color:var(--ink);font-weight:600">⛏ Deploy a miner — one click</div>
+      <div class="sub">Claim <b>new pairs</b> to extend the network. AXP mines them for your agent; it earns 20% of every decision its coverage forms.</div>
+      <div id="pairpick" class="pairpick"></div>
+      <input id="d-wallet" placeholder="Your wallet 0x…" class="winput mono"/>
+      <a class="btn" id="d-go">⚡ Deploy miner</a>
+      <span id="d-msg" class="sub" style="margin-left:10px"></span>
     </div>
   </div>
 
@@ -189,14 +230,9 @@
       <div id="signals"><div class="sub">acquiring feeds…</div></div>
     </div>
     <div class="box fleet">
-      <h3>◢ Miner fleet</h3>
+      <h3>◢ Miner fleet · all units</h3>
       <div id="fleet"><div class="sub">no units yet</div></div>
-      <div class="deploy">
-        <div style="color:var(--ink);font-weight:600">Deploy your own miner unit</div>
-        <div class="sub">Launch an agent, then register it as a miner — it earns 20% of every decision its data helps produce.</div>
-        <a class="btn" href="/store">⚡ Launch an agent</a>
-        <div class="sub" style="margin-top:10px">Then: <code>POST /miners/register {agent_id}</code> → <code>POST /miners/observations</code></div>
-      </div>
+      <div class="sub" style="margin-top:12px">Want a full task agent instead? <a href="/store">Launch one in the store →</a></div>
     </div>
   </div>
 
@@ -207,6 +243,8 @@
 const $=(id)=>document.getElementById(id);
 const usd=(n)=>'$'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:4});
 const FEEDS=['Coinbase','Kraken','Bitstamp','Bitfinex','OKX'];
+let WALLET=null; let LASTMETRICS=null;
+const short=(a)=>a?a.slice(0,6)+'…'+a.slice(-4):'';
 
 // render exchange feed nodes on the reactor
 (function(){
@@ -227,6 +265,7 @@ function animateTo(el,target,dur=700){
 async function tick(){
   try{
     const m=await fetch('/loop/metrics',{cache:'no-store'}).then(r=>r.json());
+    LASTMETRICS=m; renderMine();
     $('status').textContent='ONLINE'; $('status').style.color='var(--green)';
     $('clock').textContent=new Date(m.generated_at).toLocaleTimeString();
     $('price').textContent=usd(m.price_per_decision_usd);
@@ -285,6 +324,62 @@ function drawAvatar(cv){
     ctx.fillRect(x*s,y*s,s,s); ctx.fillRect((N-1-x)*s,y*s,s,s);
   }
 }
+// --- wallet + my agents + plan ---
+async function setWallet(addr){
+  WALLET=addr; $('d-wallet').value=addr; localStorage.setItem('axp_wallet',addr);
+  $('connect').textContent=short(addr);
+  try{
+    const s=await fetch('/billing/subscription?owner='+encodeURIComponent(addr),{cache:'no-store'}).then(r=>r.json());
+    const active=!!(s&&s.active);
+    const plan=(s&&(s.plan_name||s.plan_sku))||null;
+    $('pdot').className='pdot'+(active?' on':'');
+    $('plantxt').textContent=active?('Host: '+(plan||'active')):'No active host plan';
+  }catch(e){ $('pdot').className='pdot'; $('plantxt').textContent='plan unknown'; }
+  renderMine();
+}
+function renderMine(){
+  const box=$('myagents'); if(!WALLET){return;}
+  const mine=((LASTMETRICS&&LASTMETRICS.miners.list)||[]).filter(a=>(a.owner||'').toLowerCase()===WALLET.toLowerCase());
+  if(!mine.length){ box.innerHTML='<div class="sub">No miners under this wallet yet. Deploy one below — it appears here within a mining cycle.</div>'; return; }
+  box.innerHTML=mine.map(a=>`<div class="magent">
+    <div class="nm">${a.name||a.agent_id}</div>
+    <div class="tags">${(a.symbols||[]).map(s=>'<span class="tg">'+s+'</span>').join('')||'<span class="tg">—</span>'}</div>
+    <div class="sub" style="margin-top:8px">${a.last_mine?('mined '+(a.last_mine.count||0)+' · '+new Date(a.last_mine.at).toLocaleTimeString()):'starting…'} · <b style="color:var(--gold)">${usd(a.real_earnings_usd)}</b></div>
+  </div>`).join('');
+}
+$('connect').addEventListener('click',async()=>{
+  if(typeof window.ethereum==='undefined'){ const v=prompt('Paste your wallet address (0x…)'); if(v&&/^0x[a-fA-F0-9]{40}$/.test(v.trim()))setWallet(v.trim()); return; }
+  try{ const a=await window.ethereum.request({method:'eth_requestAccounts'}); if(a&&a[0])setWallet(a[0]); }catch(e){}
+});
+(function initWallet(){
+  if(typeof window.ethereum!=='undefined'&&window.ethereum.selectedAddress){ setWallet(window.ethereum.selectedAddress); return; }
+  const saved=localStorage.getItem('axp_wallet'); if(saved)setWallet(saved);
+})();
+
+// --- deploy miner ---
+const PAIRS=['ADA/USD','XRP/USD','DOGE/USD','LINK/USD','AVAX/USD','DOT/USD','LTC/USD','MATIC/USD'];
+const picked=new Set();
+function wireDeploy(){
+  const w=$('d-wallet'); const saved=localStorage.getItem('axp_wallet'); if(saved)w.value=saved;
+  w.addEventListener('change',()=>localStorage.setItem('axp_wallet',w.value.trim()));
+  $('pairpick').innerHTML=PAIRS.map(p=>`<span class="pill hold" data-p="${p}" style="cursor:pointer;user-select:none">${p.split('/')[0]}</span>`).join('');
+  $('pairpick').querySelectorAll('[data-p]').forEach(el=>el.addEventListener('click',()=>{
+    const p=el.dataset.p; if(picked.has(p)){picked.delete(p);el.className='pill hold';}else{picked.add(p);el.className='pill buy';}
+  }));
+  $('d-go').addEventListener('click',async()=>{
+    const owner=$('d-wallet').value.trim(); const symbols=[...picked];
+    if(!/^0x[a-fA-F0-9]{40}$/.test(owner)){$('d-msg').textContent='enter a valid 0x wallet';return;}
+    if(!symbols.length){$('d-msg').textContent='pick at least one pair';return;}
+    $('d-msg').textContent='deploying…';
+    try{
+      const r=await fetch('/miners/deploy',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({owner,symbols})});
+      const j=await r.json();
+      if(j.ok){$('d-msg').innerHTML='<span style="color:var(--green)">✓ '+j.name+' deployed</span>';picked.clear();$('pairpick').querySelectorAll('[data-p]').forEach(e=>e.className='pill hold');await setWallet(owner);tick();}
+      else{$('d-msg').innerHTML='<span style="color:var(--red)">'+(j.error||'failed')+(j.taken?': '+j.taken.join(', '):'')+'</span>';}
+    }catch(e){$('d-msg').textContent='network error';}
+  });
+}
+wireDeploy();
 tick(); setInterval(tick,5000);
 </script>
 </body>
