@@ -15,7 +15,9 @@ import { appendObservations, loadAgentsRegistry, saveAgentsRegistry, loadPredict
 import { normalizeSymbol, computeDecision, consensusBySymbol, scorePredictions, buildCoverage } from './decision.js';
 
 function defaultBases(env = process.env) {
-  return (env.AXP_DECISION_BASES || env.AXP_DECISION_COINS || 'BTC,ETH,SOL')
+  // Broad set of liquid crypto pairs the public exchange APIs actually quote.
+  // Per-venue failures are tolerated, so a venue lacking a pair is simply skipped.
+  return (env.AXP_DECISION_BASES || env.AXP_DECISION_COINS || 'BTC,ETH,SOL,XRP,ADA,DOGE,LINK,AVAX,LTC,DOT')
     .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
     .map((s) => ({ BITCOIN: 'BTC', ETHEREUM: 'ETH', SOLANA: 'SOL' }[s] || s));
 }
@@ -75,11 +77,13 @@ export async function ensureMinerAgent(env = process.env) {
     // default bases, so user-deployed pairs EXTEND coverage instead of replacing it.
     const wantSymbols = defaultBases(env).map((b) => `${b}/USD`);
     const haveSymbols = (existing.miner_config && Array.isArray(existing.miner_config.symbols)) ? existing.miner_config.symbols : [];
-    const needsSymbols = haveSymbols.length === 0;
+    // System miner should always cover the current default set (so expanding defaults takes effect).
+    const needsSymbols = wantSymbols.some((s) => !haveSymbols.includes(s)) || haveSymbols.length === 0;
     const needsOwner = owner && existing.owner !== owner;
     if (needsSymbols || needsOwner) {
+      const merged = [...new Set([...wantSymbols, ...haveSymbols])];
       const agents = registry.agents.map((a) => (a.agent_id === SYSTEM_MINER_ID
-        ? { ...a, owner: needsOwner ? owner : a.owner, miner_config: { ...(a.miner_config || {}), symbols: needsSymbols ? wantSymbols : haveSymbols } }
+        ? { ...a, owner: needsOwner ? owner : a.owner, miner_config: { ...(a.miner_config || {}), symbols: merged } }
         : a));
       await saveAgentsRegistry({ ...registry, agents });
     }
