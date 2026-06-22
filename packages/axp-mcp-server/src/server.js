@@ -3,6 +3,7 @@
 import { AxpClient } from '../../axp-sdk-typescript/src/index.js';
 
 const registryBaseUrl = (process.env.AXP_REGISTRY_URL ?? 'https://registry.axp.network').replace(/\/$/, '');
+const decisionBaseUrl = (process.env.AXP_DECISION_URL ?? 'https://axp.network').replace(/\/$/, '');
 const protocolVersion = '2024-11-05';
 const axp = new AxpClient({ registryUrl: registryBaseUrl });
 
@@ -16,6 +17,17 @@ const tools = [
         domain: { type: 'string', description: 'Counterparty domain. The tool reads https://domain/.well-known/agent.json.' },
         manifest_url: { type: 'string', description: 'Direct URL to the counterparty agent manifest.' },
         agent_id: { type: 'string', description: 'Optional expected AXP agent id.' },
+      },
+    },
+  },
+  {
+    name: 'axp_get_price_consensus',
+    description: 'Get AXP Decision Core consensus signal for a crypto pair: action (BUY_NOW/HOLD) + a confidence earned from real multi-exchange corroboration, plus a self-scored accuracy track record. Free teaser; the full opportunity (venues, prices, net %) is a paid x402 call. Call before acting on a price to verify it is corroborated and fresh. Not investment advice.',
+    inputSchema: {
+      type: 'object',
+      required: ['symbol'],
+      properties: {
+        symbol: { type: 'string', description: 'Pair like BTC/USD, ETH/USD, SOL/USD (USDT/USDC are normalized to USD).' },
       },
     },
   },
@@ -842,6 +854,12 @@ async function callTool(name, args) {
       return axp.getInbox(args.agent_id, { limit: args.limit });
     case 'axp_get_growth_metrics':
       return axp.getGrowthMetrics({});
+    case 'axp_get_price_consensus': {
+      requireFields(args, ['symbol']);
+      const res = await fetch(`${decisionBaseUrl}/decision?symbol=${encodeURIComponent(args.symbol)}`, { headers: { accept: 'application/json' } });
+      if (!res.ok) throw new Error(`decision HTTP ${res.status}`);
+      return res.json();
+    }
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
