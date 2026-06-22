@@ -27,6 +27,7 @@ import {
   appendHire, loadHires, hireExists, appendInboxMessage, loadAgentsRegistry, loadSubscriptions,
   appendObservations, loadRecentObservations, loadPredictions, addAgent,
   getCreditBalance, creditTxUsed, addCredit, spendCredit, issueCreditKey, resolveCreditKey,
+  loadDerivatives,
 } from './src/store.js';
 import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, buildCoverage, DECISION_VERSION } from './src/decision.js';
 import { reconcileHosting } from './src/hosting.js';
@@ -1232,7 +1233,9 @@ const server = http.createServer(async (request, response) => {
     if (!symbol) return sendJson(response, 400, { error: 'symbol_required', example: '/decision?symbol=BTC/USD' });
     const observations = await loadRecentObservations({ maxAgeMs: 5 * 60 * 1000 });
     const full = computeDecision({ symbol, observations });
-    return sendJson(response, 200, teaser(full), { 'Cache-Control': 'no-store' });
+    const t = teaser(full);
+    t.derivatives = (await loadDerivatives())[full.asset] || null;
+    return sendJson(response, 200, t, { 'Cache-Control': 'no-store' });
   }
 
   // PAID decision via x402 — full opportunity + 20% reward split to contributing miners.
@@ -1287,7 +1290,8 @@ const server = http.createServer(async (request, response) => {
         }
         await appendTrustEvent({ event_type: 'decision_served', agent_id: 'decision_api', value_usd: price, data: { asset: decision.asset, action: decision.decision.action, confidence: decision.decision.confidence, contributors: contributors.length, channel: 'credits' } });
       } catch (err) { console.error('decision_reward_failed', err?.message || err); }
-      return sendJson(response, 200, { ok: true, channel: 'credits', paid_usd: price, balance_usd: spend.balance, ...decision, reward_split: { share, pool_usd: poolUsd, per_miner_usd: perMiner, miners_credited: contributors.length } }, ak.headers);
+      const dDeriv = (await loadDerivatives())[decision.asset] || null;
+      return sendJson(response, 200, { ok: true, channel: 'credits', paid_usd: price, balance_usd: spend.balance, ...decision, derivatives: dDeriv, reward_split: { share, pool_usd: poolUsd, per_miner_usd: perMiner, miners_credited: contributors.length } }, ak.headers);
     }
 
     const proof = extractPaymentProof({ headers: request.headers, body: body || {} });
@@ -1342,6 +1346,7 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 200, {
       ok: true, channel: 'decision_api', paid_usd: price, network: payNet,
       ...decision,
+      derivatives: (await loadDerivatives())[decision.asset] || null,
       reward_split: { share, pool_usd: poolUsd, per_miner_usd: perMiner, miners_credited: contributors.length },
     }, { 'Cache-Control': 'no-store' });
   }

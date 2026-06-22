@@ -24,6 +24,7 @@ export const paths = {
   observations: join(dataDir, 'observations.json'),
   predictions: join(dataDir, 'predictions.json'),
   credits: join(dataDir, 'credits.json'),
+  derivatives: join(dataDir, 'derivatives.json'),
 };
 
 let poolPromise = null;
@@ -998,6 +999,17 @@ export async function appendObservations(records = []) {
 export async function loadRecentObservations({ maxAgeMs = 5 * 60 * 1000, now = Date.now() } = {}) {
   const list = readCollection(paths.observations, 'observations');
   return list.filter((o) => o && Number(o.ts) > 0 && now - Number(o.ts) <= maxAgeMs);
+}
+
+// Latest derivatives context (funding rate + open interest) per symbol. Small object,
+// freshest-wins. Real market signal from public perp APIs.
+export async function saveDerivatives(bySymbol = {}) {
+  writeJsonAtomic(paths.derivatives, { schema: 'axp.derivatives.v0', updated_at: new Date().toISOString(), bySymbol });
+  return true;
+}
+export async function loadDerivatives() {
+  if (!existsSync(paths.derivatives)) return {};
+  try { return readJsonFile(paths.derivatives).bySymbol || {}; } catch { return {}; }
 }
 
 // Decision track-record predictions (self-scored). Rolling JSON window in both modes.

@@ -11,7 +11,7 @@
 //
 // HONEST: top-of-book bid/ask is close to executable but still ignores size/liquidity,
 // withdrawal time and venue fees. This is a consensus + monitoring signal, not a guarantee.
-import { appendObservations, loadAgentsRegistry, saveAgentsRegistry, loadPredictions, savePredictions, loadRecentObservations, updateAgentFields } from './store.js';
+import { appendObservations, loadAgentsRegistry, saveAgentsRegistry, loadPredictions, savePredictions, loadRecentObservations, updateAgentFields, saveDerivatives } from './store.js';
 import { normalizeSymbol, computeDecision, consensusBySymbol, scorePredictions, buildCoverage } from './decision.js';
 
 function defaultBases(env = process.env) {
@@ -63,6 +63,26 @@ export async function fetchBaseObservations(base, { now = Date.now() } = {}) {
     return { symbol: `${base}/USD`, source: ex.name, bid, ask, price: (bid + ask) / 2, ts: now };
   }));
   return results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+}
+
+// Real derivatives context (funding rate + open interest) from OKX perpetual swaps.
+// Funding > 0 = longs pay shorts (crowded long); rising OI = new money entering.
+// This is a genuine predictive crypto signal — not fabricated.
+export async function fetchDerivatives(base, { now = Date.now() } = {}) {
+  const inst = `${base}-USDT-SWAP`;
+  const [fr, oi] = await Promise.allSettled([
+    fetchJson(`https://www.okx.com/api/v5/public/funding-rate?instId=${inst}`),
+    fetchJson(`https://www.okx.com/api/v5/public/open-interest?instId=${inst}`),
+  ]);
+  const fundingRate = fr.status === 'fulfilled' ? Number(fr.value?.data?.[0]?.fundingRate) : null;
+  const oiVal = oi.status === 'fulfilled' ? Number(oi.value?.data?.[0]?.oiCcy) : null;
+  if (!Number.isFinite(fundingRate) && !Number.isFinite(oiVal)) return null;
+  return {
+    funding_rate_pct: Number.isFinite(fundingRate) ? Number((fundingRate * 100).toFixed(5)) : null,
+    open_interest: Number.isFinite(oiVal) ? oiVal : null,
+    source: 'okx',
+    ts: now,
+  };
 }
 
 export async function ensureMinerAgent(env = process.env) {
@@ -149,6 +169,14 @@ export async function runDecisionMineOnce(env = process.env) {
   for (const [agentId, s] of Object.entries(byAgent)) {
     try { await updateAgentFields(agentId, { last_mine: { at: new Date(now).toISOString(), count: s.count, symbols: [...s.symbols], venues: [...s.venues] } }); } catch { /* best-effort */ }
   }
+  // Derivatives context (funding rate + OI) per symbol — real perp signal from OKX.
+  try {
+    const derivs = {};
+    const drs = await Promise.allSettled(baseList.map((b) => fetchDerivatives(b, { now })));
+    drs.forEach((r, i) => { if (r.status === 'fulfilled' && r.value) derivs[`${baseList[i]}/USD`] = r.value; });
+    if (Object.keys(derivs).length) await saveDerivatives(derivs);
+  } catch (err) { console.warn('decision_mine_derivs', err?.message || err); }
+
   const score = await scoreAndSnapshot({ now });
   console.log(`[auto-miner] ${accepted} obs · ${venues.length} venues · ${baseList.length} bases · ${miners.length} miners · scored ${score.scoredNow}`);
   return { ok: true, accepted, venues, bases: baseList, miners: miners.length, ...score };
