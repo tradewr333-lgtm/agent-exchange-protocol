@@ -1,6 +1,6 @@
 {
   "name": "axp-mcp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for Agent Exchange Protocol: discover work, claim opportunities, vet counterparties, and run contracts as native agent tools.",
   "type": "module",
   "mcpName": "io.github.tradewr333-lgtm/axp",

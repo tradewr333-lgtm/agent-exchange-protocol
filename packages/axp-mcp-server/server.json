@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
   "name": "io.github.tradewr333-lgtm/axp",
-  "description": "Trust scores, opportunity feed, contracts, and a paid Decision API (real multi-exchange price consensus + funding/OI + self-scored accuracy) for AI agents.",
-  "version": "0.1.0",
+  "description": "Trust scores, opportunity feed, contracts and a paid crypto Decision API for AI agents.",
+  "version": "0.1.1",
   "repository": {
     "url": "https://github.com/tradewr333-lgtm/agent-exchange-protocol",
     "source": "github"
@@ -11,7 +11,7 @@
     {
       "registryType": "npm",
       "identifier": "axp-mcp-server",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
