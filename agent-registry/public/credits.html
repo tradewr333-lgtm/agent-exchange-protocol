@@ -48,15 +48,14 @@
     <div class="packs" id="packs"></div>
     <div class="row">
       <div>Pay with: <span class="seg" id="assetseg"><button data-a="USDT" class="on">USDT</button><button data-a="USDC">USDC</button></span></div>
-      <div class="sub">Custom: <input id="custom" type="number" min="5" step="5" placeholder="USD" style="width:90px"/></div>
     </div>
     <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
       <div>
-        <div class="sub" style="margin-bottom:4px">Crypto (any amount, incl. custom)</div>
-        <button class="btn" id="pay" disabled>⚡ Pay with USDT/USDC</button>
+        <div class="sub" style="margin-bottom:4px">Crypto (USDT/USDC)</div>
+        <button class="btn" id="pay" disabled>⚡ Pay with crypto</button>
       </div>
       <div id="cardwrap" style="display:none">
-        <div class="sub" style="margin-bottom:4px">Card (fixed packs)</div>
+        <div class="sub" style="margin-bottom:4px">Card</div>
         <button class="btn cardbtn" data-amt="20" style="background:transparent;border:1px solid var(--cyan);color:var(--cyan);box-shadow:none">💳 $20</button>
         <button class="btn cardbtn" data-amt="50" style="background:transparent;border:1px solid var(--cyan);color:var(--cyan);box-shadow:none">💳 $50</button>
       </div>
@@ -108,11 +107,10 @@ async function init(){
 function renderPacks(){
   const calls=(usd)=>Math.round(usd/(CFG.price_per_decision_usd||0.01)).toLocaleString();
   $('packs').innerHTML=(CFG.packs||[20,50]).map(p=>`<div class="pack ${p===PACK?'sel':''}" data-p="${p}"><div class="amt">$${p}</div><div class="calls">${calls(p)} calls</div></div>`).join('');
-  $('packs').querySelectorAll('[data-p]').forEach(el=>el.addEventListener('click',()=>{PACK=Number(el.dataset.p);$('custom').value='';renderPacks();sync();}));
+  $('packs').querySelectorAll('[data-p]').forEach(el=>el.addEventListener('click',()=>{PACK=Number(el.dataset.p);renderPacks();sync();}));
 }
 $('assetseg').querySelectorAll('[data-a]').forEach(b=>b.addEventListener('click',()=>{ASSET=b.dataset.a;$('assetseg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));}));
-$('custom').addEventListener('input',()=>{const v=Number($('custom').value); if(v>=5){PACK=v;$('packs').querySelectorAll('.pack').forEach(e=>e.classList.remove('sel'));} sync();});
-function sync(){ $('pay').disabled=!(WALLET&&PACK>=5&&CFG&&CFG.enabled); }
+function sync(){ $('pay').disabled=!(WALLET&&(PACK===20||PACK===50)&&CFG&&CFG.enabled); }
 
 async function setWallet(a){ WALLET=a; localStorage.setItem('axp_credit_owner',a); $('wtxt').textContent=short(a); $('connect').textContent=short(a); refreshBal(); sync(); }
 async function refreshBal(){ if(!WALLET)return; try{const b=await fetch('/credits/balance?owner='+WALLET,{cache:'no-store'}).then(r=>r.json()); $('bal').textContent='$'+Number(b.balance_usd||0).toFixed(2);}catch(e){} }
