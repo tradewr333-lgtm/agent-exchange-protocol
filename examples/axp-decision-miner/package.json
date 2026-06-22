@@ -1,0 +1,10 @@
+{
+  "name": "axp-decision-miner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Feeds real multi-venue crypto prices (CoinGecko) into the AXP Decision API as a miner agent.",
+  "scripts": {
+    "mine": "node miner.js"
+  }
+}

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AXP Decision Loop — live</title>
+<style>
+  :root{
+    --bg:#070a16; --panel:#0f1428; --panel2:#141b33; --line:#1f2a4d;
+    --ink:#e8edff; --dim:#8a96bf; --green:#34e0a1; --amber:#ffcc66; --red:#ff6b88; --cyan:#5ad0ff;
+    --accent:#7c8cff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 700px at 70% -10%,#10183a 0%,var(--bg) 55%);color:var(--ink);
+    font:15px/1.5 ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  a{color:var(--cyan);text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:22px;margin:0;letter-spacing:.2px}
+  .live{display:inline-flex;align-items:center;gap:8px;color:var(--dim);font-size:13px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  .sub{color:var(--dim);margin:6px 0 22px;font-size:14px;max-width:760px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:14px;padding:16px}
+  .k{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+  .v{font-size:30px;font-weight:700;margin-top:6px}
+  .v.small{font-size:20px}
+  .row{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-top:14px}
+  @media(max-width:880px){.grid{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700}
+  .buy{background:rgba(52,224,161,.15);color:var(--green)}
+  .hold{background:rgba(255,204,102,.15);color:var(--amber)}
+  .muted{color:var(--dim)}
+  .explain{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:16px}
+  .explain h3{margin:0 0 10px;font-size:15px}
+  .steps{counter-reset:s;display:grid;gap:8px;margin:0;padding:0;list-style:none}
+  .steps li{counter-increment:s;color:var(--dim);position:relative;padding-left:30px}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;
+    background:var(--accent);color:#0a0e1f;font-weight:700;font-size:12px;display:grid;place-items:center}
+  .steps b{color:var(--ink)}
+  .disc{margin-top:18px;font-size:12.5px;color:var(--dim);border-left:3px solid var(--amber);padding:10px 14px;background:rgba(255,204,102,.05);border-radius:0 10px 10px 0}
+  code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px;font-size:13px}
+  .teaser{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .conf{font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>🧭 AXP Decision Loop</h1>
+      <div class="live"><span class="dot"></span> <span id="ts">live · loading…</span></div>
+    </div>
+    <div class="muted" style="text-align:right;font-size:13px">
+      <div>Decision price: <b id="price">—</b> / call</div>
+      <div>Miner reward share: <b id="share">—</b></div>
+    </div>
+  </header>
+
+  <p class="sub">Miner agents hosted on AXP feed real-time prices. The <code>/decision</code> API turns them into an
+  arbitrage signal sold per call (x402, USDC). The more miners, the more sources corroborate a quote — so
+  <b>confidence is earned, not assumed</b>. Every number below is real and starts at zero.</p>
+
+  <div class="grid">
+    <div class="card"><div class="k">Active miners</div><div class="v" id="miners">—</div></div>
+    <div class="card"><div class="k">Observations (5 min)</div><div class="v" id="obs">—</div></div>
+    <div class="card"><div class="k">Decisions sold</div><div class="v" id="served">—</div></div>
+    <div class="card"><div class="k">Rewards to miners</div><div class="v" id="rewards">—</div></div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <div class="k">Live signal — BTC/USD <span class="muted">(free teaser)</span></div>
+      <div class="teaser" style="margin-top:12px">
+        <span id="sig-action" class="pill hold">—</span>
+        <div><div class="muted" style="font-size:12px">confidence</div><div class="v small conf" id="sig-conf">—</div></div>
+        <div><div class="muted" style="font-size:12px">corroborating sources</div><div class="v small" id="sig-src">—</div></div>
+      </div>
+      <div class="muted" id="sig-note" style="margin-top:10px;font-size:13px"></div>
+    </div>
+    <div class="card">
+      <div class="k">Coverage now</div>
+      <div style="margin-top:10px"><span class="muted">Symbols:</span> <b id="symbols">—</b></div>
+      <div style="margin-top:6px"><span class="muted">Sources:</span> <b id="sources">—</b></div>
+      <div style="margin-top:6px"><span class="muted">Revenue (decisions):</span> <b id="revenue">—</b></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="k">Miners</div>
+    <table style="margin-top:10px">
+      <thead><tr><th>Agent</th><th>Last mined</th><th>Earnings (USDC)</th></tr></thead>
+      <tbody id="miner-rows"><tr><td class="muted" colspan="3">No miners registered yet.</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="explain">
+    <h3>How the loop works</h3>
+    <ol class="steps">
+      <li><b>Mine.</b> Agents launched on AXP register as miners and submit live prices from venues they watch.</li>
+      <li><b>Decide.</b> <code>/decision</code> finds the cheapest buy + richest sell across sources and returns a net-of-fees signal.</li>
+      <li><b>Pay.</b> A buyer (human or agent) pays per call in USDC via x402 — no API keys, no human in the loop.</li>
+      <li><b>Reward.</b> 20% of each call is split back to the miners whose data formed the decision.</li>
+      <li><b>Compound.</b> More miners → more corroborating sources → higher real confidence → more demand.</li>
+    </ol>
+    <div class="disc" id="disc">Observed cross-source spread, not investment advice.</div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const usd = (n) => '$' + Number(n||0).toLocaleString(undefined,{maximumFractionDigits:4});
+const pct = (n) => (Number(n||0)*100).toFixed(0) + '%';
+
+async function refresh(){
+  try{
+    const m = await fetch('/loop/metrics',{cache:'no-store'}).then(r=>r.json());
+    $('ts').textContent = 'live · ' + new Date(m.generated_at).toLocaleTimeString();
+    $('price').textContent = usd(m.price_per_decision_usd);
+    $('share').textContent = pct(m.miner_reward_share);
+    $('miners').textContent = m.miners.total;
+    $('obs').textContent = m.observations_window_5m.count.toLocaleString();
+    $('served').textContent = m.decisions.served_count.toLocaleString();
+    $('rewards').textContent = usd(m.decisions.miner_rewards_paid_usd);
+    $('revenue').textContent = usd(m.decisions.revenue_usd);
+    $('symbols').textContent = m.observations_window_5m.symbols.length ? m.observations_window_5m.symbols.join(', ') : '—';
+    $('sources').textContent = m.observations_window_5m.sources.length ? m.observations_window_5m.sources.join(', ') : '—';
+    const rows = m.miners.list;
+    $('miner-rows').innerHTML = rows.length ? rows.map(r=>`<tr>
+      <td>${r.name||r.agent_id}</td>
+      <td class="muted">${r.last_mine ? new Date(r.last_mine.at).toLocaleTimeString()+' · '+(r.last_mine.count||0)+' obs' : '—'}</td>
+      <td>${usd(r.real_earnings_usd)}</td></tr>`).join('')
+      : '<tr><td class="muted" colspan="3">No miners registered yet. Launch an agent and POST /miners/register.</td></tr>';
+  }catch(e){ $('ts').textContent='live · metrics unavailable'; }
+
+  try{
+    const s = await fetch('/decision?symbol=BTC/USD',{cache:'no-store'}).then(r=>r.json());
+    const a = s.decision.action;
+    const el = $('sig-action'); el.textContent = a; el.className = 'pill ' + (a==='BUY_NOW'?'buy':'hold');
+    $('sig-conf').textContent = (Number(s.decision.confidence||0)*100).toFixed(0)+'%';
+    $('sig-src').textContent = s.sources_count;
+    $('sig-note').textContent = s.note || '';
+    if (s.disclaimer) $('disc').textContent = s.disclaimer;
+  }catch(e){}
+}
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>

@@ -21,6 +21,7 @@ export const paths = {
   subscriptions: join(dataDir, 'subscriptions.json'),
   launchPayments: join(dataDir, 'launch-payments.json'),
   hires: join(dataDir, 'hires.json'),
+  observations: join(dataDir, 'observations.json'),
 };
 
 let poolPromise = null;
@@ -962,6 +963,27 @@ export async function hireExists(txHash) {
     return result.rows.length > 0;
   }
   return readCollection(paths.hires, 'hires').some((h) => h.tx_hash === txHash);
+}
+
+// --- Decision API: price OBSERVATIONS from miner agents ---
+// Stored in a rolling JSON window in BOTH modes: observations are short-lived,
+// high-volume and re-submitted every cycle, so losing them on redeploy is fine and
+// avoids a Postgres migration. Capped to the most recent entries.
+export async function appendObservations(records = []) {
+  const now = new Date().toISOString();
+  const stored = records
+    .filter((r) => r && r.symbol)
+    .map((r) => ({ ...r, ts: Number(r.ts || r.timestamp || Date.now()), received_at: now }));
+  if (!stored.length) return 0;
+  const list = readCollection(paths.observations, 'observations');
+  list.push(...stored);
+  writeCollection(paths.observations, 'observations', list.slice(-8000));
+  return stored.length;
+}
+
+export async function loadRecentObservations({ maxAgeMs = 5 * 60 * 1000, now = Date.now() } = {}) {
+  const list = readCollection(paths.observations, 'observations');
+  return list.filter((o) => o && Number(o.ts) > 0 && now - Number(o.ts) <= maxAgeMs);
 }
 
 // Patch a single agent's record (e.g. hosting status) in the registry.

@@ -25,7 +25,9 @@ import {
   listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals,
   appendTrustEvent, saveSubscription, appendLaunchPayment, launchPaymentExists, updateAgentFields,
   appendHire, loadHires, hireExists, appendInboxMessage, loadAgentsRegistry, loadSubscriptions,
+  appendObservations, loadRecentObservations,
 } from './src/store.js';
+import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, DECISION_VERSION } from './src/decision.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { computeWeightedScores, reputationWeight } from './src/sybil.js';
@@ -70,6 +72,11 @@ const server = http.createServer(async (request, response) => {
 
   if (url.pathname === '/network' || url.pathname === '/dashboard') {
     return sendHtml(response, 200, readFileSync(join(publicPath, 'network.html'), 'utf8'));
+  }
+
+  // Decision Loop dashboard — REAL metrics (reads /loop/metrics live).
+  if (url.pathname === '/loop') {
+    return sendHtml(response, 200, readFileSync(join(publicPath, 'loop.html'), 'utf8'));
   }
 
   // Agent App Store + agent product pages (single-page; JS reads the path).
@@ -1029,6 +1036,161 @@ const server = http.createServer(async (request, response) => {
     } catch { /* best-effort */ }
     response.setHeader('PAYMENT-RESPONSE', encodeHeader({ success: true, network: usedNet.name, transaction: proof.tx_hash, amount_usd: price }));
     return sendJson(response, 200, { ok: true, agent_id: agent.agent_id, result: run.output, paid_usd: price, network: usedNet.name, channel: 'x402' });
+  }
+
+  // ===================================================================
+  // DECISION API — sell the DECISION (arbitrage signal), not just data.
+  // Miner agents (hosted on AXP) feed price observations; /decision aggregates
+  // them into a signal. More miners → more corroborating sources → higher
+  // (real) consensus confidence. Paid calls share 20% back to the miners.
+  // ===================================================================
+
+  // Register one of YOUR launched agents as a data miner.
+  if (request.method === 'POST' && url.pathname === '/miners/register') {
+    const apiKey = await requireApiKey(request, 'miner_register', { path: url.pathname });
+    if (!apiKey.ok) return sendJson(response, apiKey.status, apiKey, apiKey.headers);
+    const body = await readJsonBody(request);
+    const agentId = body?.agent_id;
+    if (!agentId) return sendJson(response, 400, { error: 'agent_id_required' }, apiKey.headers);
+    const agent = await getAgent(agentId);
+    if (!agent) return sendJson(response, 404, { error: 'agent_not_found', agent_id: agentId }, apiKey.headers);
+    const owner = (apiKey.key.owner || '').toLowerCase();
+    if (owner && (agent.owner || '').toLowerCase() !== owner) {
+      return sendJson(response, 403, { error: 'not_agent_owner' }, apiKey.headers);
+    }
+    const symbols = Array.isArray(body?.symbols) ? body.symbols.map(normalizeSymbol) : [];
+    const updated = await updateAgentFields(agentId, {
+      miner: true,
+      miner_config: { symbols, registered_at: new Date().toISOString() },
+    });
+    return sendJson(response, 200, { ok: true, agent_id: agentId, miner: true, symbols, name: updated?.name }, apiKey.headers);
+  }
+
+  // Miner submits fresh price observations. Each is stamped with the miner identity
+  // so the reward split can credit the right agents.
+  if (request.method === 'POST' && url.pathname === '/miners/observations') {
+    const apiKey = await requireApiKey(request, 'miner_observations', { path: url.pathname });
+    if (!apiKey.ok) return sendJson(response, apiKey.status, apiKey, apiKey.headers);
+    const body = await readJsonBody(request);
+    const agentId = body?.agent_id;
+    const incoming = Array.isArray(body?.observations) ? body.observations : [];
+    if (!agentId || !incoming.length) return sendJson(response, 400, { error: 'agent_id_and_observations_required' }, apiKey.headers);
+    const agent = await getAgent(agentId);
+    if (!agent || !agent.miner) return sendJson(response, 409, { error: 'agent_not_a_registered_miner', hint: 'POST /miners/register first' }, apiKey.headers);
+    const owner = (apiKey.key.owner || '').toLowerCase();
+    if (owner && (agent.owner || '').toLowerCase() !== owner) return sendJson(response, 403, { error: 'not_agent_owner' }, apiKey.headers);
+    const now = Date.now();
+    const stamped = incoming
+      .filter((o) => o && o.symbol && (o.price != null || o.bid != null || o.ask != null))
+      .slice(0, 500)
+      .map((o) => ({ symbol: o.symbol, source: o.source || o.exchange || 'unknown', price: o.price, bid: o.bid, ask: o.ask, ts: Number(o.ts || o.timestamp || now), agent_id: agentId, owner: agent.owner || null }));
+    const count = await appendObservations(stamped);
+    await updateAgentFields(agentId, { last_mine: { at: new Date().toISOString(), count, symbols: [...new Set(stamped.map((s) => normalizeSymbol(s.symbol)))] } });
+    return sendJson(response, 201, { ok: true, accepted: count }, apiKey.headers);
+  }
+
+  // FREE teaser — action + confidence only (no executable venues/prices).
+  if (request.method === 'GET' && url.pathname === '/decision') {
+    const symbol = url.searchParams.get('symbol');
+    if (!symbol) return sendJson(response, 400, { error: 'symbol_required', example: '/decision?symbol=BTC/USD' });
+    const observations = await loadRecentObservations({ maxAgeMs: 5 * 60 * 1000 });
+    const full = computeDecision({ symbol, observations });
+    return sendJson(response, 200, teaser(full), { 'Cache-Control': 'no-store' });
+  }
+
+  // PAID decision via x402 — full opportunity + 20% reward split to contributing miners.
+  if (request.method === 'POST' && url.pathname === '/x402/decision/call') {
+    const payTo = process.env.AXP_DECISION_PAYTO || process.env.AXP_TREASURY_ADDRESS || null;
+    let resolvedPayTo = payTo;
+    if (!resolvedPayTo) {
+      const all = await listAgents({});
+      resolvedPayTo = (all.agents || []).find((a) => a.origin === 'launch' && a.owner)?.owner || null;
+    }
+    if (!resolvedPayTo) return sendJson(response, 503, { error: 'decision_payto_unconfigured', hint: 'set AXP_DECISION_PAYTO or AXP_TREASURY_ADDRESS' });
+
+    const base = process.env.AXP_PUBLIC_URL || `https://${request.headers.host || 'axp.network'}`;
+    const resource = `${base}/x402/decision/call`;
+    const price = decisionPriceUsd();
+    const svcAgent = { name: 'AXP Decision API', owner: resolvedPayTo, services: ['decision'], template: 'decision' };
+    const required = buildPaymentRequired({ agent: svcAgent, resource, env: { ...process.env, AXP_X402_PRICE_USD: String(price) } });
+    const body = await readJsonBody(request);
+    const proof = extractPaymentProof({ headers: request.headers, body: body || {} });
+    if (!proof) { response.setHeader('PAYMENT-REQUIRED', encodeHeader(required)); return sendJson(response, 402, required); }
+    const symbol = typeof body?.symbol === 'string' ? body.symbol.trim() : '';
+    if (!symbol) return sendJson(response, 400, { error: 'symbol_required' });
+
+    // Verify payment (phase 2 facilitator OR phase 1 on-chain tx, multi-rail).
+    const networks = x402NetworkList();
+    let paid = null; let payNet = null; let payer = null; let txId = null;
+    if (isSignedPayload(proof)) {
+      if (!facilitatorEnabled()) { response.setHeader('PAYMENT-REQUIRED', encodeHeader(required)); return sendJson(response, 402, { error: 'facilitator_not_configured', payment_required: required }); }
+      const selected = required.accepts.find((a) => a.network === proof.network) || required.accepts[0];
+      const v = await verifyViaFacilitator({ paymentPayload: proof, paymentRequirements: selected });
+      if (!v.ok) { response.setHeader('PAYMENT-REQUIRED', encodeHeader(required)); return sendJson(response, 402, { error: 'payment_invalid', reason: v.invalidReason || v.error, payment_required: required }); }
+      payer = v.payer; payNet = proof.network || selected.network;
+    } else {
+      if (!proof.tx_hash) { response.setHeader('PAYMENT-REQUIRED', encodeHeader(required)); return sendJson(response, 402, required); }
+      if (await hireExists(proof.tx_hash)) return sendJson(response, 409, { error: 'payment_already_used', tx_hash: proof.tx_hash });
+      const tried = proof.network ? networks.filter((n) => n.name === proof.network) : networks;
+      for (const net of (tried.length ? tried : networks)) {
+        const r = await verifyErc20TransferTo({ tx_hash: proof.tx_hash, token_address: net.usdc, decimals: net.decimals, min_amount_usd: price, recipient: resolvedPayTo, rpc: net.rpc, chain_id: net.chain_id });
+        if (r.ok) { paid = r; payNet = net.name; break; }
+        paid = r;
+      }
+      if (!paid || !paid.ok) { response.setHeader('PAYMENT-REQUIRED', encodeHeader(required)); return sendJson(response, paid?.status ?? 402, { ...(paid || { error: 'payment_invalid' }), payment_required: required }); }
+      payer = proof.from; txId = proof.tx_hash;
+    }
+
+    // Produce the decision from real miner data.
+    const observations = await loadRecentObservations({ maxAgeMs: 5 * 60 * 1000 });
+    const decision = computeDecision({ symbol, observations });
+
+    // Reward split: 20% of the call shared equally among contributing miners.
+    const share = minerRewardShare();
+    const contributors = decision.contributors || [];
+    const poolUsd = Number((price * share).toFixed(6));
+    const perMiner = contributors.length ? Number((poolUsd / contributors.length).toFixed(6)) : 0;
+    const settleTx = txId || `x402:decision:${Date.now()}`;
+    try {
+      for (const c of contributors) {
+        if (!c.agent_id || perMiner <= 0) continue;
+        await appendHire({ agent_id: c.agent_id, customer_address: payer || null, asset: 'USDC', amount: perMiner, fee_usd: 0, owner_usd: perMiner, tx_hash: `${settleTx}:${c.agent_id}`, payout_tx: settleTx, status: 'reward', task: `decision:${decision.asset}`, deliverable: '__decision_reward__' });
+        const cur = (await getAgent(c.agent_id))?.real_earnings_usd || 0;
+        await updateAgentFields(c.agent_id, { real_earnings_usd: Number((Number(cur) + perMiner).toFixed(4)) });
+        await appendTrustEvent({ event_type: 'decision_reward', agent_id: c.agent_id, value_usd: perMiner, data: { asset: decision.asset, channel: 'decision_api' } });
+      }
+      await appendTrustEvent({ event_type: 'decision_served', agent_id: 'decision_api', value_usd: price, data: { asset: decision.asset, action: decision.decision.action, confidence: decision.decision.confidence, contributors: contributors.length, network: payNet } });
+    } catch (err) { console.error('decision_reward_failed', err?.message || err); }
+
+    response.setHeader('PAYMENT-RESPONSE', encodeHeader({ success: true, network: payNet, transaction: settleTx, amount_usd: price }));
+    return sendJson(response, 200, {
+      ok: true, channel: 'decision_api', paid_usd: price, network: payNet,
+      ...decision,
+      reward_split: { share, pool_usd: poolUsd, per_miner_usd: perMiner, miners_credited: contributors.length },
+    }, { 'Cache-Control': 'no-store' });
+  }
+
+  // Real-metrics snapshot for the Loop dashboard — NO fabricated numbers.
+  if (url.pathname === '/loop/metrics') {
+    const all = await listAgents({});
+    const miners = (all.agents || []).filter((a) => a.miner);
+    const obs = await loadRecentObservations({ maxAgeMs: 5 * 60 * 1000 });
+    const symbols = [...new Set(obs.map((o) => normalizeSymbol(o.symbol)))];
+    const sources = [...new Set(obs.map((o) => String(o.source || 'unknown').toLowerCase()))];
+    const events = (await listTrustEvents({ limit: 1000 })).events || [];
+    const served = events.filter((e) => e.event_type === 'decision_served');
+    const rewards = events.filter((e) => e.event_type === 'decision_reward');
+    const rewardsPaidUsd = Number(rewards.reduce((s, e) => s + Number(e.value_usd || 0), 0).toFixed(4));
+    const revenueUsd = Number(served.reduce((s, e) => s + Number(e.value_usd || 0), 0).toFixed(4));
+    return sendJson(response, 200, {
+      protocol: 'AXP', schema: 'axp.decision_loop.v0', decisionVersion: DECISION_VERSION,
+      generated_at: new Date().toISOString(),
+      price_per_decision_usd: decisionPriceUsd(), miner_reward_share: minerRewardShare(),
+      miners: { total: miners.length, list: miners.map((m) => ({ agent_id: m.agent_id, name: m.name, last_mine: m.last_mine || null, real_earnings_usd: Number(m.real_earnings_usd || 0) })) },
+      observations_window_5m: { count: obs.length, symbols, sources },
+      decisions: { served_count: served.length, revenue_usd: revenueUsd, miner_rewards_paid_usd: rewardsPaidUsd },
+      note: 'All numbers are real and start at zero until miners feed data and buyers pay. Not investment advice.',
+    }, { 'Cache-Control': 'no-store' });
   }
 
   // A2A Agent Card — lets Agent2Agent-aware clients discover AXP as a service.
