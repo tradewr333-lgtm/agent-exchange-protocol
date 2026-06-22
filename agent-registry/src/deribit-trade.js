@@ -5,6 +5,7 @@
 // /private/get_positions, /private/get_open_orders_by_currency, /private/cancel_all_by_currency.
 //
 // Keys are TRADE-ONLY (no withdrawal). Nothing here can move funds off the exchange.
+import { buildIronCondor } from './iron-condor.js';
 
 const tokenCache = new Map(); // key: apiKey|testnet -> { token, exp }
 
@@ -76,6 +77,45 @@ export async function getOpenOrders(creds, { currency = 'BTC', kind = 'option' }
 export async function cancelAll(creds, { currency = 'BTC', kind = 'option' } = {}) {
   const r = await priv(creds, '/private/cancel_all_by_currency', { currency, kind, type: 'all' });
   return { ok: r.ok, cancelled: r.result, error: r.error };
+}
+
+// --- Build a live Iron Condor in the SAME environment as the user's keys ---
+async function pub(creds, method) { return getJson(`${base(creds.testnet)}${method}`); }
+
+async function getSpot(creds, asset) {
+  const r = await pub(creds, `/public/get_index_price?index_name=${asset.toLowerCase()}_usd`);
+  return r.ok ? Number(r.result?.index_price) : null;
+}
+async function nearestExpiry(creds, asset) {
+  const r = await pub(creds, `/public/get_instruments?currency=${asset}&kind=option&expired=false`);
+  if (!r.ok || !Array.isArray(r.result)) return null;
+  const now = Date.now(); let best = null;
+  for (const i of r.result) { const ts = Number(i.expiration_timestamp); if (ts > now && (!best || ts < best.ts)) best = { ts, code: i.instrument_name.split('-')[1] }; }
+  return best;
+}
+async function mapConc(items, limit, fn) {
+  const out = []; let i = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) { const idx = i++; out[idx] = await fn(items[idx]).catch(() => null); }
+  }));
+  return out;
+}
+
+// Build the condor structure from the user's environment (so instrument names are valid there).
+export async function liveCondor(creds, asset = 'BTC', { putDelta = -0.12, callDelta = 0.12, wingStrikes = 1 } = {}) {
+  const spot = await getSpot(creds, asset);
+  if (!Number.isFinite(spot)) return { ok: false, error: 'spot_unavailable' };
+  const exp = await nearestExpiry(creds, asset);
+  if (!exp) return { ok: false, error: 'no_expiry' };
+  const insts = await pub(creds, `/public/get_instruments?currency=${asset}&kind=option&expired=false`);
+  const lo = spot * 0.6, hi = spot * 1.4;
+  const wanted = (insts.result || []).filter((i) => { const p = i.instrument_name.split('-'); return p[1] === exp.code && Number(i.strike) >= lo && Number(i.strike) <= hi; });
+  const chain = (await mapConc(wanted, 6, async (i) => {
+    const t = await pub(creds, `/public/ticker?instrument_name=${i.instrument_name}`);
+    if (!t.ok) return null;
+    return { instrument: i.instrument_name, strike: Number(i.strike), type: i.option_type === 'call' ? 'C' : 'P', delta: Number(t.result?.greeks?.delta), bid: Number(t.result?.best_bid_price), ask: Number(t.result?.best_ask_price) };
+  })).filter((x) => x && Number.isFinite(x.delta) && Number.isFinite(x.bid));
+  return buildIronCondor(chain, { spot, putDelta, callDelta, wingStrikes, asset, expiry: exp.code });
 }
 
 // Public ticker (mark price + greeks) for an instrument — used to price legs / value the position.

@@ -293,3 +293,10 @@ create table if not exists deribit_creds (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create table if not exists deribit_bots (
+  owner text primary key,
+  config jsonb not null default '{}'::jsonb,
+  enabled boolean not null default false,
+  updated_at timestamptz not null default now()
+);

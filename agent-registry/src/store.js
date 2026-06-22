@@ -1157,6 +1157,50 @@ export async function deribitConnected(owner) {
   return existsSync(paths.deribitCreds) && Boolean((readJsonFile(paths.deribitCreds).creds || {})[o]);
 }
 
+// --- Deribit Iron Condor bot: config (persisted) + trade log (rolling JSON) ---
+export async function saveBotConfig(owner, config, enabled) {
+  const o = creditOwner(owner);
+  if (storageMode() === 'postgres') {
+    await query(`insert into deribit_bots (owner, config, enabled) values ($1,$2::jsonb,$3)
+      on conflict (owner) do update set config=excluded.config, enabled=excluded.enabled, updated_at=now()`,
+      [o, JSON.stringify(config || {}), Boolean(enabled)]);
+    return { ok: true };
+  }
+  const store = existsSync(paths.deribitCreds) ? (readJsonFile(paths.deribitCreds)) : {};
+  store.bots = store.bots || {};
+  store.bots[o] = { config: config || {}, enabled: Boolean(enabled), updated_at: new Date().toISOString() };
+  writeJsonAtomic(paths.deribitCreds, store);
+  return { ok: true };
+}
+export async function loadBotConfig(owner) {
+  const o = creditOwner(owner);
+  if (storageMode() === 'postgres') {
+    const r = await query('select config, enabled from deribit_bots where owner=$1', [o]);
+    return r.rows[0] ? { config: r.rows[0].config || {}, enabled: r.rows[0].enabled } : null;
+  }
+  const store = existsSync(paths.deribitCreds) ? readJsonFile(paths.deribitCreds) : {};
+  return (store.bots || {})[o] || null;
+}
+export async function loadEnabledBots() {
+  if (storageMode() === 'postgres') {
+    const r = await query('select owner, config from deribit_bots where enabled = true');
+    return r.rows.map((x) => ({ owner: x.owner, config: x.config || {} }));
+  }
+  const store = existsSync(paths.deribitCreds) ? readJsonFile(paths.deribitCreds) : {};
+  return Object.entries(store.bots || {}).filter(([, b]) => b.enabled).map(([owner, b]) => ({ owner, config: b.config || {} }));
+}
+export async function appendBotTrade(owner, trade) {
+  const path = join(dataDir, `bot-trades.json`);
+  const list = readCollection(path, 'trades');
+  list.push({ owner: creditOwner(owner), ...trade, at: new Date().toISOString() });
+  writeCollection(path, 'trades', list.slice(-3000));
+}
+export async function loadBotTrades(owner, limit = 50) {
+  const path = join(dataDir, `bot-trades.json`);
+  const o = creditOwner(owner);
+  return readCollection(path, 'trades').filter((t) => t.owner === o).slice(-limit).reverse();
+}
+
 // Credit keys — bearer secrets to spend a wallet's credits (issued at purchase).
 export async function issueCreditKey(owner) {
   const o = creditOwner(owner);

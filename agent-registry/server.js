@@ -28,9 +28,11 @@ import {
   appendObservations, loadRecentObservations, loadPredictions, addAgent,
   getCreditBalance, creditTxUsed, addCredit, spendCredit, issueCreditKey, resolveCreditKey,
   loadDerivatives, keyVaultEnabled, saveDeribitCreds, loadDeribitCreds, deribitConnected,
+  saveBotConfig, loadBotConfig, appendBotTrade, loadBotTrades,
 } from './src/store.js';
 import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, buildCoverage, DECISION_VERSION } from './src/decision.js';
 import { ironCondorSignal, testConnection } from './src/deribit.js';
+import { startBot as icStartBot, stopBot as icStopBot, getBotStatus as icBotStatus } from './src/iron-condor-bot.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { startDecisionMiner, runDecisionMineOnce, decisionMineEnabled } from './src/decision-miner.js';
@@ -123,6 +125,73 @@ const server = http.createServer(async (request, response) => {
     if (!creds) return sendJson(response, 200, { connected: false }, { 'Cache-Control': 'no-store' });
     const test = await testConnection(creds);
     return sendJson(response, 200, { connected: test.ok, testnet: creds.testnet, balance: test.balance, equity: test.equity, available_funds: test.available_funds, error: test.ok ? null : test.error }, { 'Cache-Control': 'no-store' });
+  }
+
+  // ── Iron Condor BOT: config / start / stop / status / subscribe ──
+  // Helper: verify a wallet signature proving owner controls the wallet.
+  const verifyOwnerSig = async (owner, message, signature) => {
+    if (!owner || !message || !signature) return false;
+    try { const { verifyMessage } = await import('ethers'); return verifyMessage(message, signature).toLowerCase() === owner.toLowerCase(); }
+    catch { return false; }
+  };
+
+  if (request.method === 'GET' && url.pathname === '/deribit/bot/config') {
+    const owner = (url.searchParams.get('owner') || '').trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(owner)) return sendJson(response, 400, { error: 'valid_owner_required' });
+    return sendJson(response, 200, (await loadBotConfig(owner)) || { config: null, enabled: false }, { 'Cache-Control': 'no-store' });
+  }
+
+  if (request.method === 'POST' && url.pathname === '/deribit/bot/config') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
+    if (!owner || !(await verifyOwnerSig(owner, body?.message, body?.signature))) return sendJson(response, 401, { error: 'signature_required_or_mismatch' });
+    await saveBotConfig(owner, body?.config || {}, false);
+    return sendJson(response, 200, { ok: true, config: body?.config || {} }, { 'Cache-Control': 'no-store' });
+  }
+
+  // Stripe $35/mo subscription checkout for the bot.
+  if (request.method === 'POST' && url.pathname === '/deribit/bot/subscribe') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner.toLowerCase() : null;
+    if (!owner) return sendJson(response, 400, { error: 'valid_owner_required' });
+    const priceId = process.env.STRIPE_PRICE_DERIBIT_BOT;
+    if (!priceId) return sendJson(response, 503, { error: 'bot_plan_not_configured', hint: 'set STRIPE_PRICE_DERIBIT_BOT' });
+    const base = process.env.AXP_PUBLIC_URL || `https://${request.headers.host || 'axp.network'}`;
+    const result = await createSubscriptionCheckout({ priceId, ownerRef: owner, planSku: 'deribit_bot', successUrl: `${base}/deribit?sub=1`, cancelUrl: `${base}/deribit` });
+    return sendJson(response, result.status, result);
+  }
+
+  if (request.method === 'POST' && url.pathname === '/deribit/bot/start') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
+    if (!owner || !(await verifyOwnerSig(owner, body?.message, body?.signature))) return sendJson(response, 401, { error: 'signature_required_or_mismatch' });
+    const creds = await loadDeribitCreds(owner);
+    if (!creds) return sendJson(response, 409, { error: 'deribit_not_connected', hint: 'connect your Deribit key first' });
+    // Gate: mainnet requires an active $35 subscription. Testnet is free (for validation).
+    if (!creds.testnet) {
+      const subs = (await loadSubscriptions()).filter((s) => String(s.owner_ref || '').toLowerCase() === owner.toLowerCase() && s.plan_sku === 'deribit_bot' && ['active', 'trialing'].includes(s.status));
+      if (!subs.length) return sendJson(response, 402, { error: 'subscription_required', hint: 'subscribe ($35/mo) to run the bot on mainnet', subscribe: '/deribit/bot/subscribe' });
+    }
+    const cfgRow = await loadBotConfig(owner);
+    const state = icStartBot(owner, cfgRow?.config || {}, loadDeribitCreds, (trade) => appendBotTrade(owner, trade));
+    await saveBotConfig(owner, cfgRow?.config || {}, true);
+    return sendJson(response, 200, { ok: true, started: true, testnet: creds.testnet, status: icBotStatus(owner) }, { 'Cache-Control': 'no-store' });
+  }
+
+  if (request.method === 'POST' && url.pathname === '/deribit/bot/stop') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
+    if (!owner || !(await verifyOwnerSig(owner, body?.message, body?.signature))) return sendJson(response, 401, { error: 'signature_required_or_mismatch' });
+    icStopBot(owner);
+    const cfgRow = await loadBotConfig(owner);
+    await saveBotConfig(owner, cfgRow?.config || {}, false);
+    return sendJson(response, 200, { ok: true, stopped: true }, { 'Cache-Control': 'no-store' });
+  }
+
+  if (request.method === 'GET' && url.pathname === '/deribit/bot/status') {
+    const owner = (url.searchParams.get('owner') || '').trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(owner)) return sendJson(response, 400, { error: 'valid_owner_required' });
+    return sendJson(response, 200, { status: icBotStatus(owner), trades: await loadBotTrades(owner, 30) }, { 'Cache-Control': 'no-store' });
   }
 
   // Live Iron Condor (delta 10-15) signal from Deribit PUBLIC data — no key, no execution.
