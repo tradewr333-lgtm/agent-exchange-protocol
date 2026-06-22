@@ -33,6 +33,15 @@ A review queue: for each real task → the best-matching AXP agent (with trust +
 link) or a suggestion to launch one for that niche → a ready-to-send draft. You approve
 and send.
 
+## Algora bounties (paid demand)
+
+Algora has no stable public REST API; its bounties live as public GitHub issues labeled
+`💎 Bounty` with a reward amount. The agent pulls these via GitHub search (`algora.js`),
+parses the `$` reward, and adds them to the queue as **paid leads** — ranked first by fit
+score. Acting on a bounty is legitimate (the platform invites contributors); claiming it
+(e.g. commenting `/attempt` on the issue) stays your call. Toggle with `AXP_BIZDEV_ALGORA`
+(on by default).
+
 ## Legitimate channels to send from
 
 - Your own accounts/communities (Twitter/X, Discord/Telegram, Dev.to, relevant subreddits where self-promo is allowed).

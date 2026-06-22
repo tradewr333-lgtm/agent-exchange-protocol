@@ -193,10 +193,10 @@
       <circle cx="585" cy="184" r="92" fill="url(#core)" filter="url(#g)">
         <animate attributeName="r" values="86;96;86" dur="3s" repeatCount="indefinite"/>
       </circle>
-      <circle cx="585" cy="184" r="58" fill="#06122e" stroke="#39d9ff" stroke-width="2"/>
-      <text x="585" y="172" text-anchor="middle" class="mono" fill="#9fd9ff" font-size="11" letter-spacing="2">CONSENSUS</text>
-      <text x="585" y="196" text-anchor="middle" class="mono" id="coreVal" fill="#eaffff" font-size="20" font-weight="700">—</text>
-      <text x="585" y="214" text-anchor="middle" class="mono" id="coreHit" fill="#3dffa6" font-size="11">—</text>
+      <circle cx="585" cy="184" r="60" fill="#06122e" stroke="#39d9ff" stroke-width="2"/>
+      <text x="585" y="170" text-anchor="middle" class="mono" fill="#9fd9ff" font-size="10" letter-spacing="2">DECISION CORE</text>
+      <text x="585" y="192" text-anchor="middle" class="mono" id="coreVal" fill="#eaffff" font-size="18" font-weight="700">multi-asset</text>
+      <text x="585" y="210" text-anchor="middle" class="mono" id="coreHit" fill="#7488b8" font-size="10">— assets · — venues</text>
 
       <!-- consumer nodes -->
       <g id="consumers">
@@ -244,7 +244,10 @@ const $=(id)=>document.getElementById(id);
 const usd=(n)=>'$'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:4});
 const FEEDS=['Coinbase','Kraken','Bitstamp','Bitfinex','OKX'];
 let WALLET=null; let LASTMETRICS=null;
+let COVERED=[]; let coreIdx=0;
+const MIN_SCORED=20; // don't claim an accuracy % until the sample is meaningful
 const short=(a)=>a?a.slice(0,6)+'…'+a.slice(-4):'';
+const accLabel=(tr)=> (tr && tr.scored_count>=MIN_SCORED && tr.hit_rate!=null) ? (tr.hit_rate*100).toFixed(0)+'%' : null;
 
 // render exchange feed nodes on the reactor
 (function(){
@@ -280,11 +283,15 @@ async function tick(){
     $('s-sold').textContent=usd(m.decisions.revenue_usd)+' revenue · '+usd(m.decisions.miner_rewards_paid_usd)+' to miners';
 
     animateTo($('c-miners'),m.miners.total); animateTo($('c-venues'),venues); animateTo($('c-symbols'),syms);
-    const tr=m.track_record||{};
-    $('c-hit').textContent=tr.hit_rate!=null?(tr.hit_rate*100).toFixed(0)+'%':'—';
+    const tr=m.track_record||{}; const acc=accLabel(tr);
+    $('c-hit').textContent=acc||('cal. '+(tr.scored_count||0)+'/'+MIN_SCORED);
     $('c-err').textContent=tr.mean_abs_error_pct!=null?tr.mean_abs_error_pct.toFixed(3)+'%':'—';
     animateTo($('c-scored'),tr.scored_count||0);
-    $('coreHit').textContent=tr.hit_rate!=null?(tr.hit_rate*100).toFixed(0)+'% acc':'building…';
+    if($('tr-hit')){ $('tr-hit').textContent=acc||('cal. '+(tr.scored_count||0)); $('tr-err').textContent=tr.mean_abs_error_pct!=null?tr.mean_abs_error_pct.toFixed(3)+'%':'—'; $('tr-n').textContent=(tr.scored_count||0).toLocaleString(); }
+    if($('tr-tol')) $('tr-tol').textContent=acc?'within tolerance':'calibrating (need '+MIN_SCORED+')';
+    // core reflects the WHOLE network — multi-asset, not one coin
+    COVERED=(m.observations_window_5m.symbols||[]);
+    $('coreHit').textContent=`${syms} assets · ${venues} venues`+(acc?` · ${acc} acc`:'');
 
     // fleet
     const fl=m.miners.list||[];
@@ -297,9 +304,9 @@ async function tick(){
     document.querySelectorAll('.av').forEach(drawAvatar);
   }catch(e){ $('status').textContent='LINK LOST'; $('status').style.color='var(--red)'; }
 
-  // live signals
+  // live signals — every covered asset (grows when miners add pairs), not a fixed list
   try{
-    const pairs=['BTC/USD','ETH/USD','SOL/USD'];
+    const pairs=(COVERED.length?COVERED:['BTC/USD','ETH/USD','SOL/USD']).slice(0,8);
     const res=await Promise.all(pairs.map(p=>fetch('/decision?symbol='+encodeURIComponent(p),{cache:'no-store'}).then(r=>r.json()).catch(()=>null)));
     $('signals').innerHTML=res.filter(Boolean).map(s=>{
       const a=s.decision.action, c=Math.round((s.decision.confidence||0)*100);
@@ -307,11 +314,16 @@ async function tick(){
         <span class="pill ${a==='BUY_NOW'?'buy':'hold'}">${a}</span>
         <span class="cbar"><i style="width:${c}%"></i></span><span class="conf">${c}%</span></div>`;
     }).join('')||'<div class="sub">no fresh signals</div>';
-    const btc=res.find(s=>s&&s.asset==='BTC/USD');
-    if(btc) $('coreVal').textContent='BTC '+(btc.decision.action==='BUY_NOW'?'▲':'•');
     if(res[0]&&res[0].disclaimer) $('disc').textContent=res[0].disclaimer;
   }catch(e){}
 }
+
+// rotate the core through the covered assets so it reads as multi-asset, never "just BTC"
+setInterval(()=>{
+  if(!COVERED.length){ $('coreVal').textContent='multi-asset'; return; }
+  coreIdx=(coreIdx+1)%COVERED.length;
+  $('coreVal').textContent=(COVERED[coreIdx]||'').split('/')[0]||'multi-asset';
+},1800);
 
 // tiny deterministic pixel avatar (Polkadot-ish) from agent id
 function drawAvatar(cv){
