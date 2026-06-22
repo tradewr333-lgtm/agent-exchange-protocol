@@ -65,8 +65,13 @@
   </div>
 
   <div class="card">
-    <b>2 · Call the API</b>
-    <p class="sub" style="margin:6px 0">Use your credit key. Each call returns the full decision (venues, prices, net %, confidence) and debits $0.01.</p>
+    <b>2 · Get your credit key</b>
+    <p class="sub" style="margin:6px 0">Your key spends this wallet's balance. Reveal it anytime — you sign with your wallet to prove ownership (no gas, no cost). Keep it secret.</p>
+    <button class="btn" id="reveal" style="background:transparent;border:1px solid var(--cyan);color:var(--cyan);box-shadow:none">🔑 Reveal my credit key</button>
+    <span class="sub" id="revmsg" style="margin-left:10px"></span>
+    <div id="revkey"></div>
+    <div style="margin-top:16px"><b>3 · Call the API</b></div>
+    <p class="sub" style="margin:6px 0">Each call returns the full decision (venues, prices, net %, confidence) and debits $0.01.</p>
     <pre id="snippet">curl -X POST https://axp.network/x402/decision/call \
   -H "X-AXP-CREDIT-KEY: &lt;your key&gt;" \
   -H "content-type: application/json" \
@@ -166,6 +171,21 @@ async function payCard(amount){
   }catch(e){ $('msg').textContent='checkout error'; }
 }
 document.querySelectorAll('.cardbtn').forEach(b=>b.addEventListener('click',()=>payCard(Number(b.dataset.amt))));
+
+$('reveal').addEventListener('click',async()=>{
+  if(!WALLET){$('revmsg').textContent='connect your wallet first';return;}
+  if(typeof window.ethereum==='undefined'){$('revmsg').textContent='need a browser wallet (MetaMask) to sign';return;}
+  $('revmsg').textContent='sign the message in your wallet…';
+  try{
+    const message='AXP credit key · '+WALLET+' · '+Date.now();
+    const signature=await window.ethereum.request({method:'personal_sign',params:[message,WALLET]});
+    const r=await fetch('/credits/key',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({owner:WALLET,message,signature})}).then(x=>x.json());
+    if(r.ok){
+      $('revmsg').innerHTML='<span style="color:var(--green)">✓ key issued · balance $'+Number(r.balance_usd).toFixed(2)+'</span>';
+      $('revkey').innerHTML='<div class="keybox"><b>Your credit key:</b><br><span class="mono" id="rk">'+r.credit_key+'</span> <button class="btn sm" onclick="navigator.clipboard.writeText(document.getElementById(\'rk\').textContent)">copy</button></div>';
+    } else $('revmsg').innerHTML='<span style="color:var(--red)">'+(r.error||'failed')+'</span>';
+  }catch(e){ $('revmsg').textContent='signature cancelled'; }
+});
 init();
 </script>
 </body>

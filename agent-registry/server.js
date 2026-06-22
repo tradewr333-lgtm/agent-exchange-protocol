@@ -1163,6 +1163,22 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 200, { ok: true, owner, balance_usd: await getCreditBalance(owner), credit_key }, { 'Cache-Control': 'no-store' });
   }
 
+  // Reveal/generate a credit key for a wallet — proven by a wallet signature.
+  // Lets a buyer retrieve their key anytime (after crypto OR card purchase) securely.
+  if (request.method === 'POST' && url.pathname === '/credits/key') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
+    const message = typeof body?.message === 'string' ? body.message : null;
+    const signature = typeof body?.signature === 'string' ? body.signature : null;
+    if (!owner || !message || !signature) return sendJson(response, 400, { error: 'owner_message_signature_required' });
+    let recovered;
+    try { const { verifyMessage } = await import('ethers'); recovered = verifyMessage(message, signature); }
+    catch { return sendJson(response, 400, { error: 'signature_invalid' }); }
+    if (recovered.toLowerCase() !== owner.toLowerCase()) return sendJson(response, 401, { error: 'signature_mismatch' });
+    const credit_key = await issueCreditKey(owner);
+    return sendJson(response, 200, { ok: true, owner, balance_usd: await getCreditBalance(owner), credit_key }, { 'Cache-Control': 'no-store' });
+  }
+
   // Payment config for the buy page (treasury + BSC token addresses + packs).
   if (request.method === 'GET' && url.pathname === '/credits/config') {
     const treasury = process.env.AXP_TREASURY_ADDRESS || null;
