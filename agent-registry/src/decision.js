@@ -168,6 +168,63 @@ function dedupeContributors(quotes) {
   return [...seen.values()];
 }
 
+// --- Track record (honest, self-scoring) ---
+// Map of normalized symbol → median mid price from fresh observations.
+export function consensusBySymbol(observations = [], now = Date.now(), maxAgeMs = 5 * 60 * 1000) {
+  const bySymbol = new Map();
+  for (const o of observations) {
+    if (!o || !o.symbol) continue;
+    const ts = Number(o.ts || o.timestamp || 0);
+    if (!ts || now - ts > maxAgeMs) continue;
+    const price = Number(o.price ?? o.mid ?? ((Number(o.bid) + Number(o.ask)) / 2));
+    if (!Number.isFinite(price) || price <= 0) continue;
+    const sym = normalizeSymbol(o.symbol);
+    if (!bySymbol.has(sym)) bySymbol.set(sym, []);
+    bySymbol.get(sym).push(price);
+  }
+  const out = {};
+  for (const [sym, prices] of bySymbol) out[sym] = median(prices);
+  return out;
+}
+
+// Score predictions whose eval window has elapsed against the realized consensus.
+// Mutates copies; returns { updated, scoredNow }. A "hit" = abs error within tolerance.
+export function scorePredictions(predictions = [], consensusNow = {}, { now = Date.now(), evalWindowMs = 300_000, tolerancePct = 0.5 } = {}) {
+  let scoredNow = 0;
+  const updated = predictions.map((p) => {
+    if (p.scored || now - Number(p.ts) < evalWindowMs) return p;
+    const realized = consensusNow[p.symbol];
+    if (!Number.isFinite(realized) || !Number.isFinite(Number(p.predicted_price)) || Number(p.predicted_price) <= 0) return p;
+    const errorPct = Math.abs(realized - p.predicted_price) / p.predicted_price * 100;
+    scoredNow += 1;
+    return { ...p, scored: true, realized_price: realized, error_pct: Number(errorPct.toFixed(4)), hit: errorPct <= tolerancePct, scored_at: now };
+  });
+  return { updated, scoredNow };
+}
+
+// Aggregate accuracy over scored predictions.
+export function trackRecordStats(predictions = []) {
+  const scored = predictions.filter((p) => p.scored && Number.isFinite(Number(p.error_pct)));
+  if (!scored.length) return { scored_count: 0, mean_abs_error_pct: null, hit_rate: null, by_symbol: {} };
+  const meanErr = scored.reduce((s, p) => s + Number(p.error_pct), 0) / scored.length;
+  const hits = scored.filter((p) => p.hit).length;
+  const bySymbol = {};
+  for (const p of scored) {
+    const b = (bySymbol[p.symbol] ||= { n: 0, err: 0, hits: 0 });
+    b.n += 1; b.err += Number(p.error_pct); b.hits += p.hit ? 1 : 0;
+  }
+  const by_symbol = {};
+  for (const [sym, b] of Object.entries(bySymbol)) {
+    by_symbol[sym] = { scored: b.n, mean_abs_error_pct: Number((b.err / b.n).toFixed(4)), hit_rate: Number((b.hits / b.n).toFixed(4)) };
+  }
+  return {
+    scored_count: scored.length,
+    mean_abs_error_pct: Number(meanErr.toFixed(4)),
+    hit_rate: Number((hits / scored.length).toFixed(4)),
+    by_symbol,
+  };
+}
+
 // Public "teaser" — action + confidence only, no executable prices. Free preview.
 export function teaser(decision) {
   return {

@@ -72,6 +72,13 @@
     <div class="card"><div class="k">Rewards to miners</div><div class="v" id="rewards">—</div></div>
   </div>
 
+  <div class="grid" style="margin-top:14px">
+    <div class="card"><div class="k">Track record · hit-rate</div><div class="v" id="tr-hit">—</div><div class="muted" style="font-size:12px" id="tr-tol">within tolerance</div></div>
+    <div class="card"><div class="k">Mean abs error</div><div class="v" id="tr-err">—</div><div class="muted" style="font-size:12px">consensus vs realized</div></div>
+    <div class="card"><div class="k">Predictions scored</div><div class="v" id="tr-n">—</div><div class="muted" style="font-size:12px">self-scored, growing</div></div>
+    <div class="card"><div class="k">Revenue (decisions)</div><div class="v" id="rev2">—</div><div class="muted" style="font-size:12px">paid x402 calls</div></div>
+  </div>
+
   <div class="row">
     <div class="card">
       <div class="k">Live signal — BTC/USD <span class="muted">(free teaser)</span></div>
@@ -127,6 +134,11 @@ async function refresh(){
     $('served').textContent = m.decisions.served_count.toLocaleString();
     $('rewards').textContent = usd(m.decisions.miner_rewards_paid_usd);
     $('revenue').textContent = usd(m.decisions.revenue_usd);
+    const tr = m.track_record || {};
+    $('tr-hit').textContent = tr.hit_rate != null ? (tr.hit_rate*100).toFixed(0)+'%' : '—';
+    $('tr-err').textContent = tr.mean_abs_error_pct != null ? tr.mean_abs_error_pct.toFixed(3)+'%' : '—';
+    $('tr-n').textContent = (tr.scored_count||0).toLocaleString();
+    if ($('rev2')) $('rev2').textContent = usd(m.decisions.revenue_usd);
     $('symbols').textContent = m.observations_window_5m.symbols.length ? m.observations_window_5m.symbols.join(', ') : '—';
     $('sources').textContent = m.observations_window_5m.sources.length ? m.observations_window_5m.sources.join(', ') : '—';
     const rows = m.miners.list;

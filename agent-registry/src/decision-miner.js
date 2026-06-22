@@ -1,40 +1,69 @@
-// In-process auto-miner — makes the Decision API self-sustaining.
+// In-process auto-miner — makes the Decision API self-sustaining + builds a track record.
 //
-// The whole "miners feed data" loop has a cold-start problem: with zero observations,
-// /decision can't sell anything. This runs ENTIRELY server-side on a timer (like the
-// swarm heartbeat) and feeds REAL multi-venue prices from CoinGecko into the store,
-// attributed to a system miner agent. So the Decision API always has fresh data 24/7
-// without anyone running a script.
+// Pulls REAL top-of-book bid/ask from multiple public exchange APIs (no key, no rate-limit
+// pain) and feeds them into the store as observations, attributed to a system miner agent.
+// Then it self-scores: each cycle it records the consensus price it computed and, a window
+// later, compares it to the realized consensus — producing an honest, continuously growing
+// accuracy record WITHOUT needing any external buyer.
 //
-// Enable with AXP_DECISION_MINE_ENABLED=true. Coins via AXP_DECISION_COINS (CoinGecko
-// ids). Rewards for the system miner accrue to AXP_DECISION_PAYTO / AXP_TREASURY_ADDRESS.
+// Enable with AXP_DECISION_MINE_ENABLED=true. Bases via AXP_DECISION_BASES (e.g. BTC,ETH,SOL).
+// Rewards/identity owner via AXP_DECISION_PAYTO / AXP_TREASURY_ADDRESS.
 //
-// HONEST: CoinGecko's converted_last.usd is a reference price, not an executable fill.
-// The data is real and multi-venue, but the resulting "spread" is a monitoring signal,
-// not a guaranteed-profit arbitrage instruction.
-import { appendObservations, loadAgentsRegistry, saveAgentsRegistry } from './store.js';
+// HONEST: top-of-book bid/ask is close to executable but still ignores size/liquidity,
+// withdrawal time and venue fees. This is a consensus + monitoring signal, not a guarantee.
+import { appendObservations, loadAgentsRegistry, saveAgentsRegistry, loadPredictions, savePredictions, loadRecentObservations } from './store.js';
+import { normalizeSymbol, computeDecision, consensusBySymbol, scorePredictions } from './decision.js';
 
-const SYMBOL = { bitcoin: 'BTC', ethereum: 'ETH', solana: 'SOL', binancecoin: 'BNB', ripple: 'XRP', cardano: 'ADA', dogecoin: 'DOGE', chainlink: 'LINK', avalanche: 'AVAX' };
 export const SYSTEM_MINER_ID = 'system_decision_miner';
 
 export function decisionMineEnabled(env = process.env) {
   return env.AXP_DECISION_MINE_ENABLED === 'true';
 }
-
 function minerOwner(env = process.env) {
   return env.AXP_DECISION_PAYTO || env.AXP_TREASURY_ADDRESS || null;
 }
 
-// Ensure a system miner agent exists so observations + rewards have an identity.
-// origin 'system_miner' keeps it OUT of the x402 payable-agent discovery, but it still
-// shows on /loop (which filters by `miner`) and can be credited in the reward split.
+// Kraken uses XBT for BTC and odd result keys; take the first result entry.
+function krakenPair(base) { return `${base === 'BTC' ? 'XBT' : base}USD`; }
+
+// Public, key-free, globally-accessible exchange tickers. Each returns {bid, ask}.
+const EXCHANGES = [
+  { name: 'Coinbase', url: (b) => `https://api.exchange.coinbase.com/products/${b}-USD/ticker`, parse: (j) => ({ bid: +j.bid, ask: +j.ask }) },
+  { name: 'Kraken', url: (b) => `https://api.kraken.com/0/public/Ticker?pair=${krakenPair(b)}`, parse: (j) => { const r = j.result?.[Object.keys(j.result)[0]]; return { bid: +r.b[0], ask: +r.a[0] }; } },
+  { name: 'Bitstamp', url: (b) => `https://www.bitstamp.net/api/v2/ticker/${b.toLowerCase()}usd/`, parse: (j) => ({ bid: +j.bid, ask: +j.ask }) },
+  { name: 'Bitfinex', url: (b) => `https://api-pub.bitfinex.com/v2/ticker/t${b}USD`, parse: (a) => ({ bid: +a[0], ask: +a[2] }) },
+  { name: 'OKX', url: (b) => `https://www.okx.com/api/v5/market/ticker?instId=${b}-USDT`, parse: (j) => ({ bid: +j.data[0].bidPx, ask: +j.data[0].askPx }) },
+];
+
+async function fetchJson(url, ms = 8000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'axp-decision-miner/1.0' }, signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally { clearTimeout(t); }
+}
+
+// Fetch one base across every exchange; tolerate per-venue failures.
+export async function fetchBaseObservations(base, { now = Date.now(), env = process.env } = {}) {
+  const owner = minerOwner(env);
+  const results = await Promise.allSettled(EXCHANGES.map(async (ex) => {
+    const j = await fetchJson(ex.url(base));
+    const { bid, ask } = ex.parse(j);
+    if (!Number.isFinite(bid) || !Number.isFinite(ask) || bid <= 0 || ask <= 0) throw new Error('bad quote');
+    return { symbol: `${base}/USD`, source: ex.name, bid, ask, price: (bid + ask) / 2, ts: now, agent_id: SYSTEM_MINER_ID, owner };
+  }));
+  return results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+}
+
 export async function ensureMinerAgent(env = process.env) {
   let registry;
   try { registry = await loadAgentsRegistry(); }
   catch { registry = { schema: 'axp.agents.v0', agents: [] }; }
   if (!Array.isArray(registry.agents)) registry.agents = [];
-  const existing = registry.agents.find((a) => a.agent_id === SYSTEM_MINER_ID);
   const owner = minerOwner(env);
+  const existing = registry.agents.find((a) => a.agent_id === SYSTEM_MINER_ID);
   if (existing) {
     if (owner && existing.owner !== owner) {
       const agents = registry.agents.map((a) => (a.agent_id === SYSTEM_MINER_ID ? { ...a, owner } : a));
@@ -43,71 +72,52 @@ export async function ensureMinerAgent(env = process.env) {
     return existing;
   }
   const agent = {
-    agent_id: SYSTEM_MINER_ID,
-    name: 'AXP Auto-Miner',
-    role: 'provider',
-    status: 'active',
-    services: ['price_feed'],
-    skills: ['price_tracker'],
-    reputation: 0,
-    owner,
-    origin: 'system_miner',
-    miner: true,
-    miner_config: { auto: true, registered_at: new Date().toISOString() },
-    real_earnings_usd: 0,
-    created_at: new Date().toISOString(),
+    agent_id: SYSTEM_MINER_ID, name: 'AXP Auto-Miner', role: 'provider', status: 'active',
+    services: ['price_feed'], skills: ['price_tracker'], reputation: 0, owner,
+    origin: 'system_miner', miner: true, miner_config: { auto: true, registered_at: new Date().toISOString() },
+    real_earnings_usd: 0, created_at: new Date().toISOString(),
   };
   await saveAgentsRegistry({ ...registry, agents: [...registry.agents, agent] });
   return agent;
 }
 
-// Fetch per-exchange tickers for one coin → observation rows (USD-quoted only).
-export async function fetchCoinObservations(coinId, { maxVenues = 8, now = Date.now() } = {}) {
-  const url = `https://api.coingecko.com/api/v3/coins/${coinId}/tickers?depth=false`;
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!res.ok) throw new Error(`coingecko ${coinId} HTTP ${res.status}`);
-  const json = await res.json();
-  const base = SYMBOL[coinId] || String(json?.tickers?.[0]?.base || coinId).toUpperCase();
-  const seen = new Set();
-  const obs = [];
-  for (const t of (json.tickers || [])) {
-    const target = String(t.target || '').toUpperCase();
-    if (!['USD', 'USDT', 'USDC'].includes(target)) continue;
-    const price = Number(t.converted_last?.usd ?? t.last);
-    if (!Number.isFinite(price) || price <= 0) continue;
-    const venue = String(t.market?.name || 'unknown');
-    if (seen.has(venue)) continue;
-    seen.add(venue);
-    const spread = Number(t.bid_ask_spread_percentage) > 0 ? Number(t.bid_ask_spread_percentage) / 100 : 0.0005;
-    obs.push({
-      symbol: `${base}/USD`,
-      source: venue,
-      price,
-      bid: Number((price * (1 - spread / 2)).toFixed(8)),
-      ask: Number((price * (1 + spread / 2)).toFixed(8)),
-      ts: now,
-      agent_id: SYSTEM_MINER_ID,
-      owner: minerOwner(),
-    });
-    if (obs.length >= maxVenues) break;
+// Self-scoring track record: score old predictions vs the realized consensus, then
+// snapshot the current consensus as new predictions to be scored next time.
+const EVAL_WINDOW_MS = () => Math.max(60_000, Number(process.env.AXP_DECISION_EVAL_WINDOW_MS) || 300_000);
+const TOLERANCE_PCT = () => Number(process.env.AXP_DECISION_TOLERANCE_PCT) || 0.5;
+
+export async function scoreAndSnapshot({ now = Date.now() } = {}) {
+  const obs = await loadRecentObservations({ maxAgeMs: 5 * 60 * 1000, now });
+  const consensus = consensusBySymbol(obs, now);
+  let preds = await loadPredictions();
+  const { updated, scoredNow } = scorePredictions(preds, consensus, { now, evalWindowMs: EVAL_WINDOW_MS(), tolerancePct: TOLERANCE_PCT() });
+  preds = updated;
+  for (const [symbol, price] of Object.entries(consensus)) {
+    const d = computeDecision({ symbol, observations: obs, now });
+    preds.push({ symbol, predicted_price: price, action: d.decision.action, confidence: d.decision.confidence, sources: d.context.sources_count, ts: now, scored: false });
   }
-  return obs;
+  await savePredictions(preds.slice(-5000));
+  return { scoredNow, snapshotted: Object.keys(consensus).length };
 }
 
 export async function runDecisionMineOnce(env = process.env) {
-  const coins = (env.AXP_DECISION_COINS || 'bitcoin,ethereum,solana').split(',').map((s) => s.trim()).filter(Boolean);
+  const bases = (env.AXP_DECISION_BASES || env.AXP_DECISION_COINS || 'BTC,ETH,SOL')
+    .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+    // accept CoinGecko-style ids too (bitcoin→BTC) for back-compat
+    .map((s) => ({ BITCOIN: 'BTC', ETHEREUM: 'ETH', SOLANA: 'SOL' }[s] || s));
   await ensureMinerAgent(env);
   const now = Date.now();
   let all = [];
-  for (const coin of coins) {
-    try { all = all.concat(await fetchCoinObservations(coin, { now })); }
-    catch (err) { console.warn('decision_mine_fetch', coin, err?.message || err); }
+  for (const base of bases) {
+    try { all = all.concat(await fetchBaseObservations(base, { now, env })); }
+    catch (err) { console.warn('decision_mine_fetch', base, err?.message || err); }
   }
-  if (!all.length) return { ok: false, accepted: 0 };
+  if (!all.length) { console.warn('[auto-miner] no venues reachable this cycle'); return { ok: false, accepted: 0 }; }
   const accepted = await appendObservations(all);
-  const symbols = [...new Set(all.map((o) => o.symbol))];
-  console.log(`[auto-miner] ${accepted} obs across ${symbols.join(', ')} (${[...new Set(all.map((o) => o.source))].length} venues)`);
-  return { ok: true, accepted, symbols };
+  const venues = [...new Set(all.map((o) => o.source))];
+  const score = await scoreAndSnapshot({ now });
+  console.log(`[auto-miner] ${accepted} obs · ${venues.length} venues (${venues.join(',')}) · scored ${score.scoredNow}`);
+  return { ok: true, accepted, venues, ...score };
 }
 
 let timer = null;

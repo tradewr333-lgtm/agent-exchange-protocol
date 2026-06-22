@@ -25,9 +25,9 @@ import {
   listApiUsage, listTrustEvents, appendExternalSignals, loadExternalSignals,
   appendTrustEvent, saveSubscription, appendLaunchPayment, launchPaymentExists, updateAgentFields,
   appendHire, loadHires, hireExists, appendInboxMessage, loadAgentsRegistry, loadSubscriptions,
-  appendObservations, loadRecentObservations,
+  appendObservations, loadRecentObservations, loadPredictions,
 } from './src/store.js';
-import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, DECISION_VERSION } from './src/decision.js';
+import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, DECISION_VERSION } from './src/decision.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { startDecisionMiner, runDecisionMineOnce, decisionMineEnabled } from './src/decision-miner.js';
@@ -1193,6 +1193,7 @@ const server = http.createServer(async (request, response) => {
     const rewards = events.filter((e) => e.event_type === 'decision_reward');
     const rewardsPaidUsd = Number(rewards.reduce((s, e) => s + Number(e.value_usd || 0), 0).toFixed(4));
     const revenueUsd = Number(served.reduce((s, e) => s + Number(e.value_usd || 0), 0).toFixed(4));
+    const track = trackRecordStats(await loadPredictions());
     return sendJson(response, 200, {
       protocol: 'AXP', schema: 'axp.decision_loop.v0', decisionVersion: DECISION_VERSION,
       generated_at: new Date().toISOString(),
@@ -1200,7 +1201,8 @@ const server = http.createServer(async (request, response) => {
       miners: { total: miners.length, list: miners.map((m) => ({ agent_id: m.agent_id, name: m.name, last_mine: m.last_mine || null, real_earnings_usd: Number(m.real_earnings_usd || 0) })) },
       observations_window_5m: { count: obs.length, symbols, sources },
       decisions: { served_count: served.length, revenue_usd: revenueUsd, miner_rewards_paid_usd: rewardsPaidUsd },
-      note: 'All numbers are real and start at zero until miners feed data and buyers pay. Not investment advice.',
+      track_record: track,
+      note: 'All numbers are real and start at zero until miners feed data. Track record is self-scored (consensus vs realized). Not investment advice.',
     }, { 'Cache-Control': 'no-store' });
   }
 

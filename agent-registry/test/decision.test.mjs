@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { computeDecision, teaser, normalizeSymbol, decisionPriceUsd, minerRewardShare } from '../src/decision.js';
+import { computeDecision, teaser, normalizeSymbol, decisionPriceUsd, minerRewardShare, consensusBySymbol, scorePredictions, trackRecordStats } from '../src/decision.js';
 
 let passed = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); passed += 1; };
@@ -85,5 +85,35 @@ const t = teaser(arb);
 ok(t.decision.action === 'BUY_NOW' && t.opportunity === undefined, 'teaser omits opportunity');
 ok(typeof t.decision.confidence === 'number', 'teaser keeps confidence');
 ok(t.paid_endpoint === 'POST /x402/decision/call', 'teaser points to paid endpoint');
+
+// --- track record: consensus, scoring, stats ---
+const cons = consensusBySymbol([
+  fresh({ symbol: 'BTC/USDT', price: 65000 }),
+  fresh({ symbol: 'BTC/USD', price: 65100 }),
+  fresh({ symbol: 'ETH/USD', price: 3200 }),
+], now);
+ok(cons['BTC/USD'] === 65050 && cons['ETH/USD'] === 3200, 'consensusBySymbol medians per normalized symbol');
+
+const preds = [
+  { symbol: 'BTC/USD', predicted_price: 65000, ts: now - 400_000, scored: false }, // window elapsed
+  { symbol: 'BTC/USD', predicted_price: 65000, ts: now - 10_000, scored: false },  // too fresh
+];
+const { updated, scoredNow } = scorePredictions(preds, { 'BTC/USD': 65200 }, { now, evalWindowMs: 300_000, tolerancePct: 0.5 });
+ok(scoredNow === 1, 'only the elapsed prediction is scored');
+ok(updated[0].scored && updated[0].error_pct > 0.3 && updated[0].error_pct < 0.31, 'error_pct ≈ 0.307%');
+ok(updated[0].hit === true, '0.31% within 0.5% tolerance → hit');
+ok(updated[1].scored !== true, 'fresh prediction left unscored');
+
+const stats = trackRecordStats([
+  { symbol: 'BTC/USD', scored: true, error_pct: 0.2, hit: true },
+  { symbol: 'BTC/USD', scored: true, error_pct: 0.8, hit: false },
+  { symbol: 'ETH/USD', scored: true, error_pct: 0.1, hit: true },
+  { symbol: 'X', scored: false },
+]);
+ok(stats.scored_count === 3, 'stats count only scored');
+ok(Math.abs(stats.hit_rate - 0.6667) < 0.01, 'hit_rate 2/3');
+ok(Math.abs(stats.mean_abs_error_pct - 0.3667) < 0.01, 'mean abs error averaged');
+ok(stats.by_symbol['BTC/USD'].scored === 2, 'per-symbol breakdown');
+ok(trackRecordStats([]).scored_count === 0, 'empty track record → zero, no crash');
 
 console.log(`decision.test.mjs: ${passed} checks passed`);

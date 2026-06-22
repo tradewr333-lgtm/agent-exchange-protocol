@@ -22,6 +22,7 @@ export const paths = {
   launchPayments: join(dataDir, 'launch-payments.json'),
   hires: join(dataDir, 'hires.json'),
   observations: join(dataDir, 'observations.json'),
+  predictions: join(dataDir, 'predictions.json'),
 };
 
 let poolPromise = null;
@@ -984,6 +985,15 @@ export async function appendObservations(records = []) {
 export async function loadRecentObservations({ maxAgeMs = 5 * 60 * 1000, now = Date.now() } = {}) {
   const list = readCollection(paths.observations, 'observations');
   return list.filter((o) => o && Number(o.ts) > 0 && now - Number(o.ts) <= maxAgeMs);
+}
+
+// Decision track-record predictions (self-scored). Rolling JSON window in both modes.
+export async function loadPredictions() {
+  return readCollection(paths.predictions, 'predictions');
+}
+export async function savePredictions(list = []) {
+  writeCollection(paths.predictions, 'predictions', list.slice(-5000));
+  return list.length;
 }
 
 // Patch a single agent's record (e.g. hosting status) in the registry.
