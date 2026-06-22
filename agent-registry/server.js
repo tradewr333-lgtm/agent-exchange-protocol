@@ -794,7 +794,7 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 200, {
       protocol: 'AXP', schema: 'axp.store_agents.v0', count: cards.length,
       agents: cards.sort((x, y) => y.revenue_usd - x.revenue_usd),
-    });
+    }, { 'Cache-Control': 'no-store' });
   }
 
   const agentCardMatch = url.pathname.match(/^\/agents\/([^/]+)\/card$/);
@@ -802,7 +802,16 @@ const server = http.createServer(async (request, response) => {
     const [agent, ranking] = await Promise.all([getAgent(agentCardMatch[1]), getTrustRanking({ limit: 500 })]);
     if (!agent) return sendJson(response, 404, { error: 'agent_not_found', agent_id: agentCardMatch[1] });
     const score = (ranking.agents.find((a) => a.agent_id === agentCardMatch[1]) || {});
-    return sendJson(response, 200, toAgentCard(agent, score.trust_score ?? score.score ?? score.proof_of_trust_score ?? 0));
+    const card = toAgentCard(agent, score.trust_score ?? score.score ?? score.proof_of_trust_score ?? 0);
+    // Real earnings = sum of the append-only hires/x402 ledger (immune to the registry
+    // read-modify-write race; the source of truth for money the agent actually received).
+    try {
+      const hires = await loadHires({ agentId: agentCardMatch[1] });
+      const earned = (hires || []).reduce((s, h) => s + (Number(h.owner_usd) || Number(h.amount) || 0), 0);
+      card.real_earnings_usd = Number(earned.toFixed(2));
+      card.paid_calls = (hires || []).length;
+    } catch { /* keep stored value */ }
+    return sendJson(response, 200, card, { 'Cache-Control': 'no-store' });
   }
 
   // Hire-this-agent: REAL paid jobs. Customer pays on-chain, agent works (Claude),
