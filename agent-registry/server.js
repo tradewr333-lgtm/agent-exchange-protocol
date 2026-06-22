@@ -102,7 +102,7 @@ const server = http.createServer(async (request, response) => {
     const body = await readJsonBody(request);
     const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
     const { message, signature, api_key, secret } = body || {};
-    const testnet = body?.testnet !== false;
+    const testnet = body?.testnet === true; // default MAINNET (real account) — testnet only if explicitly requested
     if (!owner || !message || !signature) return sendJson(response, 400, { error: 'owner_message_signature_required' });
     if (!api_key || !secret) return sendJson(response, 400, { error: 'api_key_and_secret_required' });
     let recovered;

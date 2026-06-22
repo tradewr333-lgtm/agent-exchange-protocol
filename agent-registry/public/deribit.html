@@ -71,7 +71,7 @@
 
   <!-- ── RUN THE BOT (your Deribit account) ── -->
   <h1 style="margin-top:26px">⚙ Run this strategy on your account</h1>
-  <p class="sub">Connect a <b>trade-only</b> Deribit key (no withdrawal). Start on <b>testnet</b> (free) to validate; mainnet needs the $35/mo subscription. You sign with your wallet to bind the key to you — keys are encrypted, we never withdraw.</p>
+  <p class="sub">Connect a <b>trade-only</b> Deribit key (no withdrawal) from your <b>real</b> Deribit account. You sign with your wallet to bind the key to you — keys are encrypted, we never withdraw. Subscription $35/mo.</p>
 
   <div class="card">
     <div class="row"><b>1 · Connect Deribit</b> <button class="btn sm" id="wconnect">Connect wallet</button></div>
@@ -79,7 +79,7 @@
     <div id="dform" style="display:none;margin-top:10px">
       <input type="text" id="d-key" placeholder="Deribit API key (client id)"/>
       <input type="password" id="d-secret" placeholder="Deribit API secret"/>
-      <label class="sub"><input type="checkbox" id="d-testnet" checked/> Testnet (test.deribit.com — recommended first)</label>
+      <div class="sub">Live account · <b>www.deribit.com</b> (real funds)</div>
       <a class="btn" id="d-connect" style="display:block;margin-top:8px">🔒 Connect &amp; test</a>
       <span class="sub" id="d-msg"></span>
       <div class="sub" style="margin-top:8px">Create the key on Deribit → API: scope <code>account:read trade:read_write</code>, <b>no withdrawal</b>. Optionally IP-whitelist.</div>
@@ -108,7 +108,7 @@
       <div class="kpi"><div class="k">Expiry</div><div class="v" id="b-exp" style="font-size:14px">—</div></div>
     </div>
     <div class="row" style="gap:10px;margin-top:12px">
-      <a class="btn" id="b-start">▶ START (testnet)</a>
+      <a class="btn" id="b-start">▶ START</a>
       <a class="btn" id="b-stop" style="background:transparent;border:1px solid var(--red);color:var(--red);box-shadow:none">■ STOP</a>
       <a class="btn sm" id="b-sub" style="background:transparent;border:1px solid var(--gold);color:var(--gold);box-shadow:none">Subscribe $35/mo (mainnet)</a>
     </div>
@@ -202,7 +202,7 @@ async function refreshDeribit(){
 }
 $('d-connect').addEventListener('click',async()=>{
   if(!WALLET){$('d-msg').textContent='connect wallet first';return;}
-  const api_key=$('d-key').value.trim(), secret=$('d-secret').value.trim(), testnet=$('d-testnet').checked;
+  const api_key=$('d-key').value.trim(), secret=$('d-secret').value.trim(), testnet=false;
   if(!api_key||!secret){$('d-msg').textContent='enter key + secret';return;}
   $('d-msg').textContent='sign in your wallet to bind the key…';
   try{
