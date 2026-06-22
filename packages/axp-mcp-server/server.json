@@ -10,7 +10,7 @@
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "@axp-mcp-server/server",
+      "identifier": "axp-mcp-server",
       "version": "0.1.0",
       "transport": { "type": "stdio" },
       "environmentVariables": [

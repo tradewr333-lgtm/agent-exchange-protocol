@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { AxpClient } from '../../axp-sdk-typescript/src/index.js';
+import { AxpClient } from './axp-sdk.js';
 
 const registryBaseUrl = (process.env.AXP_REGISTRY_URL ?? 'https://registry.axp.network').replace(/\/$/, '');
 const decisionBaseUrl = (process.env.AXP_DECISION_URL ?? 'https://axp.network').replace(/\/$/, '');
