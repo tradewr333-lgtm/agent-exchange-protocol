@@ -1157,6 +1157,23 @@ export async function deribitConnected(owner) {
   return existsSync(paths.deribitCreds) && Boolean((readJsonFile(paths.deribitCreds).creds || {})[o]);
 }
 
+// Permanently delete a user's stored Deribit key (encrypted blob) + bot config.
+export async function deleteDeribitCreds(owner) {
+  const o = creditOwner(owner);
+  if (storageMode() === 'postgres') {
+    await query('delete from deribit_creds where owner=$1', [o]);
+    await query('delete from deribit_bots where owner=$1', [o]);
+    return { ok: true };
+  }
+  if (existsSync(paths.deribitCreds)) {
+    const data = readJsonFile(paths.deribitCreds);
+    if (data.creds) delete data.creds[o];
+    if (data.bots) delete data.bots[o];
+    writeJsonAtomic(paths.deribitCreds, data);
+  }
+  return { ok: true };
+}
+
 // --- Deribit Iron Condor bot: config (persisted) + trade log (rolling JSON) ---
 export async function saveBotConfig(owner, config, enabled) {
   const o = creditOwner(owner);

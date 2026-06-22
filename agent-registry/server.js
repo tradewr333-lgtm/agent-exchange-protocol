@@ -27,7 +27,7 @@ import {
   appendHire, loadHires, hireExists, appendInboxMessage, loadAgentsRegistry, loadSubscriptions,
   appendObservations, loadRecentObservations, loadPredictions, addAgent,
   getCreditBalance, creditTxUsed, addCredit, spendCredit, issueCreditKey, resolveCreditKey,
-  loadDerivatives, keyVaultEnabled, saveDeribitCreds, loadDeribitCreds, deribitConnected,
+  loadDerivatives, keyVaultEnabled, saveDeribitCreds, loadDeribitCreds, deribitConnected, deleteDeribitCreds,
   saveBotConfig, loadBotConfig, appendBotTrade, loadBotTrades,
 } from './src/store.js';
 import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, buildCoverage, DECISION_VERSION } from './src/decision.js';
@@ -114,6 +114,16 @@ const server = http.createServer(async (request, response) => {
     if (!test.ok) return sendJson(response, 400, { error: 'deribit_connection_failed', detail: test.error || test.detail });
     await saveDeribitCreds(owner, { apiKey: api_key, secret, testnet, label: body?.label || null });
     return sendJson(response, 200, { ok: true, connected: true, testnet, balance: test.balance, equity: test.equity, available_funds: test.available_funds, currency: 'BTC' }, { 'Cache-Control': 'no-store' });
+  }
+
+  // Remove a stored Deribit key (and stop the bot). Wallet signature required.
+  if (request.method === 'POST' && url.pathname === '/deribit/disconnect') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
+    if (!owner || !(await verifyOwnerSig(owner, body?.message, body?.signature))) return sendJson(response, 401, { error: 'signature_required_or_mismatch' });
+    icStopBot(owner);
+    await deleteDeribitCreds(owner);
+    return sendJson(response, 200, { ok: true, disconnected: true }, { 'Cache-Control': 'no-store' });
   }
 
   // Connection status + live balance (re-tests the stored key).

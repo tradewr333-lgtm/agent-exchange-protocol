@@ -75,7 +75,7 @@
 
   <div class="card">
     <div class="row"><b>1 · Connect Deribit</b> <button class="btn sm" id="wconnect">Connect wallet</button></div>
-    <div id="dstatus" class="sub" style="margin-top:8px">connect your wallet first</div>
+    <div class="row" style="margin-top:8px"><div id="dstatus" class="sub">connect your wallet first</div><a class="btn sm" id="d-disconnect" style="display:none;background:transparent;border:1px solid var(--red);color:var(--red);box-shadow:none">Remove key</a></div>
     <div id="dform" style="display:none;margin-top:10px">
       <input type="text" id="d-key" placeholder="Deribit API key (client id)"/>
       <input type="password" id="d-secret" placeholder="Deribit API secret"/>
@@ -196,8 +196,8 @@ $('wconnect').addEventListener('click',async()=>{
 async function refreshDeribit(){
   if(!WALLET)return;
   try{const s=await fetch('/deribit/status?owner='+WALLET,{cache:'no-store'}).then(r=>r.json());
-    if(s.connected){$('dstatus').innerHTML='<span class="ok">✓ connected'+(s.testnet?' (testnet)':' (MAINNET)')+' · balance '+(s.balance??'?')+' BTC</span>';}
-    else $('dstatus').textContent='not connected — paste your Deribit key below';
+    if(s.connected){$('dstatus').innerHTML='<span class="ok">✓ connected'+(s.testnet?' (testnet)':' (MAINNET)')+' · balance '+(s.balance??'?')+' BTC</span>';$('d-disconnect').style.display='';$('dform').style.display='none';}
+    else {$('dstatus').textContent='not connected — paste your Deribit key below';$('d-disconnect').style.display='none';$('dform').style.display='';}
   }catch(e){}
 }
 $('d-connect').addEventListener('click',async()=>{
@@ -212,6 +212,15 @@ $('d-connect').addEventListener('click',async()=>{
   }catch(e){$('d-msg').textContent='error';}
 });
 
+$('d-disconnect').addEventListener('click',async()=>{
+  if(!WALLET)return;
+  if(!confirm('Remove your stored Deribit key and stop the bot?'))return;
+  $('d-msg').textContent='sign to remove…';
+  try{const r=await fetch('/deribit/disconnect',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody()}).then(x=>x.json());
+    if(r.ok){$('d-msg').innerHTML='<span class="ok">✓ key removed</span>';refreshDeribit();pollBot();}
+    else $('d-msg').innerHTML='<span class="err">'+(r.error||'failed')+'</span>';
+  }catch(e){$('d-msg').textContent='error';}
+});
 async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;}catch(e){} }
 $('c-save').addEventListener('click',async()=>{
   if(!WALLET){$('c-msg').textContent='connect wallet';return;}
