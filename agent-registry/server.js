@@ -168,9 +168,16 @@ const server = http.createServer(async (request, response) => {
     const creds = await loadDeribitCreds(owner);
     if (!creds) return sendJson(response, 409, { error: 'deribit_not_connected', hint: 'connect your Deribit key first' });
     // Gate: mainnet requires an active $35 subscription. Testnet is free (for validation).
+    // Owner bypass: the platform owner (treasury wallet, or AXP_BOT_OWNER_BYPASS list)
+    // runs the bot on their OWN account without paying themselves the $35.
     if (!creds.testnet) {
-      const subs = (await loadSubscriptions()).filter((s) => String(s.owner_ref || '').toLowerCase() === owner.toLowerCase() && s.plan_sku === 'deribit_bot' && ['active', 'trialing'].includes(s.status));
-      if (!subs.length) return sendJson(response, 402, { error: 'subscription_required', hint: 'subscribe ($35/mo) to run the bot on mainnet', subscribe: '/deribit/bot/subscribe' });
+      const bypass = [process.env.AXP_TREASURY_ADDRESS, ...(process.env.AXP_BOT_OWNER_BYPASS || '').split(',')]
+        .map((a) => String(a || '').trim().toLowerCase()).filter(Boolean);
+      const isOwner = bypass.includes(owner.toLowerCase());
+      if (!isOwner) {
+        const subs = (await loadSubscriptions()).filter((s) => String(s.owner_ref || '').toLowerCase() === owner.toLowerCase() && s.plan_sku === 'deribit_bot' && ['active', 'trialing'].includes(s.status));
+        if (!subs.length) return sendJson(response, 402, { error: 'subscription_required', hint: 'subscribe ($35/mo) to run the bot on mainnet', subscribe: '/deribit/bot/subscribe' });
+      }
     }
     const cfgRow = await loadBotConfig(owner);
     const state = icStartBot(owner, cfgRow?.config || {}, loadDeribitCreds, (trade) => appendBotTrade(owner, trade));
