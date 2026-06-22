@@ -298,5 +298,22 @@ create table if not exists deribit_bots (
   owner text primary key,
   config jsonb not null default '{}'::jsonb,
   enabled boolean not null default false,
+  open_state jsonb,
   updated_at timestamptz not null default now()
 );
+alter table deribit_bots add column if not exists open_state jsonb;
+
+-- Bot trade log (persisted across deploys) — powers the cumulative P&L chart.
+create table if not exists bot_trades (
+  id bigserial primary key,
+  owner text not null,
+  type text,
+  price numeric,
+  size numeric,
+  pnl_usd numeric,
+  credit_usd numeric,
+  reason text,
+  data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists bot_trades_owner_idx on bot_trades(owner, id desc);

@@ -28,7 +28,7 @@ import {
   appendObservations, loadRecentObservations, loadPredictions, addAgent,
   getCreditBalance, creditTxUsed, addCredit, spendCredit, issueCreditKey, resolveCreditKey,
   loadDerivatives, keyVaultEnabled, saveDeribitCreds, loadDeribitCreds, deribitConnected, deleteDeribitCreds,
-  saveBotConfig, loadBotConfig, appendBotTrade, loadBotTrades,
+  saveBotConfig, loadBotConfig, appendBotTrade, loadBotTrades, loadEnabledBots, saveBotState, loadBotState,
 } from './src/store.js';
 import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, buildCoverage, DECISION_VERSION } from './src/decision.js';
 import { ironCondorSignal, testConnection } from './src/deribit.js';
@@ -190,7 +190,9 @@ const server = http.createServer(async (request, response) => {
       }
     }
     const cfgRow = await loadBotConfig(owner);
-    const state = icStartBot(owner, cfgRow?.config || {}, loadDeribitCreds, (trade) => appendBotTrade(owner, trade));
+    const restoreState = await loadBotState(owner);
+    icStartBot(owner, cfgRow?.config || {}, loadDeribitCreds, (trade) => appendBotTrade(owner, trade),
+      { saveState: (snap) => saveBotState(owner, snap), restoreState, testnet: creds.testnet });
     await saveBotConfig(owner, cfgRow?.config || {}, true);
     return sendJson(response, 200, { ok: true, started: true, testnet: creds.testnet, status: icBotStatus(owner) }, { 'Cache-Control': 'no-store' });
   }
@@ -1801,7 +1803,25 @@ server.listen(port, () => {
   console.log(`AXP agent registry running at http://localhost:${port}`);
   startSwarmScheduler();
   startDecisionMiner();
+  resumeDeribitBots();
 });
+
+// On startup, resume every enabled Deribit bot and restore any open condor so a
+// deploy/restart continues managing the position (never closes a winning trade).
+async function resumeDeribitBots() {
+  try {
+    const bots = await loadEnabledBots();
+    let n = 0;
+    for (const b of bots) {
+      const creds = await loadDeribitCreds(b.owner);
+      if (!creds) continue;
+      icStartBot(b.owner, b.config || {}, loadDeribitCreds, (trade) => appendBotTrade(b.owner, trade),
+        { saveState: (snap) => saveBotState(b.owner, snap), restoreState: b.openState || null, testnet: creds.testnet });
+      n++;
+    }
+    if (n) console.log(`[deribit-bot] resumed ${n} bot(s) after restart`);
+  } catch (e) { console.error('[deribit-bot] resume failed:', e?.message || e); }
+}
 
 function sendJson(response, status, body, extraHeaders = {}) {
   response.writeHead(status, {

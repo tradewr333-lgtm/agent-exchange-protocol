@@ -1200,21 +1200,62 @@ export async function loadBotConfig(owner) {
 }
 export async function loadEnabledBots() {
   if (storageMode() === 'postgres') {
-    const r = await query('select owner, config from deribit_bots where enabled = true');
-    return r.rows.map((x) => ({ owner: x.owner, config: x.config || {} }));
+    const r = await query('select owner, config, open_state from deribit_bots where enabled = true');
+    return r.rows.map((x) => ({ owner: x.owner, config: x.config || {}, openState: x.open_state || null }));
   }
   const store = existsSync(paths.deribitCreds) ? readJsonFile(paths.deribitCreds) : {};
-  return Object.entries(store.bots || {}).filter(([, b]) => b.enabled).map(([owner, b]) => ({ owner, config: b.config || {} }));
+  return Object.entries(store.bots || {}).filter(([, b]) => b.enabled).map(([owner, b]) => ({ owner, config: b.config || {}, openState: b.open_state || null }));
 }
+
+// Persist / restore the OPEN condor state so a deploy/restart resumes the same
+// position instead of losing track of it. Stored in deribit_bots.open_state (jsonb).
+export async function saveBotState(owner, openState) {
+  const o = creditOwner(owner);
+  if (storageMode() === 'postgres') {
+    await query(`insert into deribit_bots (owner, open_state) values ($1,$2::jsonb)
+      on conflict (owner) do update set open_state=excluded.open_state, updated_at=now()`,
+      [o, openState == null ? null : JSON.stringify(openState)]);
+    return { ok: true };
+  }
+  const store = existsSync(paths.deribitCreds) ? readJsonFile(paths.deribitCreds) : {};
+  store.bots = store.bots || {};
+  store.bots[o] = { ...(store.bots[o] || {}), open_state: openState || null };
+  writeJsonAtomic(paths.deribitCreds, store);
+  return { ok: true };
+}
+export async function loadBotState(owner) {
+  const o = creditOwner(owner);
+  if (storageMode() === 'postgres') {
+    const r = await query('select open_state from deribit_bots where owner=$1', [o]);
+    return r.rows[0] ? (r.rows[0].open_state || null) : null;
+  }
+  const store = existsSync(paths.deribitCreds) ? readJsonFile(paths.deribitCreds) : {};
+  return (store.bots || {})[o]?.open_state || null;
+}
+
+// Trade log — persisted in Postgres (survives deploys). JSON fallback for local dev.
 export async function appendBotTrade(owner, trade) {
+  const o = creditOwner(owner);
+  if (storageMode() === 'postgres') {
+    await query(
+      `insert into bot_trades (owner, type, price, size, pnl_usd, credit_usd, reason, data)
+       values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+      [o, trade.type || null, trade.price ?? null, trade.size ?? null,
+       trade.pnl_usd ?? null, trade.credit_usd ?? null, trade.reason || null, JSON.stringify(trade)]);
+    return { ok: true };
+  }
   const path = join(dataDir, `bot-trades.json`);
   const list = readCollection(path, 'trades');
-  list.push({ owner: creditOwner(owner), ...trade, at: new Date().toISOString() });
+  list.push({ owner: o, ...trade, at: new Date().toISOString() });
   writeCollection(path, 'trades', list.slice(-3000));
 }
-export async function loadBotTrades(owner, limit = 50) {
-  const path = join(dataDir, `bot-trades.json`);
+export async function loadBotTrades(owner, limit = 200) {
   const o = creditOwner(owner);
+  if (storageMode() === 'postgres') {
+    const r = await query('select type, price, size, pnl_usd, credit_usd, reason, created_at as at, data from bot_trades where owner=$1 order by id desc limit $2', [o, limit]);
+    return r.rows.map((x) => ({ ...(x.data || {}), type: x.type, price: x.price, size: x.size, pnl_usd: x.pnl_usd, credit_usd: x.credit_usd, reason: x.reason, at: x.at }));
+  }
+  const path = join(dataDir, `bot-trades.json`);
   return readCollection(path, 'trades').filter((t) => t.owner === o).slice(-limit).reverse();
 }
 
