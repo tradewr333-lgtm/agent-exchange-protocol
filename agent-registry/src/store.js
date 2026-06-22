@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +25,7 @@ export const paths = {
   predictions: join(dataDir, 'predictions.json'),
   credits: join(dataDir, 'credits.json'),
   derivatives: join(dataDir, 'derivatives.json'),
+  deribitCreds: join(dataDir, 'deribit-creds.json'),
 };
 
 let poolPromise = null;
@@ -1089,6 +1090,71 @@ export async function spendCredit(owner, usd, { ref = null } = {}) {
   store.ledger.push({ owner: o, usd: -amount, type: 'spend', ref, at: new Date().toISOString() });
   saveCreditsJson(store);
   return { ok: true, balance: store.balances[o] };
+}
+
+// --- Deribit bot credentials, ENCRYPTED at rest (AES-256-GCM) ---
+export function keyVaultEnabled(env = process.env) { return Boolean(env.AXP_KEY_ENC_SECRET); }
+function encKey(env = process.env) {
+  if (!env.AXP_KEY_ENC_SECRET) return null;
+  return createHash('sha256').update(String(env.AXP_KEY_ENC_SECRET)).digest(); // 32 bytes
+}
+function encryptJson(obj, env = process.env) {
+  const key = encKey(env); if (!key) throw new Error('key_vault_disabled');
+  const iv = randomBytes(12);
+  const c = createCipheriv('aes-256-gcm', key, iv);
+  const ct = Buffer.concat([c.update(JSON.stringify(obj), 'utf8'), c.final()]);
+  const tag = c.getAuthTag();
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${ct.toString('hex')}`;
+}
+function decryptJson(enc, env = process.env) {
+  const key = encKey(env); if (!key) return null;
+  try {
+    const [ivh, tagh, cth] = String(enc).split(':');
+    const d = createDecipheriv('aes-256-gcm', key, Buffer.from(ivh, 'hex'));
+    d.setAuthTag(Buffer.from(tagh, 'hex'));
+    const pt = Buffer.concat([d.update(Buffer.from(cth, 'hex')), d.final()]);
+    return JSON.parse(pt.toString('utf8'));
+  } catch { return null; }
+}
+
+export async function saveDeribitCreds(owner, { apiKey, secret, testnet = true, label = null } = {}) {
+  const o = creditOwner(owner);
+  const enc = encryptJson({ apiKey, secret }); // throws if vault disabled
+  if (storageMode() === 'postgres') {
+    await query(
+      `insert into deribit_creds (owner, enc, testnet, label) values ($1,$2,$3,$4)
+       on conflict (owner) do update set enc=excluded.enc, testnet=excluded.testnet, label=excluded.label, updated_at=now()`,
+      [o, enc, Boolean(testnet), label]);
+    return { ok: true };
+  }
+  const store = existsSync(paths.deribitCreds) ? (readJsonFile(paths.deribitCreds).creds || {}) : {};
+  store[o] = { enc, testnet: Boolean(testnet), label, updated_at: new Date().toISOString() };
+  writeJsonAtomic(paths.deribitCreds, { schema: 'axp.deribit_creds.v0', creds: store });
+  return { ok: true };
+}
+
+export async function loadDeribitCreds(owner) {
+  const o = creditOwner(owner);
+  let row = null;
+  if (storageMode() === 'postgres') {
+    const r = await query('select enc, testnet from deribit_creds where owner=$1', [o]);
+    row = r.rows[0] || null;
+  } else if (existsSync(paths.deribitCreds)) {
+    row = (readJsonFile(paths.deribitCreds).creds || {})[o] || null;
+  }
+  if (!row) return null;
+  const dec = decryptJson(row.enc);
+  if (!dec) return null;
+  return { apiKey: dec.apiKey, secret: dec.secret, testnet: Boolean(row.testnet) };
+}
+
+export async function deribitConnected(owner) {
+  const o = creditOwner(owner);
+  if (storageMode() === 'postgres') {
+    const r = await query('select 1 from deribit_creds where owner=$1 limit 1', [o]);
+    return r.rows.length > 0;
+  }
+  return existsSync(paths.deribitCreds) && Boolean((readJsonFile(paths.deribitCreds).creds || {})[o]);
 }
 
 // Credit keys — bearer secrets to spend a wallet's credits (issued at purchase).

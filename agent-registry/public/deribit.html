@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AXP · Deribit Options Desk</title>
+<style>
+  :root{--bg:#04060f;--bg2:#070c1c;--panel:rgba(14,22,46,.72);--line:#1b2c57;--ink:#dbe7ff;--dim:#7488b8;--cyan:#39d9ff;--green:#3dffa6;--amber:#ffcc55;--red:#ff5d7e;--gold:#ffd66b;--glow:0 0 18px rgba(57,217,255,.4)}
+  *{box-sizing:border-box}body{margin:0;background:radial-gradient(1100px 620px at 78% -8%,#10204d 0%,var(--bg2) 50%,var(--bg) 100%);color:var(--ink);font:14px/1.55 ui-sans-serif,system-ui,Segoe UI,Roboto,Arial}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}a{color:var(--cyan);text-decoration:none}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 18px 70px}
+  .hud{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:14px;padding:12px 16px;background:var(--panel);flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:10px}.back{color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:12px;letter-spacing:1px}
+  .back:hover{color:var(--cyan);border-color:var(--cyan)}.brand b{letter-spacing:2px;font-size:15px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{background:transparent;border:0;color:var(--dim);padding:7px 16px;cursor:pointer;font-family:ui-monospace,monospace}
+  .seg button.on{background:rgba(57,217,255,.12);color:var(--cyan)}
+  h1{font-size:21px;margin:18px 2px 2px}.sub{color:var(--dim)}
+  .card{border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:18px;margin-top:14px}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:12px}
+  @media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:#0a142e;border:1px solid var(--line);border-radius:12px;padding:12px}
+  .kpi .k{font-size:10px;letter-spacing:1px;color:var(--dim);text-transform:uppercase}
+  .kpi .v{font:700 20px/1 ui-monospace,monospace;margin-top:6px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace}
+  th{color:var(--dim);font-size:11px;text-transform:uppercase}
+  .sell{color:var(--red)} .buy{color:var(--green)}
+  .pill{display:inline-block;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700}
+  .open{background:rgba(61,255,166,.16);color:var(--green)} .skip{background:rgba(255,204,85,.16);color:var(--amber)}
+  .btn{display:inline-block;margin-top:6px;background:linear-gradient(90deg,#1d6bff,var(--cyan));color:#021;cursor:pointer;font-weight:700;padding:10px 18px;border-radius:10px;box-shadow:var(--glow)}
+  .disc{margin-top:16px;font-size:11.5px;color:var(--dim);border-left:3px solid var(--amber);padding:10px 14px;background:rgba(255,204,85,.05);border-radius:0 10px 10px 0}
+  svg{display:block;width:100%;height:auto}
+  input[type=text],input[type=password]{width:100%;background:#0a142e;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:9px 11px;font-size:13px;margin:6px 0;font-family:ui-monospace,monospace}
+  .ok{color:var(--green)} .err{color:var(--red)}
+  .btn.sm{padding:6px 12px;font-size:12px;margin-top:0}
+  code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px;font-size:12px;font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hud">
+    <div class="brand"><a href="/" class="back mono">‹ HOME</a><b class="mono">◧ DERIBIT OPTIONS DESK</b></div>
+    <div class="seg" id="asset"><button data-a="BTC" class="on">BTC</button><button data-a="ETH">ETH</button></div>
+  </div>
+
+  <h1>Iron Condor · delta 10-15 <span class="sub" id="exp"></span></h1>
+  <p class="sub">A defined-risk, theta-positive structure: sell an out-of-the-money put spread + call spread; profit if price stays in a range. Built live from <b>Deribit public option quotes</b>. You execute on your own Deribit account — we never hold your keys.</p>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="pill skip" id="action">…</span>
+      <span class="sub mono" id="status">loading live chain…</span>
+    </div>
+    <svg id="payoff" viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="grid">
+      <div class="kpi"><div class="k">Spot</div><div class="v" id="spot">—</div></div>
+      <div class="kpi"><div class="k">Net credit</div><div class="v" style="color:var(--green)" id="credit">—</div></div>
+      <div class="kpi"><div class="k">Max loss</div><div class="v" style="color:var(--red)" id="maxloss">—</div></div>
+      <div class="kpi"><div class="k">Profit range</div><div class="v" id="range" style="font-size:14px">—</div></div>
+      <div class="kpi"><div class="k">Approx. prob in range</div><div class="v" style="color:var(--gold)" id="prob">—</div></div>
+    </div>
+    <table>
+      <thead><tr><th>Leg</th><th>Type</th><th>Strike</th><th>Δ delta</th><th>Price (BTC)</th></tr></thead>
+      <tbody id="legs"><tr><td class="sub" colspan="5">…</td></tr></tbody>
+    </table>
+    <p class="sub" id="reasoning" style="margin-top:10px"></p>
+    <a class="btn" href="https://www.deribit.com/options/BTC" target="_blank" id="open">Open on Deribit ↗</a>
+  </div>
+
+  <div class="disc" id="disc">Built from live option quotes. NOT investment advice and NOT a return guarantee — an Iron Condor can lose its full max loss. Probability is approximated from option deltas.</div>
+</div>
+
+<script>
+const $=(id)=>document.getElementById(id);
+const usd=(n)=>n==null?'—':'$'+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+let ASSET='BTC';
+
+function drawPayoff(s){
+  const W=900,H=320,padL=46,padR=20,padT=20,padB=34;
+  if(!s.ok||!s.legs){ $('payoff').innerHTML='<text x="450" y="160" text-anchor="middle" fill="#7488b8" font-family="monospace">no live structure</text>'; return; }
+  const lp=s.legs.find(l=>l.type==='P'&&l.action==='BUY').strike;
+  const sp=s.legs.find(l=>l.type==='P'&&l.action==='SELL').strike;
+  const sc=s.legs.find(l=>l.type==='C'&&l.action==='SELL').strike;
+  const lc=s.legs.find(l=>l.type==='C'&&l.action==='BUY').strike;
+  const credit=s.credit_usd, maxl=-s.max_loss_usd;
+  const xmin=lp-(sc-sp)*0.4, xmax=lc+(sc-sp)*0.4;
+  const pts=[[xmin,maxl],[lp,maxl],[sp,credit],[sc,credit],[lc,maxl],[xmax,maxl]];
+  const ymin=maxl*1.2, ymax=credit*1.6||1;
+  const X=(p)=>padL+(p-xmin)/(xmax-xmin)*(W-padL-padR);
+  const Y=(v)=>padT+(ymax-v)/(ymax-ymin)*(H-padT-padB);
+  const line=pts.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' ');
+  const be=s.breakevens;
+  let svg='';
+  // profit zone shading (between breakevens)
+  svg+=`<rect x="${X(be.lower)}" y="${padT}" width="${X(be.upper)-X(be.lower)}" height="${H-padT-padB}" fill="rgba(61,255,166,.08)"/>`;
+  // zero line
+  svg+=`<line x1="${padL}" y1="${Y(0)}" x2="${W-padR}" y2="${Y(0)}" stroke="#1b2c57" stroke-dasharray="4 4"/>`;
+  svg+=`<text x="${padL-6}" y="${Y(0)+4}" text-anchor="end" fill="#7488b8" font-size="10" font-family="monospace">$0</text>`;
+  // spot marker
+  if(s.spot){ svg+=`<line x1="${X(s.spot)}" y1="${padT}" x2="${X(s.spot)}" y2="${H-padB}" stroke="#39d9ff" stroke-dasharray="2 4" opacity=".7"/>`;
+    svg+=`<text x="${X(s.spot)}" y="${padT+12}" text-anchor="middle" fill="#39d9ff" font-size="10" font-family="monospace">spot ${usd(s.spot)}</text>`; }
+  // payoff line
+  svg+=`<path d="${line}" fill="none" stroke="#3dffa6" stroke-width="2.5"/>`;
+  // strike ticks
+  [[lp,'longP'],[sp,'shortP'],[sc,'shortC'],[lc,'longC']].forEach(([k,lab])=>{
+    svg+=`<text x="${X(k)}" y="${H-padB+16}" text-anchor="middle" fill="#7488b8" font-size="9" font-family="monospace">${(k/1000).toFixed(0)}k</text>`;
+  });
+  // breakeven labels
+  svg+=`<text x="${X(be.lower)}" y="${H-padB+28}" text-anchor="middle" fill="#ffcc55" font-size="9" font-family="monospace">BE ${usd(be.lower)}</text>`;
+  svg+=`<text x="${X(be.upper)}" y="${H-padB+28}" text-anchor="middle" fill="#ffcc55" font-size="9" font-family="monospace">BE ${usd(be.upper)}</text>`;
+  $('payoff').innerHTML=svg;
+}
+
+async function load(){
+  $('status').textContent='loading live chain…';
+  try{
+    const s=await fetch('/strategy/iron-condor?asset='+ASSET,{cache:'no-store'}).then(r=>r.json());
+    if(s.ok===false){ $('status').textContent='Deribit data unavailable: '+(s.error||'')+(s.detail?' ('+s.detail+')':''); $('action').textContent='—'; return; }
+    $('status').textContent='live · '+new Date(s.generated_at).toLocaleTimeString();
+    $('exp').textContent=s.expiry?('· exp '+s.expiry):'';
+    const a=$('action'); a.textContent=s.decision.action; a.className='pill '+(s.decision.action==='OPEN'?'open':'skip');
+    $('spot').textContent=usd(s.spot);
+    $('credit').textContent=usd(s.credit_usd);
+    $('maxloss').textContent=usd(s.max_loss_usd);
+    $('range').textContent=usd(s.breakevens.lower)+' – '+usd(s.breakevens.upper);
+    $('prob').textContent=(s.approx_prob_in_range*100).toFixed(0)+'%';
+    $('legs').innerHTML=s.legs.map(l=>`<tr><td class="${l.action==='SELL'?'sell':'buy'}">${l.action}</td><td>${l.type==='P'?'PUT':'CALL'}</td><td>${usd(l.strike)}</td><td>${Number(l.delta).toFixed(3)}</td><td>${(l.bid??l.ask??0)}</td></tr>`).join('');
+    $('reasoning').textContent=s.decision.reasoning||'';
+    if(s.disclaimer) $('disc').textContent=s.disclaimer;
+    $('open').href='https://www.deribit.com/options/'+ASSET;
+    drawPayoff(s);
+  }catch(e){ $('status').textContent='error loading signal'; }
+}
+$('asset').querySelectorAll('[data-a]').forEach(b=>b.addEventListener('click',()=>{ASSET=b.dataset.a;$('asset').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));load();}));
+load(); setInterval(load,60000);
+</script>
+</body>
+</html>

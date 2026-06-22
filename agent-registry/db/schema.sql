@@ -282,3 +282,14 @@ create table if not exists credit_keys (
   created_at timestamptz not null default now()
 );
 create index if not exists credit_keys_owner_idx on credit_keys(owner);
+
+-- Deribit bot: per-user exchange credentials, ENCRYPTED at rest (AES-256-GCM).
+-- Keys must be created trade-only (no withdrawal) + IP-whitelisted on Deribit.
+create table if not exists deribit_creds (
+  owner text primary key,
+  enc text not null,
+  testnet boolean not null default true,
+  label text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);

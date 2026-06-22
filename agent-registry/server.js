@@ -27,9 +27,10 @@ import {
   appendHire, loadHires, hireExists, appendInboxMessage, loadAgentsRegistry, loadSubscriptions,
   appendObservations, loadRecentObservations, loadPredictions, addAgent,
   getCreditBalance, creditTxUsed, addCredit, spendCredit, issueCreditKey, resolveCreditKey,
-  loadDerivatives,
+  loadDerivatives, keyVaultEnabled, saveDeribitCreds, loadDeribitCreds, deribitConnected,
 } from './src/store.js';
 import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, buildCoverage, DECISION_VERSION } from './src/decision.js';
+import { ironCondorSignal, testConnection } from './src/deribit.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { startDecisionMiner, runDecisionMineOnce, decisionMineEnabled } from './src/decision-miner.js';
@@ -85,6 +86,51 @@ const server = http.createServer(async (request, response) => {
   // Buy Decision API credits (crypto / card).
   if (url.pathname === '/credits' || url.pathname === '/buy') {
     return sendHtml(response, 200, readFileSync(join(publicPath, 'credits.html'), 'utf8'));
+  }
+
+  // Deribit options strategy desk (Iron Condor signal).
+  if (url.pathname === '/deribit') {
+    return sendHtml(response, 200, readFileSync(join(publicPath, 'deribit.html'), 'utf8'));
+  }
+
+  // Connect a Deribit account: store TRADE-ONLY keys encrypted, after testing them.
+  // Wallet signature proves ownership (keys are bound to your wallet).
+  if (request.method === 'POST' && url.pathname === '/deribit/connect') {
+    if (!keyVaultEnabled()) return sendJson(response, 503, { error: 'key_vault_disabled', hint: 'set AXP_KEY_ENC_SECRET' });
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
+    const { message, signature, api_key, secret } = body || {};
+    const testnet = body?.testnet !== false;
+    if (!owner || !message || !signature) return sendJson(response, 400, { error: 'owner_message_signature_required' });
+    if (!api_key || !secret) return sendJson(response, 400, { error: 'api_key_and_secret_required' });
+    let recovered;
+    try { const { verifyMessage } = await import('ethers'); recovered = verifyMessage(message, signature); }
+    catch { return sendJson(response, 400, { error: 'signature_invalid' }); }
+    if (recovered.toLowerCase() !== owner.toLowerCase()) return sendJson(response, 401, { error: 'signature_mismatch' });
+    // Test the key (read-only) BEFORE storing — never save a key that doesn't work.
+    const test = await testConnection({ apiKey: api_key, secret, testnet });
+    if (!test.ok) return sendJson(response, 400, { error: 'deribit_connection_failed', detail: test.error || test.detail });
+    await saveDeribitCreds(owner, { apiKey: api_key, secret, testnet, label: body?.label || null });
+    return sendJson(response, 200, { ok: true, connected: true, testnet, balance: test.balance, equity: test.equity, available_funds: test.available_funds, currency: 'BTC' }, { 'Cache-Control': 'no-store' });
+  }
+
+  // Connection status + live balance (re-tests the stored key).
+  if (request.method === 'GET' && url.pathname === '/deribit/status') {
+    const owner = (url.searchParams.get('owner') || '').trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(owner)) return sendJson(response, 400, { error: 'valid_owner_required' });
+    if (!(await deribitConnected(owner))) return sendJson(response, 200, { connected: false }, { 'Cache-Control': 'no-store' });
+    const creds = await loadDeribitCreds(owner);
+    if (!creds) return sendJson(response, 200, { connected: false }, { 'Cache-Control': 'no-store' });
+    const test = await testConnection(creds);
+    return sendJson(response, 200, { connected: test.ok, testnet: creds.testnet, balance: test.balance, equity: test.equity, available_funds: test.available_funds, error: test.ok ? null : test.error }, { 'Cache-Control': 'no-store' });
+  }
+
+  // Live Iron Condor (delta 10-15) signal from Deribit PUBLIC data — no key, no execution.
+  if (request.method === 'GET' && url.pathname === '/strategy/iron-condor') {
+    const asset = (url.searchParams.get('asset') || 'BTC').toUpperCase();
+    if (!['BTC', 'ETH'].includes(asset)) return sendJson(response, 400, { error: 'asset_must_be_BTC_or_ETH' });
+    const signal = await ironCondorSignal(asset);
+    return sendJson(response, signal.ok === false ? 502 : 200, signal, { 'Cache-Control': 'no-store' });
   }
 
   // Agent App Store + agent product pages (single-page; JS reads the path).
