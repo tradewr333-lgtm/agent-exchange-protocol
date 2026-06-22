@@ -21,16 +21,25 @@ export const X402_NETWORKS = {
   bsc: { chain_id: 56, usdc: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', decimals: 18, rpc: 'https://bsc-dataseed.binance.org' },
 };
 
+function resolveNet(key) {
+  const k = String(key || '').toLowerCase();
+  const preset = X402_NETWORKS[k];
+  if (!preset) return null;
+  return { name: k, chain_id: preset.chain_id, usdc: preset.usdc, decimals: preset.decimals, rpc: preset.rpc };
+}
+
+// All networks an agent accepts payment on. Multi-rail by default (BSC + Base) so a
+// buyer pays on whichever chain they hold USDC. Override with AXP_X402_NETWORKS="bsc,base"
+// (or a single AXP_X402_NETWORK for back-compat).
+export function x402NetworkList(env = process.env) {
+  const raw = env.AXP_X402_NETWORKS || env.AXP_X402_NETWORK || 'base,bsc';
+  const list = raw.split(',').map((s) => resolveNet(s)).filter(Boolean);
+  return list.length ? list : [resolveNet('base')];
+}
+
+// Primary network (first in the list) — for single-network callers / labels.
 export function x402Network(env = process.env) {
-  const key = (env.AXP_X402_NETWORK || 'base').toLowerCase();
-  const preset = X402_NETWORKS[key] || X402_NETWORKS.base;
-  return {
-    name: key in X402_NETWORKS ? key : 'base',
-    chain_id: Number(env.AXP_X402_CHAIN_ID || preset.chain_id),
-    usdc: env.AXP_X402_USDC || preset.usdc,
-    decimals: Number(env.AXP_X402_USDC_DECIMALS || preset.decimals),
-    rpc: env.AXP_X402_RPC || preset.rpc,
-  };
+  return x402NetworkList(env)[0];
 }
 
 export function pricePerCallUsd(env = process.env) {
@@ -57,28 +66,27 @@ export function decodeHeader(b64) {
   catch { return null; }
 }
 
-// Build the standard x402 PaymentRequired object for an agent's paid endpoint.
+// Build the standard x402 PaymentRequired object — one `accepts` entry PER network
+// (multi-rail: the buyer picks whichever chain they hold USDC on).
 export function buildPaymentRequired({ agent, resource, env = process.env } = {}) {
-  const net = x402Network(env);
   const price = pricePerCallUsd(env);
   const service = (agent?.services || [])[0] || agent?.template || 'task';
+  const accepts = x402NetworkList(env).map((net) => ({
+    scheme: 'exact',
+    network: net.name,
+    maxAmountRequired: toAtomic(price, net.decimals),
+    resource,
+    description: `Run the ${agent?.name || 'AXP'} agent (${service}) once and return the result.`,
+    mimeType: 'application/json',
+    payTo: agent?.owner || null,
+    maxTimeoutSeconds: 120,
+    asset: net.usdc,
+    extra: { name: 'USD Coin', symbol: 'USDC', version: '2', price_usd: price },
+  }));
   return {
     x402Version: X402_VERSION,
-    accepts: [
-      {
-        scheme: 'exact',
-        network: net.name,
-        maxAmountRequired: toAtomic(price, net.decimals),
-        resource,
-        description: `Run the ${agent?.name || 'AXP'} agent (${service}) once and return the result.`,
-        mimeType: 'application/json',
-        payTo: agent?.owner || null,
-        maxTimeoutSeconds: 120,
-        asset: net.usdc,
-        extra: { name: 'USD Coin', symbol: 'USDC', version: '2', price_usd: price },
-      },
-    ],
-    error: 'X-PAYMENT required: pay the quoted USDC to payTo, then retry with proof.',
+    accepts,
+    error: 'X-PAYMENT required: pay the quoted USDC to payTo on any listed network, then retry with proof.',
   };
 }
 
@@ -107,8 +115,11 @@ export function isSignedPayload(proof) {
 // Configure AXP_X402_FACILITATOR_URL (e.g. testnet https://x402.org/facilitator,
 // or a Base mainnet facilitator). Optional AXP_X402_FACILITATOR_KEY for hosted ones.
 // ---------------------------------------------------------------------------
+// Default to a public Base mainnet facilitator (PayAI, no API key) so autonomous
+// single-call settlement works out of the box. Override with AXP_X402_FACILITATOR_URL.
+export const DEFAULT_FACILITATOR_URL = 'https://facilitator.payai.network';
 export function facilitatorUrl(env = process.env) {
-  return (env.AXP_X402_FACILITATOR_URL || '').replace(/\/$/, '') || null;
+  return (env.AXP_X402_FACILITATOR_URL || DEFAULT_FACILITATOR_URL).replace(/\/$/, '') || null;
 }
 export function facilitatorEnabled(env = process.env) {
   return Boolean(facilitatorUrl(env));

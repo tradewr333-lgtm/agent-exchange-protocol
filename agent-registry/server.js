@@ -35,7 +35,7 @@ import { getPlanCatalog, planBySku, stripePlanBySku, stripePriceId, computeContr
 import { listTemplates } from './src/agent-templates.js';
 import { launchAgent } from './src/agent-launcher.js';
 import { buildLaunchQuote, verifyLaunchPayment, launchPaymentEnabled, verifyTreasuryPayment, verifyErc20TransferTo } from './src/payments-onchain.js';
-import { buildPaymentRequired, x402Network, pricePerCallUsd, extractPaymentProof, encodeHeader, x402Enabled, isSignedPayload, facilitatorEnabled, verifyViaFacilitator, settleViaFacilitator } from './src/x402.js';
+import { buildPaymentRequired, x402Network, x402NetworkList, pricePerCallUsd, extractPaymentProof, encodeHeader, x402Enabled, isSignedPayload, facilitatorEnabled, verifyViaFacilitator, settleViaFacilitator } from './src/x402.js';
 import { stripeEnabled, createSubscriptionCheckout, constructWebhookEvent } from './src/stripe.js';
 import { buildHireQuote, hireAmounts, hireFeeRate, computeSplit, hirePaymentEnabled } from './src/hire.js';
 import { sendPayout, payoutEnabled } from './src/payout.js';
@@ -888,7 +888,7 @@ const server = http.createServer(async (request, response) => {
   // them via x402 — the "agents discover + pay each other" loop, hosted by AXP.
   if (url.pathname === '/x402/discovery/resources') {
     const base = process.env.AXP_PUBLIC_URL || `https://${request.headers.host || 'axp.network'}`;
-    const net = x402Network();
+    const netNames = x402NetworkList().map((n) => n.name);
     const agentsR = await listAgents({});
     const items = (agentsR.agents || [])
       .filter((a) => a.origin === 'launch' && a.owner)
@@ -901,7 +901,7 @@ const server = http.createServer(async (request, response) => {
           x402Version: pr.x402Version,
           accepts: pr.accepts,
           lastUpdated: new Date().toISOString(),
-          metadata: { protocol: 'AXP', agent_id: a.agent_id, name: a.name, service: (a.services || [])[0] || null, price_usd: pricePerCallUsd(), network: net.name },
+          metadata: { protocol: 'AXP', agent_id: a.agent_id, name: a.name, service: (a.services || [])[0] || null, price_usd: pricePerCallUsd(), networks: netNames },
         };
       });
     return sendJson(response, 200, { x402Version: 1, protocol: 'AXP', schema: 'axp.x402_bazaar.v0', count: items.length, items }, { 'Cache-Control': 'no-store' });
@@ -913,14 +913,14 @@ const server = http.createServer(async (request, response) => {
   if (request.method === 'GET' && x402DiscoverMatch) {
     const agent = await getAgent(x402DiscoverMatch[1]);
     if (!agent) return sendJson(response, 404, { error: 'agent_not_found', agent_id: x402DiscoverMatch[1] });
-    const net = x402Network();
+    const netNames = x402NetworkList().map((n) => n.name);
     const base = process.env.AXP_PUBLIC_URL || `https://${request.headers.host || 'axp.network'}`;
     const resource = `${base}/x402/agents/${agent.agent_id}/call`;
     return sendJson(response, 200, {
       protocol: 'AXP', schema: 'axp.x402_endpoint.v0',
       agent_id: agent.agent_id, name: agent.name, service: (agent.services || [])[0] || null,
       resource, method: 'POST', price_usd: pricePerCallUsd(), asset: 'USDC',
-      network: net.name, pay_to: agent.owner || null,
+      networks: netNames, pay_to: agent.owner || null,
       payment_required: buildPaymentRequired({ agent, resource }),
       how_to: 'POST {"task":"..."}. No payment → HTTP 402 + quote. Pay the USDC to pay_to, then retry with header X-PAYMENT (base64 JSON {tx_hash}) or body.payment.tx_hash.',
     });
@@ -946,11 +946,10 @@ const server = http.createServer(async (request, response) => {
     }
     const task = typeof body?.task === 'string' ? body.task.trim() : '';
     if (!task) return sendJson(response, 400, { error: 'task_required' });
-    const net = x402Network();
     const price = pricePerCallUsd();
-    const selected = required.accepts[0];
+    const networks = x402NetworkList(); // multi-rail: BSC + Base (buyer picks the chain)
 
-    const recordEarning = async ({ txId, payer }) => {
+    const recordEarning = async ({ txId, payer, networkName }) => {
       try {
         await appendHire({
           agent_id: agent.agent_id, customer_address: payer || proof.from || null, asset: 'USDC',
@@ -962,17 +961,20 @@ const server = http.createServer(async (request, response) => {
           real_earnings_usd: Number((prevEarnings + price).toFixed(2)),
           last_work: { at: new Date().toISOString(), task: task.slice(0, 200), model: 'claude-haiku-4-5-20251001', preview: '', paid: true, channel: 'x402' },
         });
-        await appendTrustEvent({ event_type: 'hire_settled', agent_id: agent.agent_id, value_usd: price, data: { channel: 'x402', tx_hash: txId, network: net.name } });
+        await appendTrustEvent({ event_type: 'hire_settled', agent_id: agent.agent_id, value_usd: price, data: { channel: 'x402', tx_hash: txId, network: networkName } });
       } catch (err) { console.error('x402_record_failed', err?.message || err); }
     };
 
     // ----- PHASE 2: facilitator flow (autonomous, single round-trip) -----
     // A signed PaymentPayload + a configured facilitator = verify → work → settle.
+    // Pick the accepts entry for the network the buyer actually signed on.
     if (isSignedPayload(proof)) {
       if (!facilitatorEnabled()) {
         response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
         return sendJson(response, 402, { error: 'facilitator_not_configured', hint: 'set AXP_X402_FACILITATOR_URL to accept signed payments', payment_required: required });
       }
+      const selected = required.accepts.find((a) => a.network === proof.network) || required.accepts[0];
+      const netName = proof.network || selected.network;
       const v = await verifyViaFacilitator({ paymentPayload: proof, paymentRequirements: selected });
       if (!v.ok) {
         response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
@@ -983,41 +985,50 @@ const server = http.createServer(async (request, response) => {
       // Settle on-chain via the facilitator AFTER the work is produced.
       const s = await settleViaFacilitator({ paymentPayload: proof, paymentRequirements: selected });
       const txId = s.transaction || `x402:${Date.now()}`;
-      if (s.ok) await recordEarning({ txId, payer: v.payer });
-      response.setHeader('PAYMENT-RESPONSE', encodeHeader({ success: s.ok, transaction: s.transaction, network: net.name, payer: v.payer }));
+      if (s.ok) await recordEarning({ txId, payer: v.payer, networkName: netName });
+      response.setHeader('PAYMENT-RESPONSE', encodeHeader({ success: s.ok, transaction: s.transaction, network: netName, payer: v.payer }));
       return sendJson(response, 200, {
-        ok: true, agent_id: agent.agent_id, result: run.output, paid_usd: price, network: net.name, channel: 'x402',
+        ok: true, agent_id: agent.agent_id, result: run.output, paid_usd: price, network: netName, channel: 'x402',
         settlement: { settled: s.ok, transaction: s.transaction, error: s.ok ? null : (s.errorReason || s.error) },
       });
     }
 
     // ----- PHASE 1 fallback: caller already paid; verify the tx hash on-chain -----
+    // Try each accepted network until one matches (so a BSC tx OR a Base tx both work).
     if (!proof.tx_hash) {
       response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
       return sendJson(response, 402, required);
     }
     if (await hireExists(proof.tx_hash)) return sendJson(response, 409, { error: 'payment_already_used', tx_hash: proof.tx_hash });
-    const verified = await verifyErc20TransferTo({
-      tx_hash: proof.tx_hash, token_address: net.usdc, decimals: net.decimals,
-      min_amount_usd: price, recipient: agent.owner, rpc: net.rpc, chain_id: net.chain_id,
-    });
-    if (!verified.ok) {
+    // If the buyer named a network, verify only that one; otherwise probe each rail.
+    const candidates = proof.network ? networks.filter((n) => n.name === proof.network) : networks;
+    const tried = (candidates.length ? candidates : networks);
+    let verified = null; let usedNet = null;
+    for (const net of tried) {
+      const r = await verifyErc20TransferTo({
+        tx_hash: proof.tx_hash, token_address: net.usdc, decimals: net.decimals,
+        min_amount_usd: price, recipient: agent.owner, rpc: net.rpc, chain_id: net.chain_id,
+      });
+      if (r.ok) { verified = r; usedNet = net; break; }
+      verified = r; // remember the last failure for the error response
+    }
+    if (!verified || !verified.ok) {
       response.setHeader('PAYMENT-REQUIRED', encodeHeader(required));
-      return sendJson(response, verified.status ?? 402, { ...verified, payment_required: required });
+      return sendJson(response, verified?.status ?? 402, { ...(verified || { error: 'payment_invalid' }), networks_tried: tried.map((n) => n.name), payment_required: required });
     }
     const run = await executeTask({ template_id: agent.template, task, maxTokens: 900 });
     if (!run.ok || !run.output) {
       return sendJson(response, 502, { error: 'execution_failed', detail: run.reason || run.detail, note: 'payment received on-chain — retry or contact support' });
     }
-    await recordEarning({ txId: proof.tx_hash, payer: proof.from });
+    await recordEarning({ txId: proof.tx_hash, payer: proof.from, networkName: usedNet.name });
     // overwrite the deliverable placeholder with the real output for the phase-1 record path
     try {
       await updateAgentFields(agent.agent_id, {
         last_work: { at: new Date().toISOString(), task: task.slice(0, 200), model: run.model, preview: run.output.slice(0, 500), paid: true, channel: 'x402' },
       });
     } catch { /* best-effort */ }
-    response.setHeader('PAYMENT-RESPONSE', encodeHeader({ success: true, network: net.name, transaction: proof.tx_hash, amount_usd: price }));
-    return sendJson(response, 200, { ok: true, agent_id: agent.agent_id, result: run.output, paid_usd: price, network: net.name, channel: 'x402' });
+    response.setHeader('PAYMENT-RESPONSE', encodeHeader({ success: true, network: usedNet.name, transaction: proof.tx_hash, amount_usd: price }));
+    return sendJson(response, 200, { ok: true, agent_id: agent.agent_id, result: run.output, paid_usd: price, network: usedNet.name, channel: 'x402' });
   }
 
   // A2A Agent Card — lets Agent2Agent-aware clients discover AXP as a service.

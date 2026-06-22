@@ -6,13 +6,22 @@ settles via the facilitator and returns the agent's work — all in one request.
 
 ## 1. Configure the AXP server (Render → Environment)
 
+Multi-rail (recommended) — accept **both** BSC and Base at once:
 ```
-AXP_X402_NETWORK=base-sepolia
-AXP_X402_FACILITATOR_URL=https://x402.org/facilitator
+AXP_X402_NETWORKS=bsc,base
+```
+The buyer picks whichever chain it holds USDC on. Autonomous single-call settlement uses
+the **default facilitator** (PayAI, no API key) — no extra env needed. Override only if you
+want a specific facilitator:
+```
+AXP_X402_FACILITATOR_URL=https://facilitator.payai.network   # default; override as needed
 ```
 
-(`base-sepolia` = free testnet. For mainnet later, use `base` + a production facilitator
-like `https://facilitator.payai.network`.)
+Testnet (free, for recording a demo) — use Base Sepolia + the x402.org facilitator:
+```
+AXP_X402_NETWORKS=base-sepolia
+AXP_X402_FACILITATOR_URL=https://x402.org/facilitator
+```
 
 ## 2. Fund a throwaway buyer wallet
 
