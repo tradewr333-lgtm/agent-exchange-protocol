@@ -40,7 +40,7 @@ import { listTemplates } from './src/agent-templates.js';
 import { launchAgent } from './src/agent-launcher.js';
 import { buildLaunchQuote, verifyLaunchPayment, launchPaymentEnabled, verifyTreasuryPayment, verifyErc20TransferTo, TOKENS } from './src/payments-onchain.js';
 import { buildPaymentRequired, x402Network, x402NetworkList, pricePerCallUsd, extractPaymentProof, encodeHeader, x402Enabled, isSignedPayload, facilitatorEnabled, verifyViaFacilitator, settleViaFacilitator } from './src/x402.js';
-import { stripeEnabled, createSubscriptionCheckout, constructWebhookEvent } from './src/stripe.js';
+import { stripeEnabled, createSubscriptionCheckout, constructWebhookEvent, createCreditCheckout, retrieveCheckoutSession } from './src/stripe.js';
 import { buildHireQuote, hireAmounts, hireFeeRate, computeSplit, hirePaymentEnabled } from './src/hire.js';
 import { sendPayout, payoutEnabled } from './src/payout.js';
 import { executeTask, llmEnabled } from './src/agent-executor.js';
@@ -1126,6 +1126,43 @@ const server = http.createServer(async (request, response) => {
     return sendJson(response, 200, { ok: true, owner, credited_usd: amount, balance_usd: credited.balance, asset, tx_hash, credit_key, how_to: 'Call POST /x402/decision/call with header X-AXP-CREDIT-KEY and body {"symbol":"BTC/USD"}. Save this key — it is shown once.' }, { 'Cache-Control': 'no-store' });
   }
 
+  // Start a Stripe one-time checkout for a credit pack (card rail).
+  if (request.method === 'POST' && url.pathname === '/credits/checkout') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
+    const amount = Number(body?.amount);
+    if (!owner) return sendJson(response, 400, { error: 'valid_owner_wallet_required' });
+    const priceMap = { 20: process.env.STRIPE_PRICE_CREDITS_20, 50: process.env.STRIPE_PRICE_CREDITS_50 };
+    const priceId = priceMap[amount];
+    if (!priceId) return sendJson(response, 400, { error: 'pack_not_available', hint: 'amount must be 20 or 50 and its Stripe price env must be set' });
+    const base = process.env.AXP_PUBLIC_URL || `https://${request.headers.host || 'axp.network'}`;
+    const result = await createCreditCheckout({
+      priceId, ownerRef: owner.toLowerCase(), creditsUsd: amount,
+      successUrl: `${base}/credits?paid=1&session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${base}/credits`,
+      customerEmail: typeof body?.email === 'string' ? body.email : undefined,
+    });
+    return sendJson(response, result.status, result);
+  }
+
+  // After Stripe success: verify the session is paid, credit (idempotent) and issue a key.
+  if (request.method === 'POST' && url.pathname === '/credits/stripe/key') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner.toLowerCase() : null;
+    const sessionId = body?.session_id;
+    if (!owner || !sessionId) return sendJson(response, 400, { error: 'owner_and_session_id_required' });
+    const r = await retrieveCheckoutSession(sessionId);
+    if (!r.ok) return sendJson(response, r.status ?? 404, r);
+    const s = r.session;
+    const meta = s.metadata || {};
+    if (meta.kind !== 'api_credits' || (meta.owner_ref || '').toLowerCase() !== owner) return sendJson(response, 403, { error: 'session_owner_mismatch' });
+    if (s.payment_status !== 'paid') return sendJson(response, 402, { error: 'not_paid', payment_status: s.payment_status });
+    const usd = Number(meta.credits_usd);
+    await addCredit(owner, usd, { source: 'stripe', ref: s.id }); // idempotent by session id
+    const credit_key = await issueCreditKey(owner);
+    return sendJson(response, 200, { ok: true, owner, balance_usd: await getCreditBalance(owner), credit_key }, { 'Cache-Control': 'no-store' });
+  }
+
   // Payment config for the buy page (treasury + BSC token addresses + packs).
   if (request.method === 'GET' && url.pathname === '/credits/config') {
     const treasury = process.env.AXP_TREASURY_ADDRESS || null;
@@ -1134,6 +1171,7 @@ const server = http.createServer(async (request, response) => {
       tokens: { USDT: TOKENS.USDT, USDC: TOKENS.USDC },
       price_per_decision_usd: decisionPriceUsd(),
       packs: [20, 50],
+      stripe: { enabled: stripeEnabled() && Boolean(process.env.STRIPE_PRICE_CREDITS_20), packs: { 20: Boolean(process.env.STRIPE_PRICE_CREDITS_20), 50: Boolean(process.env.STRIPE_PRICE_CREDITS_50) } },
     }, { 'Cache-Control': 'no-store' });
   }
 
@@ -3881,6 +3919,14 @@ async function handleStripeEvent(event) {
   if (type !== 'checkout.session.completed' && !type.startsWith('customer.subscription')) return;
 
   const meta = obj.metadata || {};
+  // API credits: one-time card payment → credit the buyer's wallet balance (idempotent by session id).
+  if (type === 'checkout.session.completed' && meta.kind === 'api_credits' && (obj.payment_status === 'paid' || obj.status === 'complete')) {
+    const usd = Number(meta.credits_usd);
+    if (meta.owner_ref && usd > 0) {
+      try { await addCredit(meta.owner_ref, usd, { source: 'stripe', ref: obj.id }); } catch (e) { console.error('stripe_credit_failed', e?.message || e); }
+    }
+    return;
+  }
   const agentId = meta.agent_id || obj.client_reference_id || null;
   const subId = obj.subscription || (type.startsWith('customer.subscription') ? obj.id : null) || obj.id;
   let status;

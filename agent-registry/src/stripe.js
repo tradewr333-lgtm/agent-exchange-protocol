@@ -43,6 +43,41 @@ export async function createSubscriptionCheckout({ priceId, agentId, ownerRef, p
   }
 }
 
+// One-time checkout for prepaid API credits (mode: payment, not subscription).
+export async function createCreditCheckout({ priceId, ownerRef, creditsUsd, successUrl, cancelUrl, customerEmail } = {}) {
+  const stripe = await getStripe();
+  if (!stripe) return { ok: false, status: 503, error: 'stripe_disabled', hint: 'set STRIPE_SECRET_KEY' };
+  if (!priceId) return { ok: false, status: 400, error: 'price_not_configured', hint: 'set STRIPE_PRICE_CREDITS_20 / _50' };
+  const metadata = { kind: 'api_credits', owner_ref: ownerRef || '', credits_usd: String(creditsUsd || '') };
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      client_reference_id: ownerRef || undefined,
+      customer_email: customerEmail || undefined,
+      metadata,
+      payment_intent_data: { metadata },
+    });
+    return { ok: true, status: 200, url: session.url, id: session.id };
+  } catch (err) {
+    return { ok: false, status: 502, error: 'stripe_checkout_failed', detail: err?.message || String(err) };
+  }
+}
+
+// Retrieve a checkout session to verify payment before issuing a credit key.
+export async function retrieveCheckoutSession(sessionId) {
+  const stripe = await getStripe();
+  if (!stripe) return { ok: false, status: 503, error: 'stripe_disabled' };
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    return { ok: true, session };
+  } catch (err) {
+    return { ok: false, status: 404, error: 'session_not_found', detail: err?.message || String(err) };
+  }
+}
+
 export async function constructWebhookEvent(rawBody, signature) {
   const stripe = await getStripe();
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
