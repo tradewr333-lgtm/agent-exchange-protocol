@@ -85,6 +85,31 @@ export async function fetchDerivatives(base, { now = Date.now() } = {}) {
   };
 }
 
+// Equities / index ETFs via Finnhub (free tier). Honest caveats: SINGLE source (no
+// cross-venue consensus), free-tier quotes can be delayed, and rate-limited (~60/min).
+// So an equity gets a real price + daily change, but the decision is HOLD (no spread to
+// arbitrage from one source). Enabled only when AXP_FINNHUB_KEY is set.
+function finnhubKey(env = process.env) { return env.AXP_FINNHUB_KEY || null; }
+function equitySymbols(env = process.env) {
+  return (env.AXP_DECISION_EQUITIES || 'SPY,QQQ,AAPL,NVDA,MSFT')
+    .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+}
+export async function fetchEquityObservations(env = process.env, { now = Date.now() } = {}) {
+  const key = finnhubKey(env);
+  if (!key) return [];
+  const owner = minerOwner(env);
+  const out = [];
+  for (const s of equitySymbols(env)) {
+    try {
+      const j = await fetchJson(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${key}`);
+      const c = Number(j.c);
+      if (!Number.isFinite(c) || c <= 0) continue;
+      out.push({ symbol: `${s}/USD`, source: 'finnhub', price: c, bid: c, ask: c, ts: now, agent_id: SYSTEM_MINER_ID, owner, change_pct: Number(j.dp) });
+    } catch { /* tolerate per-symbol failure / rate limit */ }
+  }
+  return out;
+}
+
 export async function ensureMinerAgent(env = process.env) {
   let registry;
   try { registry = await loadAgentsRegistry(); }
@@ -158,6 +183,11 @@ export async function runDecisionMineOnce(env = process.env) {
         all.push({ ...q, agent_id: owner.agent_id, owner: owner.owner });
       }
     } catch (err) { console.warn('decision_mine_fetch', base, err?.message || err); }
+  }
+  // Equities / index ETFs (Finnhub) — single-source price feed, only if a key is set.
+  if (finnhubKey(env)) {
+    try { all = all.concat(await fetchEquityObservations(env, { now })); }
+    catch (err) { console.warn('decision_mine_equities', err?.message || err); }
   }
   if (!all.length) { console.warn('[auto-miner] no venues reachable this cycle'); return { ok: false, accepted: 0 }; }
   const accepted = await appendObservations(all);
