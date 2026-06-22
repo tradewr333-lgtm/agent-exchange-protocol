@@ -35,6 +35,8 @@
   .ok{color:var(--green)} .err{color:var(--red)}
   .btn.sm{padding:6px 12px;font-size:12px;margin-top:0}
   .cf,select.cf{width:100%;background:#0a142e;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:13px;margin-top:4px;font-family:ui-monospace,monospace}
+  @keyframes axppulse{0%{transform:scale(1)}40%{transform:scale(1.25);filter:brightness(1.8) drop-shadow(0 0 6px var(--green))}100%{transform:scale(1)}}
+  .pulsing{display:inline-block;animation:axppulse .65s ease}
   code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px;font-size:12px;font-family:ui-monospace,monospace}
 </style>
 </head>
@@ -75,7 +77,7 @@
 
   <div class="card">
     <div class="row"><b>1 · Connect Deribit</b> <button class="btn sm" id="wconnect">Connect wallet</button></div>
-    <div class="row" style="margin-top:8px"><div id="dstatus" class="sub">connect your wallet first</div><a class="btn sm" id="d-disconnect" style="display:none;background:transparent;border:1px solid var(--red);color:var(--red);box-shadow:none">Remove key</a></div>
+    <div class="row" style="margin-top:8px"><div id="dstatus" class="sub">connect your wallet first</div><span style="display:flex;gap:8px"><a class="btn sm" id="d-refresh" style="display:none">🔄 Refresh balance</a><a class="btn sm" id="d-disconnect" style="display:none;background:transparent;border:1px solid var(--red);color:var(--red);box-shadow:none">Remove key</a></span></div>
     <div id="dform" style="display:none;margin-top:10px">
       <input type="text" id="d-key" placeholder="Deribit API key (client id)"/>
       <input type="password" id="d-secret" placeholder="Deribit API secret"/>
@@ -193,11 +195,12 @@ $('wconnect').addEventListener('click',async()=>{
   if(typeof window.ethereum==='undefined'){$('dstatus').textContent='install MetaMask to connect';return;}
   try{const a=await window.ethereum.request({method:'eth_requestAccounts'}); if(a&&a[0]){WALLET=a[0];$('wconnect').textContent=short(WALLET);$('dform').style.display='';refreshDeribit();loadCfg();pollBot();}}catch(e){}
 });
-async function refreshDeribit(){
+async function refreshDeribit(pulse){
   if(!WALLET)return;
   try{const s=await fetch('/deribit/status?owner='+WALLET,{cache:'no-store'}).then(r=>r.json());
-    if(s.connected){$('dstatus').innerHTML='<span class="ok">✓ connected'+(s.testnet?' (testnet)':' (MAINNET)')+' · balance '+(s.balance??'?')+' BTC</span>';$('d-disconnect').style.display='';$('dform').style.display='none';}
-    else {$('dstatus').textContent='not connected — paste your Deribit key below';$('d-disconnect').style.display='none';$('dform').style.display='';}
+    if(s.connected){$('dstatus').innerHTML='<span class="ok">✓ connected'+(s.testnet?' (testnet)':' (MAINNET)')+' · balance <b id="dbal">'+(s.balance??'?')+'</b> BTC</span>';$('d-disconnect').style.display='';$('d-refresh').style.display='';$('dform').style.display='none';
+      if(pulse){const b=$('dbal');if(b){b.classList.add('pulsing');setTimeout(()=>b.classList.remove('pulsing'),700);}}}
+    else {$('dstatus').textContent='not connected — paste your Deribit key below';$('d-disconnect').style.display='none';$('d-refresh').style.display='none';$('dform').style.display='';}
   }catch(e){}
 }
 $('d-connect').addEventListener('click',async()=>{
@@ -212,6 +215,11 @@ $('d-connect').addEventListener('click',async()=>{
   }catch(e){$('d-msg').textContent='error';}
 });
 
+$('d-refresh').addEventListener('click',async()=>{
+  const btn=$('d-refresh');const t=btn.textContent;btn.textContent='⏳ updating…';
+  await refreshDeribit(true);
+  btn.textContent=t;
+});
 $('d-disconnect').addEventListener('click',async()=>{
   if(!WALLET)return;
   if(!confirm('Remove your stored Deribit key and stop the bot?'))return;
