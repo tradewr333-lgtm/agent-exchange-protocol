@@ -71,8 +71,16 @@ export async function ensureMinerAgent(env = process.env) {
   const owner = minerOwner(env);
   const existing = registry.agents.find((a) => a.agent_id === SYSTEM_MINER_ID);
   if (existing) {
-    if (owner && existing.owner !== owner) {
-      const agents = registry.agents.map((a) => (a.agent_id === SYSTEM_MINER_ID ? { ...a, owner } : a));
+    // Backfill: keep owner current AND ensure the system miner always claims the
+    // default bases, so user-deployed pairs EXTEND coverage instead of replacing it.
+    const wantSymbols = defaultBases(env).map((b) => `${b}/USD`);
+    const haveSymbols = (existing.miner_config && Array.isArray(existing.miner_config.symbols)) ? existing.miner_config.symbols : [];
+    const needsSymbols = haveSymbols.length === 0;
+    const needsOwner = owner && existing.owner !== owner;
+    if (needsSymbols || needsOwner) {
+      const agents = registry.agents.map((a) => (a.agent_id === SYSTEM_MINER_ID
+        ? { ...a, owner: needsOwner ? owner : a.owner, miner_config: { ...(a.miner_config || {}), symbols: needsSymbols ? wantSymbols : haveSymbols } }
+        : a));
       await saveAgentsRegistry({ ...registry, agents });
     }
     return existing;
