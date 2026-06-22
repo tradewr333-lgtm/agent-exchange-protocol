@@ -30,6 +30,7 @@ import {
 import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, DECISION_VERSION } from './src/decision.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
+import { startDecisionMiner, runDecisionMineOnce, decisionMineEnabled } from './src/decision-miner.js';
 import { computeWeightedScores, reputationWeight } from './src/sybil.js';
 import { buildObservatory } from './src/observatory.js';
 import { normalizeSignal } from './src/external-signals.js';
@@ -627,6 +628,16 @@ const server = http.createServer(async (request, response) => {
     if (!adminKey) return sendJson(response, 503, { error: 'admin_disabled', hint: 'set AXP_ADMIN_KEY' });
     if (request.headers['x-axp-admin-key'] !== adminKey) return sendJson(response, 401, { error: 'invalid_admin_key' });
     const result = await runWorkerOnce();
+    return sendJson(response, result.ok ? 200 : 503, result);
+  }
+
+  // Admin: trigger one auto-mine cycle now (seed the Decision API immediately).
+  if (request.method === 'POST' && url.pathname === '/admin/decision/mine') {
+    const adminKey = process.env.AXP_ADMIN_KEY;
+    if (!adminKey) return sendJson(response, 503, { error: 'admin_disabled', hint: 'set AXP_ADMIN_KEY' });
+    if (request.headers['x-axp-admin-key'] !== adminKey) return sendJson(response, 401, { error: 'invalid_admin_key' });
+    if (!decisionMineEnabled()) return sendJson(response, 409, { error: 'auto_miner_disabled', hint: 'set AXP_DECISION_MINE_ENABLED=true and AXP_DECISION_PAYTO' });
+    const result = await runDecisionMineOnce();
     return sendJson(response, result.ok ? 200 : 503, result);
   }
 
@@ -1484,6 +1495,7 @@ const server = http.createServer(async (request, response) => {
 server.listen(port, () => {
   console.log(`AXP agent registry running at http://localhost:${port}`);
   startSwarmScheduler();
+  startDecisionMiner();
 });
 
 function sendJson(response, status, body, extraHeaders = {}) {
