@@ -76,7 +76,11 @@ async function botTick(st) {
       if (st.lastExpiryTraded === sig.expiry) { st.lastAction = 'already traded ' + sig.expiry; return; }
 
       const placed = [];
-      for (const leg of sig.legs) {
+      // Place the protective LONG wings (BUY) FIRST, then the SHORT legs (SELL). With the
+      // longs already in the account, Deribit margins the shorts as a defined-risk spread
+      // (far less margin) instead of as naked options — critical for smaller accounts.
+      const ordered = [...sig.legs].sort((a, b) => (b.action === 'BUY') - (a.action === 'BUY'));
+      for (const leg of ordered) {
         const inst = leg.instrument;
         const isSell = leg.action === 'SELL';
         // Marketable LIMIT: sell at the bid / buy at the ask, rounded to the Deribit
