@@ -212,6 +212,22 @@ async function botTick(st) {
     const floatingBtc = ours.reduce((s, p) => s + (Number(p.floating_pl) || 0), 0);
     st.currentPnlUsd = Number((floatingBtc).toFixed(2));
 
+    // Backfill expected-net / win-prob for condors opened before these were stored
+    // (so the panel shows the probable profit). Computed once from a fresh signal, then persisted.
+    if ((st.expectedNetUsd == null || st.winProb == null) && st.creditUsd > 0) {
+      try {
+        const sig2 = await liveCondor(creds, cfg.asset, { putDelta: cfg.putDelta, callDelta: cfg.callDelta, wingStrikes: cfg.wingStrikes, minDaysToExpiry: cfg.minDaysToExpiry });
+        if (sig2 && sig2.ok) {
+          const FEE_CAP = 0.0003, FEE_RATE = 0.125; const spot2 = Number(sig2.spot) || 0;
+          const openFeesBtc = (sig2.legs || []).reduce((s, l) => s + Math.min(FEE_CAP, FEE_RATE * Math.max(0, Number(l.action === 'SELL' ? l.bid : l.ask) || 0)) * cfg.contracts, 0);
+          st.openFeesUsd = Number((openFeesBtc * spot2).toFixed(2));
+          st.winProb = Number.isFinite(Number(sig2.approx_prob_in_range)) ? Number(sig2.approx_prob_in_range) : st.winProb;
+          st.expectedNetUsd = Number((st.creditUsd - st.openFeesUsd).toFixed(2));
+          if (saveState) await saveState(snapshot(st)).catch(() => {});
+        }
+      } catch { /* keep nulls; will retry next tick */ }
+    }
+
     const profitTargetUsd = st.creditUsd * (cfg.profitTargetPct / 100);
     const stopUsd = -(st.creditUsd * cfg.stopMult);
     const hoursToExpiry = st.expiry ? hoursUntilExpiry(st.expiry) : 999;
