@@ -72,9 +72,18 @@ async function botTick(st) {
       const placed = [];
       for (const leg of sig.legs) {
         const inst = leg.instrument;
-        const r = await placeOrder(creds, { instrument: inst, direction: leg.action === 'SELL' ? 'sell' : 'buy', amount: cfg.contracts, type: 'market', label: 'axp_ic' });
-        placed.push({ instrument: inst, action: leg.action, ok: r.ok, error: r.error, avg: r.avg_price });
-        if (!r.ok) { st.lastError = `leg ${inst} failed: ${r.error}`; }
+        const isSell = leg.action === 'SELL';
+        // Marketable LIMIT: sell at the bid / buy at the ask (real ticks from the quote)
+        // so the leg actually crosses and fills. Fall back to market if no quote.
+        const px = isSell ? Number(leg.bid) : Number(leg.ask);
+        const order = px > 0
+          ? { instrument: inst, direction: isSell ? 'sell' : 'buy', amount: cfg.contracts, type: 'limit', price: px, timeInForce: 'immediate_or_cancel', label: 'axp_ic' }
+          : { instrument: inst, direction: isSell ? 'sell' : 'buy', amount: cfg.contracts, type: 'market', label: 'axp_ic' };
+        const r = await placeOrder(creds, order);
+        const filled = Number(r.filled || 0);
+        const ok = r.ok && filled > 0;
+        placed.push({ instrument: inst, action: leg.action, ok, filled, error: r.ok ? (filled > 0 ? null : 'not_filled (no liquidity at price)') : r.error, detail: r.detail, avg: r.avg_price });
+        if (!ok) { st.lastError = `leg ${inst}: ${r.ok ? 'not_filled' : r.error}${r.detail ? ' (' + r.detail + ')' : ''}`; }
       }
       const okLegs = placed.filter((p) => p.ok);
       if (okLegs.length === 4) {
@@ -85,9 +94,10 @@ async function botTick(st) {
         if (saveState) await saveState(snapshot(st)).catch(() => {});
         save && save({ type: 'open', expiry: sig.expiry, price: sig.spot ?? null, size: cfg.contracts, credit_usd: Number(st.creditUsd.toFixed(2)), legs: st.legs, reason: 'Iron Condor opened' });
       } else {
-        st.lastError = `only ${okLegs.length}/4 legs filled — unwinding`;
+        const errs = [...new Set(placed.filter((p) => !p.ok).map((p) => p.error || '?'))].join('; ');
+        st.lastError = `${okLegs.length}/4 filled — ${errs || 'no fills'}`;
         await cancelAll(creds, { currency: cfg.asset, kind: 'option' });
-        save && save({ type: 'error', reason: `Partial fill (${okLegs.length}/4) — cancelled`, legs: placed });
+        save && save({ type: 'error', reason: `Open failed (${okLegs.length}/4): ${errs || 'no fills (liquidity/margin?)'}`, legs: placed });
       }
       return;
     }
