@@ -178,17 +178,9 @@ const server = http.createServer(async (request, response) => {
     if (!owner || !(await verifyOwnerSig(owner, body?.message, body?.signature))) return sendJson(response, 401, { error: 'signature_required_or_mismatch' });
     const creds = await loadDeribitCreds(owner);
     if (!creds) return sendJson(response, 409, { error: 'deribit_not_connected', hint: 'connect your Deribit key first' });
-    // Gate: mainnet requires an active $35 subscription. Testnet is free (for validation).
-    // Owner bypass: the platform owner (treasury wallet, or AXP_BOT_OWNER_BYPASS list)
-    // runs the bot on their OWN account without paying themselves the $35.
-    if (!creds.testnet) {
-      const bypass = [process.env.AXP_TREASURY_ADDRESS, ...(process.env.AXP_BOT_OWNER_BYPASS || '').split(',')]
-        .map((a) => String(a || '').trim().toLowerCase()).filter(Boolean);
-      const isOwner = bypass.includes(owner.toLowerCase());
-      if (!isOwner) {
-        const subs = (await loadSubscriptions()).filter((s) => String(s.owner_ref || '').toLowerCase() === owner.toLowerCase() && s.plan_sku === 'deribit_bot' && ['active', 'trialing'].includes(s.status));
-        if (!subs.length) return sendJson(response, 402, { error: 'subscription_required', hint: 'subscribe ($35/mo) to run the bot on mainnet', subscribe: '/deribit/bot/subscribe' });
-      }
+    // Gate: testnet is free; mainnet needs owner bypass or an active $35 subscription.
+    if (!(await isBotEntitled(owner, creds.testnet))) {
+      return sendJson(response, 402, { error: 'subscription_required', hint: 'subscribe ($35/mo) to run the bot on mainnet', subscribe: '/deribit/bot/subscribe' });
     }
     const cfgRow = await loadBotConfig(owner);
     const restoreState = await loadBotState(owner);
@@ -1872,6 +1864,17 @@ server.listen(port, () => {
 
 // On startup, resume every enabled Deribit bot and restore any open condor so a
 // deploy/restart continues managing the position (never closes a winning trade).
+// Single source of truth for bot access: testnet is free; mainnet needs the platform
+// owner bypass (treasury / AXP_BOT_OWNER_BYPASS) OR an active $35 deribit_bot subscription.
+async function isBotEntitled(owner, testnet) {
+  if (testnet) return true;
+  const bypass = [process.env.AXP_TREASURY_ADDRESS, ...(process.env.AXP_BOT_OWNER_BYPASS || '').split(',')]
+    .map((a) => String(a || '').trim().toLowerCase()).filter(Boolean);
+  if (bypass.includes(String(owner).toLowerCase())) return true;
+  const subs = (await loadSubscriptions()).filter((s) => String(s.owner_ref || '').toLowerCase() === String(owner).toLowerCase() && s.plan_sku === 'deribit_bot' && ['active', 'trialing'].includes(s.status));
+  return subs.length > 0;
+}
+
 async function resumeDeribitBots() {
   try {
     const bots = await loadEnabledBots();
@@ -1879,6 +1882,13 @@ async function resumeDeribitBots() {
     for (const b of bots) {
       const creds = await loadDeribitCreds(b.owner);
       if (!creds) continue;
+      // Re-verify entitlement on every restart — a lapsed/cancelled subscriber must NOT
+      // be silently resumed. Disable them so they stop being picked up.
+      if (!(await isBotEntitled(b.owner, creds.testnet))) {
+        await saveBotConfig(b.owner, b.config || {}, false);
+        console.log(`[deribit-bot] skipped ${b.owner.slice(0, 8)}… — not entitled (subscription inactive)`);
+        continue;
+      }
       icStartBot(b.owner, b.config || {}, loadDeribitCreds, (trade) => appendBotTrade(b.owner, trade),
         { saveState: (snap) => saveBotState(b.owner, snap), restoreState: b.openState || null, testnet: creds.testnet });
       n++;
