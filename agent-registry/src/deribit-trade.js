@@ -92,6 +92,22 @@ async function getSpot(creds, asset) {
 }
 // Exported for the bot's expiry logic (decide let-expire vs close-early).
 export async function getIndexPrice(creds, asset) { return getSpot(creds, asset); }
+
+// IV richness from Deribit's DVOL index — the real "sell only when vol is rich" edge.
+// Returns the current DVOL, its recent percentile, and rich=true when at/above minPct.
+export async function ivRichness(creds, asset = 'BTC', lookbackDays = 45, minPct = 0.55) {
+  const end = Date.now(), start = end - lookbackDays * 86_400_000;
+  const url = `${base(creds.testnet)}/public/get_volatility_index_data?currency=${asset}&start_timestamp=${start}&end_timestamp=${end}&resolution=43200`;
+  const r = await getJson(url, {}, 9000);
+  const data = r.ok ? (r.result?.data || []) : [];
+  const closes = data.map((d) => Number(d[4])).filter(Number.isFinite);
+  if (!closes.length) return { ok: false, error: r.error || 'no_dvol' };
+  const current = closes[closes.length - 1];
+  const sorted = [...closes].sort((a, b) => a - b);
+  const percentile = sorted.filter((x) => x <= current).length / sorted.length;
+  const median = sorted[Math.floor(sorted.length / 2)];
+  return { ok: true, current, median, percentile, rich: percentile >= minPct };
+}
 // Nearest expiry at least minDaysToExpiry away — so we sell real premium (a 1-day
 // expiry has almost none, and fees swamp the credit). Falls back to the very nearest
 // if nothing satisfies the floor.

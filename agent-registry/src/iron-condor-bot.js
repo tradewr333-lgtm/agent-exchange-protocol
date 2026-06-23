@@ -8,7 +8,7 @@
 // closes a trade that is still within its exit parameters.
 //
 // Honest + safe: only TRADE-only keys, small configurable size, no return promises.
-import { liveCondor, placeOrder, getPositions, cancelAll, getIndexPrice } from './deribit-trade.js';
+import { liveCondor, placeOrder, getPositions, cancelAll, getIndexPrice, ivRichness } from './deribit-trade.js';
 
 const activeBots = new Map(); // owner -> { interval, state }
 
@@ -39,6 +39,10 @@ function defaults(cfg = {}) {
     // Target an expiry at least this many days out — short-dated condors have ~no premium
     // (fees swamp the credit). 7d is a sane theta-positive default.
     minDaysToExpiry: Number.isFinite(Number(cfg.minDaysToExpiry)) && Number(cfg.minDaysToExpiry) >= 0 ? Number(cfg.minDaysToExpiry) : 7,
+    // IV filter: only open when DVOL is rich (the real edge — sell vol when it's expensive).
+    // minPct 0.55 ≈ "medium" (~1 trade/month); raise for stricter, lower for more trades.
+    ivFilter: cfg.ivFilter === true ? true : false,
+    ivMinPercentile: Number.isFinite(Number(cfg.ivMinPercentile)) ? Number(cfg.ivMinPercentile) : 0.55,
   };
 }
 
@@ -128,6 +132,19 @@ async function botTick(st) {
       // attempt costs real fees on the filled+unwound legs). Requires a manual re-START
       // (e.g. after adding margin) to clear.
       if (st.haltOpen) { st.lastAction = `paused: ${st.haltReason || 'add margin and press START again'}`; return; }
+
+      // IV filter — the real edge: only sell when DVOL is rich. Skip cheap-vol weeks.
+      // Fail-open: a DVOL fetch error never blocks trading forever.
+      if (cfg.ivFilter) {
+        try {
+          const iv = await ivRichness(creds, cfg.asset, 45, cfg.ivMinPercentile);
+          if (iv.ok && !iv.rich) {
+            st.lastAction = `waiting for rich IV · DVOL ${iv.current.toFixed(1)} at ${(iv.percentile * 100).toFixed(0)}th pct (need ≥${(cfg.ivMinPercentile * 100).toFixed(0)}%)`;
+            return;
+          }
+        } catch { /* fail-open */ }
+      }
+
       const sig = await liveCondor(creds, cfg.asset, { putDelta: cfg.putDelta, callDelta: cfg.callDelta, wingStrikes: cfg.wingStrikes, minDaysToExpiry: cfg.minDaysToExpiry });
       if (!sig.ok || sig.decision.action !== 'OPEN') { st.lastAction = 'no entry (' + (sig.error || sig.decision?.action) + ')'; return; }
       if (st.lastExpiryTraded === sig.expiry) { st.lastAction = 'already traded ' + sig.expiry; return; }
