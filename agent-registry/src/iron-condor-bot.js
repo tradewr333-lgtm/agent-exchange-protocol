@@ -289,5 +289,21 @@ export async function closeAllAndStop(owner, getCreds) {
 export function getBotStatus(owner) {
   const e = activeBots.get(owner); if (!e) return null;
   const s = e.state;
-  return { running: s.status === 'running', open: s.open, asset: s.config.asset, testnet: s.testnet, expiry: s.expiry, credit_usd: Number(s.creditUsd.toFixed(2)), pnl_usd: s.currentPnlUsd, expected_net_usd: s.expectedNetUsd ?? null, expected_net_target_usd: s.expectedNetTargetUsd ?? null, win_prob: s.winProb ?? null, auto_reopen: s.config.autoReopen, legs: s.legs, last_action: s.lastAction, last_error: s.lastError, ticks: s.tickCount, config: s.config };
+  // Price zones derived from the legs (works for resumed positions too).
+  let zone = null;
+  if (s.open && Array.isArray(s.legs) && s.legs.length) {
+    const isP = (l) => l.type === 'P' || /-P$/i.test(l.instrument || '');
+    const isC = (l) => l.type === 'C' || /-C$/i.test(l.instrument || '');
+    const sp = s.legs.find((l) => l.action === 'SELL' && isP(l));
+    const sc = s.legs.find((l) => l.action === 'SELL' && isC(l));
+    const wp = s.legs.find((l) => l.action === 'BUY' && isP(l));
+    const wc = s.legs.find((l) => l.action === 'BUY' && isC(l));
+    const creditPer = s.config.contracts > 0 ? s.creditUsd / s.config.contracts : 0;
+    if (sp && sc) zone = {
+      short_put: sp.strike, short_call: sc.strike,
+      wing_lo: wp ? wp.strike : null, wing_hi: wc ? wc.strike : null,
+      be_lo: Math.round(sp.strike - creditPer), be_hi: Math.round(sc.strike + creditPer),
+    };
+  }
+  return { running: s.status === 'running', open: s.open, asset: s.config.asset, testnet: s.testnet, expiry: s.expiry, credit_usd: Number(s.creditUsd.toFixed(2)), pnl_usd: s.currentPnlUsd, expected_net_usd: s.expectedNetUsd ?? null, expected_net_target_usd: s.expectedNetTargetUsd ?? null, win_prob: s.winProb ?? null, zone, auto_reopen: s.config.autoReopen, legs: s.legs, last_action: s.lastAction, last_error: s.lastError, ticks: s.tickCount, config: s.config };
 }
