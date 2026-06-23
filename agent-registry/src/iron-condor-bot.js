@@ -70,7 +70,16 @@ async function botTick(st) {
 
     // ── No open condor: maybe OPEN one ──
     if (!st.open) {
-      if (pos.ok && (pos.positions || []).length > 0) { st.lastAction = 'flat-wait (existing option positions)'; return; }
+      // Stray option positions (e.g. legs left over from a previous partial fill) block a
+      // clean condor. Flatten them (reduce-only) so the next tick starts from a clean slate.
+      if (pos.ok && (pos.positions || []).length > 0) {
+        for (const p of pos.positions) {
+          await placeOrder(creds, { instrument: p.instrument, direction: p.direction === 'buy' ? 'sell' : 'buy', amount: Math.abs(Number(p.size) || cfg.contracts), type: 'market', reduceOnly: true, label: 'axp_ic_clean' });
+        }
+        st.lastAction = `flattened ${pos.positions.length} stray position(s)`;
+        save && save({ type: 'cleanup', reason: `Closed ${pos.positions.length} stray option position(s) to reset` });
+        return;
+      }
       const sig = await liveCondor(creds, cfg.asset, { putDelta: cfg.putDelta, callDelta: cfg.callDelta, wingStrikes: cfg.wingStrikes });
       if (!sig.ok || sig.decision.action !== 'OPEN') { st.lastAction = 'no entry (' + (sig.error || sig.decision?.action) + ')'; return; }
       if (st.lastExpiryTraded === sig.expiry) { st.lastAction = 'already traded ' + sig.expiry; return; }
@@ -109,8 +118,13 @@ async function botTick(st) {
       } else {
         const errs = [...new Set(placed.filter((p) => !p.ok).map((p) => (p.error || '?') + (p.detail ? ` [${p.detail}]` : '')))].join('; ');
         st.lastError = `${okLegs.length}/4 filled — ${errs || 'no fills'}`;
+        // Cancel resting orders AND close any legs that actually FILLED (reduce-only) so we
+        // never leave stray naked positions consuming margin.
         await cancelAll(creds, { currency: cfg.asset, kind: 'option' });
-        save && save({ type: 'error', reason: `Open failed (${okLegs.length}/4): ${errs || 'no fills (liquidity/margin?)'}`, legs: placed });
+        for (const p of placed.filter((x) => x.ok)) {
+          await placeOrder(creds, { instrument: p.instrument, direction: p.action === 'SELL' ? 'buy' : 'sell', amount: cfg.contracts, type: 'market', reduceOnly: true, label: 'axp_ic_unwind' });
+        }
+        save && save({ type: 'error', reason: `Open failed (${okLegs.length}/4): ${errs || 'no fills (liquidity/margin?)'} — filled legs closed`, legs: placed });
       }
       return;
     }
