@@ -151,6 +151,11 @@
 
   <div class="card">
     <div class="row"><b>3 · Live panel</b> <span class="pill" id="b-state">stopped</span></div>
+    <div id="b-winbox" style="display:none;margin:12px 0 4px;padding:16px 20px;border-radius:16px;border:1px solid var(--green);background:linear-gradient(90deg,rgba(61,255,166,.16),rgba(57,217,255,.06));box-shadow:0 0 24px rgba(61,255,166,.18);text-align:center">
+      <div class="sub" style="color:var(--green);text-transform:uppercase;letter-spacing:.6px;font-weight:700">💰 Expected gain if it wins (stays in range · no stop)</div>
+      <div style="font-size:34px;font-weight:900;color:var(--green);text-shadow:0 0 12px rgba(61,255,166,.4)" id="b-winamt">—</div>
+      <div class="sub" id="b-winprob2" style="margin-top:2px">—</div>
+    </div>
     <div class="grid" style="margin-top:10px">
       <div class="kpi"><div class="k">Status</div><div class="v" id="b-action" style="font-size:13px">—</div></div>
       <div class="kpi"><div class="k">Open condor</div><div class="v" id="b-open" style="font-size:14px">no</div></div>
@@ -367,6 +372,8 @@ async function pollBot(){
     $('b-exp').textContent=s&&s.expiry?s.expiry:'—';
     $('b-expnet').textContent=s&&s.expected_net_usd!=null?usd(s.expected_net_usd):'—';
     $('b-prob').textContent=s&&s.win_prob!=null?Math.round(s.win_prob*100)+'%':'—';
+    if(s&&s.open&&s.expected_net_usd!=null){$('b-winbox').style.display='';$('b-winamt').textContent='+'+usd(s.expected_net_usd);$('b-winprob2').textContent=(s.win_prob!=null?Math.round(s.win_prob*100)+'% chance of staying in range':'')+' · before fees credit '+usd(s.credit_usd);}
+    else{$('b-winbox').style.display='none';}
     BOT_EXPIRY_MS = (s&&s.open&&s.expiry)?expiryToMs(s.expiry):null;
     renderTTX();
     const z=s&&s.zone;

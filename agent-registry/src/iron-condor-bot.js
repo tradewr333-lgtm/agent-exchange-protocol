@@ -57,6 +57,9 @@ function createState(owner, cfg, restore = null, testnet = false) {
     st.openedAt = Number(restore.openedAt) || Date.now();
     st.expiry = restore.expiry || null;
     st.lastExpiryTraded = restore.lastExpiryTraded || restore.expiry || null;
+    st.expectedNetUsd = restore.expectedNetUsd ?? null;
+    st.winProb = restore.winProb ?? null;
+    st.openFeesUsd = restore.openFeesUsd ?? null;
     st.lastAction = 'resumed open condor ' + (st.expiry || '');
   }
   return st;
@@ -64,7 +67,7 @@ function createState(owner, cfg, restore = null, testnet = false) {
 
 function snapshot(st) {
   return st.open
-    ? { open: true, legs: st.legs, creditUsd: st.creditUsd, openedAt: st.openedAt, expiry: st.expiry, lastExpiryTraded: st.lastExpiryTraded }
+    ? { open: true, legs: st.legs, creditUsd: st.creditUsd, openedAt: st.openedAt, expiry: st.expiry, lastExpiryTraded: st.lastExpiryTraded, expectedNetUsd: st.expectedNetUsd ?? null, winProb: st.winProb ?? null, openFeesUsd: st.openFeesUsd ?? null }
     : null;
 }
 
