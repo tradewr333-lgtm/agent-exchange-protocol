@@ -36,6 +36,11 @@
   .ok{color:var(--green)} .err{color:var(--red)}
   .btn.sm{padding:6px 12px;font-size:12px;margin-top:0}
   .cf,select.cf{width:100%;background:#0a142e;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:13px;margin-top:4px;font-family:ui-monospace,monospace}
+  .modetabs{display:flex;gap:10px;margin:12px 0 4px;flex-wrap:wrap}
+  .modetab{flex:1;min-width:200px;text-align:center;cursor:pointer;padding:14px 18px;border-radius:12px;font-weight:800;font-size:15px;border:1px solid var(--line);background:#0a142e;color:var(--dim);transition:all .12s}
+  .modetab:hover{filter:brightness(1.15)}
+  .modetab.on{color:#dbe7ff;border-color:var(--cyan);background:linear-gradient(180deg,rgba(57,217,255,.18),rgba(57,217,255,.05));box-shadow:0 0 16px rgba(57,217,255,.25)}
+  .modetab.sec.on{color:#0a1f12;border-color:var(--green);background:linear-gradient(180deg,#7dffba,#28e07e);box-shadow:0 0 20px rgba(61,255,166,.5)}
   @keyframes axppulse{0%{transform:scale(1)}40%{transform:scale(1.25);filter:brightness(1.8) drop-shadow(0 0 6px var(--green))}100%{transform:scale(1)}}
   .pulsing{display:inline-block;animation:axppulse .65s ease}
   @keyframes heartbeat{0%,100%{transform:scale(1)}15%{transform:scale(1.18)}30%{transform:scale(1)}45%{transform:scale(1.12)}60%{transform:scale(1)}}
@@ -126,13 +131,12 @@
   </div>
 
   <div class="card">
-    <div class="row" style="gap:10px;align-items:center"><b>2 · Bot config</b>
-      <span style="display:flex;gap:8px;margin-left:8px">
-        <a class="btn sm tabmode on" id="tab-plain" data-mode="condor">Iron Condor</a>
-        <a class="btn sm tabmode" id="tab-sec" data-mode="security" style="background:transparent;border:1px solid var(--green);color:var(--green);box-shadow:none">🛡️ Iron Condor Security</a>
-      </span>
+    <b>2 · Bot config</b>
+    <div class="modetabs">
+      <a class="modetab on" id="tab-plain" data-mode="condor">Iron Condor</a>
+      <a class="modetab sec" id="tab-sec" data-mode="security">🛡️ Iron Condor Security</a>
     </div>
-    <div class="sub" id="mode-desc" style="margin:6px 0 4px">Base condor — opens on schedule.</div>
+    <div class="sub" id="mode-desc" style="margin:4px 0 10px">Base condor — opens whenever a valid structure exists (no IV filter).</div>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);margin-top:10px">
       <div><div class="sub">Asset</div><select id="c-asset" class="cf"><option>BTC</option><option>ETH</option></select></div>
       <div><div class="sub" id="c-contracts-label">Contracts (BTC/leg)</div><input type="text" id="c-contracts" class="cf" value="0.1"/></div>
