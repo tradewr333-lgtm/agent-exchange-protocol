@@ -80,6 +80,10 @@ async function botTick(st) {
         save && save({ type: 'cleanup', reason: `Closed ${pos.positions.length} stray option position(s) to reset` });
         return;
       }
+      // Halted after an insufficient-funds failure — do NOT keep retrying (each failed
+      // attempt costs real fees on the filled+unwound legs). Requires a manual re-START
+      // (e.g. after adding margin) to clear.
+      if (st.haltOpen) { st.lastAction = `paused: ${st.haltReason || 'add margin and press START again'}`; return; }
       const sig = await liveCondor(creds, cfg.asset, { putDelta: cfg.putDelta, callDelta: cfg.callDelta, wingStrikes: cfg.wingStrikes });
       if (!sig.ok || sig.decision.action !== 'OPEN') { st.lastAction = 'no entry (' + (sig.error || sig.decision?.action) + ')'; return; }
       if (st.lastExpiryTraded === sig.expiry) { st.lastAction = 'already traded ' + sig.expiry; return; }
@@ -118,6 +122,12 @@ async function botTick(st) {
       } else {
         const errs = [...new Set(placed.filter((p) => !p.ok).map((p) => (p.error || '?') + (p.detail ? ` [${p.detail}]` : '')))].join('; ');
         st.lastError = `${okLegs.length}/4 filled — ${errs || 'no fills'}`;
+        // Insufficient margin → HALT auto-retries to stop burning fees on repeated
+        // open/unwind cycles. User must add funds and press START again.
+        if (/not_enough_funds|insufficient/i.test(errs)) {
+          st.haltOpen = true;
+          st.haltReason = 'insufficient margin for this size — add funds (or lower size) and press START again';
+        }
         // Cancel resting orders AND close any legs that actually FILLED (reduce-only) so we
         // never leave stray naked positions consuming margin.
         await cancelAll(creds, { currency: cfg.asset, kind: 'option' });
