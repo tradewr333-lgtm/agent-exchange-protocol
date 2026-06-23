@@ -82,13 +82,16 @@ async function botTick(st) {
     // ── No open condor: maybe OPEN one ──
     if (!st.open) {
       // Stray option positions (e.g. legs left over from a previous partial fill) block a
-      // clean condor. Flatten them (reduce-only) so the next tick starts from a clean slate.
-      if (pos.ok && (pos.positions || []).length > 0) {
-        for (const p of pos.positions) {
+      // clean condor. Only SHORT residuals carry risk → flatten those. Long-only leftovers
+      // (e.g. an unsellable deep-OTM wing with no bid) are harmless: ignore them and proceed,
+      // so the bot is never stuck trying to close a position that has no buyer.
+      const shorts = (pos.positions || []).filter((p) => Number(p.size) < 0);
+      if (pos.ok && shorts.length > 0) {
+        for (const p of (pos.positions || [])) {
           await placeOrder(creds, { instrument: p.instrument, direction: p.direction === 'buy' ? 'sell' : 'buy', amount: Math.abs(Number(p.size) || cfg.contracts), type: 'market', reduceOnly: true, label: 'axp_ic_clean' });
         }
-        st.lastAction = `flattened ${pos.positions.length} stray position(s)`;
-        save && save({ type: 'cleanup', reason: `Closed ${pos.positions.length} stray option position(s) to reset` });
+        st.lastAction = `flattened ${shorts.length} short residual(s)`;
+        save && save({ type: 'cleanup', reason: `Closed short residual position(s) to reset` });
         return;
       }
       // Halted after an insufficient-funds failure — do NOT keep retrying (each failed
