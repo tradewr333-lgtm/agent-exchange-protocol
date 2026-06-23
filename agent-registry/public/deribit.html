@@ -38,6 +38,8 @@
   .cf,select.cf{width:100%;background:#0a142e;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:13px;margin-top:4px;font-family:ui-monospace,monospace}
   @keyframes axppulse{0%{transform:scale(1)}40%{transform:scale(1.25);filter:brightness(1.8) drop-shadow(0 0 6px var(--green))}100%{transform:scale(1)}}
   .pulsing{display:inline-block;animation:axppulse .65s ease}
+  @keyframes heartbeat{0%,100%{transform:scale(1)}15%{transform:scale(1.18)}30%{transform:scale(1)}45%{transform:scale(1.12)}60%{transform:scale(1)}}
+  .heartbeat{display:inline-block;color:var(--red)!important;animation:heartbeat 1s ease-in-out infinite;text-shadow:0 0 8px rgba(255,93,126,.7)}
   code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px;font-size:12px;font-family:ui-monospace,monospace}
 </style>
 </head>
@@ -125,6 +127,7 @@
       <div class="kpi"><div class="k">Realized P&amp;L (total)</div><div class="v" id="b-total" style="color:var(--green)">$0</div></div>
       <div class="kpi"><div class="k">Expected net (after fees)</div><div class="v" id="b-expnet" style="color:var(--gold)">—</div></div>
       <div class="kpi"><div class="k">Win prob (in range)</div><div class="v" id="b-prob">—</div></div>
+      <div class="kpi"><div class="k">Time to expiry</div><div class="v" id="b-ttx" style="font-size:15px">—</div></div>
     </div>
     <div style="margin-top:14px"><div class="sub" style="margin-bottom:6px">📈 Cumulative realized P&amp;L (persisted in cloud · survives deploys)</div><div style="height:220px;background:#070f24;border:1px solid var(--line);border-radius:10px;padding:8px"><canvas id="b-chart"></canvas></div></div>
     <div class="row" style="gap:10px;margin-top:12px">
@@ -315,6 +318,8 @@ async function pollBot(){
     $('b-exp').textContent=s&&s.expiry?s.expiry:'—';
     $('b-expnet').textContent=s&&s.expected_net_usd!=null?usd(s.expected_net_usd):'—';
     $('b-prob').textContent=s&&s.win_prob!=null?Math.round(s.win_prob*100)+'%':'—';
+    BOT_EXPIRY_MS = (s&&s.open&&s.expiry)?expiryToMs(s.expiry):null;
+    renderTTX();
     $('b-err').textContent=s&&s.last_error?('⚠ '+s.last_error):$('b-err').textContent;
     const tr=r.trades||[];
     $('b-trades').innerHTML=tr.length?tr.map(t=>`<tr><td class="sub">${new Date(t.at).toLocaleTimeString()}</td><td>${t.type}</td><td class="sub">${t.reason||''}${t.pnl_usd!=null?' · $'+t.pnl_usd:''}${t.credit_usd!=null?' · credit $'+t.credit_usd:''}</td></tr>`).join(''):'<tr><td class="sub" colspan="3">no trades yet</td></tr>';
@@ -337,6 +342,22 @@ function renderPnlChart(trades){
         scales:{x:{ticks:{color:'#7488b8',maxTicksLimit:10},grid:{color:'rgba(27,44,87,.4)'}},y:{ticks:{color:'#7488b8',callback:(v)=>'$'+v},grid:{color:'rgba(27,44,87,.4)'}}}}});
   } else { pnlChart.data.labels=labels; pnlChart.data.datasets[0].data=data; pnlChart.data.datasets[0].pointRadius=closed.length>40?0:3; pnlChart.update('none'); }
 }
+// Time-to-expiry countdown (Deribit code "31JUL26" → 08:00 UTC that day). Heartbeat <8h.
+let BOT_EXPIRY_MS=null;
+const MONTHS={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+function expiryToMs(code){const m=String(code).match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);if(!m)return null;return Date.UTC(2000+(+m[3]),MONTHS[m[2]]??0,+m[1],8,0,0);}
+function renderTTX(){
+  const el=$('b-ttx'); if(!el)return;
+  if(!BOT_EXPIRY_MS){el.textContent='—';el.classList.remove('heartbeat');return;}
+  let ms=BOT_EXPIRY_MS-Date.now();
+  if(ms<=0){el.textContent='expiring…';el.classList.add('heartbeat');return;}
+  const d=Math.floor(ms/86400000); ms-=d*86400000;
+  const h=Math.floor(ms/3600000); ms-=h*3600000;
+  const mi=Math.floor(ms/60000);
+  el.textContent=(d>0?d+'d ':'')+h+'h '+mi+'m';
+  el.classList.toggle('heartbeat', (BOT_EXPIRY_MS-Date.now())<=8*3600000);
+}
+setInterval(renderTTX,1000);
 setInterval(()=>{if(WALLET)pollBot();},15000);
 if(typeof window.ethereum!=='undefined'&&window.ethereum.selectedAddress){WALLET=window.ethereum.selectedAddress;$('wconnect').textContent=short(WALLET);$('dform').style.display='';refreshDeribit();loadCfg();pollBot();}
 </script>
