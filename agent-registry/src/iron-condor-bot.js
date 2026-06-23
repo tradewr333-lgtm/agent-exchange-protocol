@@ -131,17 +131,37 @@ async function botTick(st) {
         const TICK = 0.0005;
         const raw = isSell ? Number(leg.bid) : Number(leg.ask);
         const px = raw > 0 ? Number((Math[isSell ? 'floor' : 'ceil'](raw / TICK) * TICK).toFixed(4)) : 0;
+        // FILL-OR-KILL: each leg fills its FULL size or not at all — prevents a partial
+        // fill (e.g. 1 of 5 on a wing) that would leave naked short legs.
         const order = px >= TICK
-          ? { instrument: inst, direction: isSell ? 'sell' : 'buy', amount: cfg.contracts, type: 'limit', price: px, timeInForce: 'immediate_or_cancel', label: 'axp_ic' }
-          : { instrument: inst, direction: isSell ? 'sell' : 'buy', amount: cfg.contracts, type: 'market', label: 'axp_ic' };
+          ? { instrument: inst, direction: isSell ? 'sell' : 'buy', amount: cfg.contracts, type: 'limit', price: px, timeInForce: 'fill_or_kill', label: 'axp_ic' }
+          : { instrument: inst, direction: isSell ? 'sell' : 'buy', amount: cfg.contracts, type: 'market', timeInForce: 'fill_or_kill', label: 'axp_ic' };
         const r = await placeOrder(creds, order);
         const filled = Number(r.filled || 0);
-        const ok = r.ok && filled > 0;
-        placed.push({ instrument: inst, action: leg.action, ok, filled, error: r.ok ? (filled > 0 ? null : 'not_filled (no liquidity at price)') : r.error, detail: r.detail, avg: r.avg_price });
-        if (!ok) { st.lastError = `leg ${inst}: ${r.ok ? 'not_filled' : r.error}${r.detail ? ' (' + r.detail + ')' : ''}`; }
+        const ok = r.ok && filled >= cfg.contracts - 1e-9; // require FULL size
+        placed.push({ instrument: inst, action: leg.action, ok, filled, error: r.ok ? (ok ? null : `partial/unfilled ${filled}/${cfg.contracts}`) : r.error, detail: r.detail, avg: r.avg_price });
+        if (!ok) { st.lastError = `leg ${inst}: ${r.ok ? `only ${filled}/${cfg.contracts} filled` : r.error}${r.detail ? ' (' + r.detail + ')' : ''}`; }
       }
       const okLegs = placed.filter((p) => p.ok);
+      // Re-read positions from the exchange and CONFIRM all 4 legs are actually there
+      // before declaring the condor open (never trust order acks alone). Small delay so
+      // fills register first.
+      let confirmedLegs = 0;
       if (okLegs.length === 4) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const conf = await getPositions(creds, { currency: cfg.asset, kind: 'option' });
+        confirmedLegs = sig.legs.filter((l) => (conf.positions || []).some((p) => p.instrument === l.instrument && Math.abs(Number(p.size)) >= cfg.contracts - 1e-9)).length;
+        if (confirmedLegs < 4) {
+          st.lastError = `placed but only ${confirmedLegs}/4 confirmed on Deribit — unwinding`;
+          for (const p of (conf.positions || []).filter((p) => sig.legs.some((l) => l.instrument === p.instrument))) {
+            await placeOrder(creds, { instrument: p.instrument, direction: p.direction === 'buy' ? 'sell' : 'buy', amount: Math.abs(Number(p.size)), type: 'market', reduceOnly: true, label: 'axp_ic_unwind' });
+          }
+          await cancelAll(creds, { currency: cfg.asset, kind: 'option' });
+          save && save({ type: 'error', reason: `Open NOT confirmed on Deribit (${confirmedLegs}/4 positions present) — unwound` });
+          return;
+        }
+      }
+      if (okLegs.length === 4 && confirmedLegs === 4) {
         st.open = true; st.openedAt = Date.now(); st.expiry = sig.expiry; st.lastExpiryTraded = sig.expiry;
         st.legs = sig.legs.map((l) => ({ instrument: l.instrument, action: l.action, strike: l.strike, type: l.type }));
         st.creditUsd = sig.credit_usd * cfg.contracts;
