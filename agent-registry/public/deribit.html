@@ -56,6 +56,12 @@
   .bigsub-sheen{position:absolute;top:0;left:-60%;width:45%;height:100%;transform:skewX(-22deg);
     background:linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent);
     animation:bigsheen 2.6s ease-in-out infinite;}
+  /* Deribit button — same size as Subscribe, brand blue, 3D */
+  .bigderibit{display:inline-block;text-decoration:none;text-align:center;cursor:pointer;border-radius:18px;padding:20px 54px;color:#fff;font-weight:900;
+    background:linear-gradient(180deg,#3b6bff 0%,#1652F0 55%,#0e3bd0 100%);
+    box-shadow:0 10px 0 #0a2b9c,0 16px 30px rgba(22,82,240,.45);transition:transform .08s ease}
+  .bigderibit:hover{filter:brightness(1.07)}
+  .bigderibit:active{transform:translateY(8px);box-shadow:0 2px 0 #0a2b9c,0 6px 14px rgba(22,82,240,.4)}
   code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px;font-size:12px;font-family:ui-monospace,monospace}
 </style>
 </head>
@@ -94,12 +100,16 @@
   <h1 style="margin-top:26px">⚙ Run this strategy on your account</h1>
   <p class="sub">Connect a <b>trade-only</b> Deribit key (no withdrawal) from your <b>real</b> Deribit account. You sign with your wallet to bind the key to you — keys are encrypted, we never withdraw.</p>
 
-  <div style="text-align:center;margin:18px 0 24px">
+  <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin:18px 0 24px">
     <button id="big-sub" class="bigsub">
       <span class="bigsub-sheen"></span>
       <span class="bigsub-txt">⚡ Subscribe — $35/mo</span>
       <span class="bigsub-sub">unlock the bot on your live account</span>
     </button>
+    <a class="bigderibit" href="https://www.deribit.com/pt/" target="_blank" rel="noopener">
+      <span class="bigsub-txt"><svg width="22" height="22" viewBox="0 0 32 32" style="vertical-align:-4px;margin-right:8px"><rect width="32" height="32" rx="8" fill="#fff"/><path d="M9 7h7.5c4 0 6.5 2.4 6.5 6.2 0 2.6-1.3 4.6-3.4 5.4 2.4.7 3.9 2.8 3.9 5.6 0 4-2.7 6.8-6.9 6.8H9V7zm6.8 9.6c1.7 0 2.8-1 2.8-2.6s-1.1-2.5-2.8-2.5H13v5.1h2.8zm.3 9.4c1.8 0 3-1.1 3-2.8s-1.2-2.8-3-2.8H13v5.6h3.1z" fill="#1652F0"/></svg>Open Deribit</span>
+      <span class="bigsub-sub">create / fund your account ↗</span>
+    </a>
   </div>
 
   <div class="card">
@@ -213,7 +223,8 @@ function drawPayoff(s){
 async function load(){
   $('status').textContent='loading live chain…';
   try{
-    const s=await fetch('/strategy/iron-condor?asset='+ASSET,{cache:'no-store'}).then(r=>r.json());
+    const md=(document.getElementById('c-mindays')&&Number(document.getElementById('c-mindays').value))||7;
+    const s=await fetch('/strategy/iron-condor?asset='+ASSET+'&minDays='+md,{cache:'no-store'}).then(r=>r.json());
     if(s.ok===false){ $('status').textContent='Deribit data unavailable: '+(s.error||'')+(s.detail?' ('+s.detail+')':''); $('action').textContent='—'; return; }
     $('status').textContent='live · '+new Date(s.generated_at).toLocaleTimeString();
     $('exp').textContent=s.expiry?('· exp '+s.expiry):'';

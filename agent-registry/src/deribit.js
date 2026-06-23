@@ -25,17 +25,20 @@ async function getSpot(asset) {
   return Number(r?.index_price);
 }
 
-// Nearest non-expired option expiry (timestamp + Deribit code like 28JUN26).
-async function getNearestExpiry(asset) {
+// Nearest expiry at least minDays out (matches the bot's minDaysToExpiry so the desk
+// shows the same expiry the bot would actually trade). Falls back to the very nearest.
+async function getNearestExpiry(asset, minDays = 7) {
   const insts = await dfetch(`/public/get_instruments?currency=${asset}&kind=option&expired=false`);
   if (!Array.isArray(insts) || !insts.length) return null;
-  const now = Date.now();
-  let best = null;
+  const now = Date.now(); const floor = now + Math.max(0, minDays) * 86_400_000;
+  let best = null, fallback = null;
   for (const i of insts) {
-    const ts = Number(i.expiration_timestamp);
-    if (ts > now && (!best || ts < best.ts)) best = { ts, code: i.instrument_name.split('-')[1] };
+    const ts = Number(i.expiration_timestamp); if (ts <= now) continue;
+    const code = i.instrument_name.split('-')[1];
+    if (!fallback || ts < fallback.ts) fallback = { ts, code };
+    if (ts >= floor && (!best || ts < best.ts)) best = { ts, code };
   }
-  return best;
+  return best || fallback;
 }
 
 async function mapWithConcurrency(items, limit, fn) {
@@ -66,7 +69,7 @@ async function getChain(asset, expiryCode, spot) {
       ask: Number(t?.best_ask_price),
     };
   });
-  return tickers.filter((x) => x && Number.isFinite(x.delta) && Number.isFinite(x.bid));
+  return tickers.filter((x) => x && Number.isFinite(x.delta)); // keep full ladder (wings priced by ask)
 }
 
 function baseFor(testnet) { return testnet ? 'https://test.deribit.com/api/v2' : BASE; }
@@ -92,19 +95,20 @@ export async function testConnection({ apiKey, secret, testnet = true } = {}) {
   }
 }
 
-export async function ironCondorSignal(asset = 'BTC', { putDelta = -0.12, callDelta = 0.12, wingStrikes = 1 } = {}) {
+export async function ironCondorSignal(asset = 'BTC', { putDelta = -0.12, callDelta = 0.12, wingStrikes = 1, minDaysToExpiry = 7 } = {}) {
   const A = String(asset).toUpperCase();
-  const hit = cache.get(A);
+  const key = `${A}|${minDaysToExpiry}`;
+  const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.data;
   try {
     const spot = await getSpot(A);
     if (!Number.isFinite(spot)) return { ok: false, error: 'deribit_spot_unavailable' };
-    const exp = await getNearestExpiry(A);
+    const exp = await getNearestExpiry(A, minDaysToExpiry);
     if (!exp) return { ok: false, error: 'no_expiry' };
     const chain = await getChain(A, exp.code, spot);
     const signal = buildIronCondor(chain, { spot, putDelta, callDelta, wingStrikes, asset: A, expiry: exp.code });
     const data = { ...signal, generated_at: new Date().toISOString(), source: 'deribit_public' };
-    cache.set(A, { at: Date.now(), data });
+    cache.set(key, { at: Date.now(), data });
     return data;
   } catch (err) {
     return { ok: false, error: 'deribit_unreachable', detail: String(err?.message || err) };

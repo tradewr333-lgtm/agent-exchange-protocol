@@ -266,7 +266,8 @@ const server = http.createServer(async (request, response) => {
   if (request.method === 'GET' && url.pathname === '/strategy/iron-condor') {
     const asset = (url.searchParams.get('asset') || 'BTC').toUpperCase();
     if (!['BTC', 'ETH'].includes(asset)) return sendJson(response, 400, { error: 'asset_must_be_BTC_or_ETH' });
-    const signal = await ironCondorSignal(asset);
+    const minDays = Number.isFinite(Number(url.searchParams.get('minDays'))) ? Number(url.searchParams.get('minDays')) : 7;
+    const signal = await ironCondorSignal(asset, { minDaysToExpiry: minDays });
     return sendJson(response, signal.ok === false ? 502 : 200, signal, { 'Cache-Control': 'no-store' });
   }
 
