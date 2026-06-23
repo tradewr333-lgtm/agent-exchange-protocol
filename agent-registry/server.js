@@ -33,7 +33,7 @@ import {
 import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, buildCoverage, DECISION_VERSION } from './src/decision.js';
 import { ironCondorSignal, testConnection } from './src/deribit.js';
 import { startBot as icStartBot, stopBot as icStopBot, getBotStatus as icBotStatus, closeAllAndStop as icCloseAllAndStop } from './src/iron-condor-bot.js';
-import { liveCondor as dtLiveCondor, getIndexPrice as dtIndexPrice } from './src/deribit-trade.js';
+import { liveCondor as dtLiveCondor, getIndexPrice as dtIndexPrice, ivRichness as dtIvRichness } from './src/deribit-trade.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { startDecisionMiner, runDecisionMineOnce, decisionMineEnabled } from './src/decision-miner.js';
@@ -241,6 +241,22 @@ const server = http.createServer(async (request, response) => {
       credit_usd: round(creditUsd), expected_net_usd: expectedNetUsd,
       win_prob: Number(sig.approx_prob_in_range) || null,
       max_loss_usd: round(sz * (Number(sig.max_loss_usd) || 0)),
+    }, { 'Cache-Control': 'no-store' });
+  }
+
+  // Live gauges for the "video-game" panel: IV/DVOL richness vs the trigger threshold.
+  if (request.method === 'GET' && url.pathname === '/deribit/bot/gauges') {
+    const owner = (url.searchParams.get('owner') || '').trim();
+    const asset = (url.searchParams.get('asset') || 'BTC').toUpperCase();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(owner)) return sendJson(response, 400, { error: 'valid_owner_required' });
+    const creds = await loadDeribitCreds(owner);
+    if (!creds) return sendJson(response, 200, { ok: true, connected: false, iv: null }, { 'Cache-Control': 'no-store' });
+    const cfg = (await loadBotConfig(owner))?.config || {};
+    const thr = Number.isFinite(Number(cfg.ivMinPercentile)) ? Number(cfg.ivMinPercentile) : 0.55;
+    const iv = await dtIvRichness(creds, asset, 45, thr);
+    return sendJson(response, 200, {
+      ok: true, connected: true, asset,
+      iv: iv.ok ? { current: Number(iv.current.toFixed(1)), percentile: iv.percentile, median: Number(iv.median.toFixed(1)), threshold: thr, rich: iv.rich } : null,
     }, { 'Cache-Control': 'no-store' });
   }
 

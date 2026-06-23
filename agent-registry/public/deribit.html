@@ -36,6 +36,11 @@
   .ok{color:var(--green)} .err{color:var(--red)}
   .btn.sm{padding:6px 12px;font-size:12px;margin-top:0}
   .cf,select.cf{width:100%;background:#0a142e;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:13px;margin-top:4px;font-family:ui-monospace,monospace}
+  .ledbar{display:flex;gap:3px;margin-top:8px}
+  .led{flex:1;height:16px;border-radius:3px;background:#13203f;border:1px solid #1b2c57;transition:all .2s}
+  .led.on-g{background:var(--green);border-color:var(--green);box-shadow:0 0 9px rgba(61,255,166,.8)}
+  .led.on-a{background:var(--amber);border-color:var(--amber);box-shadow:0 0 6px rgba(255,204,85,.6)}
+  .led.thr{outline:2px solid #fff;outline-offset:1px;position:relative}
   .modetabs{display:flex;gap:10px;margin:12px 0 4px;flex-wrap:wrap}
   .modetab{flex:1;min-width:200px;text-align:center;cursor:pointer;padding:14px 18px;border-radius:12px;font-weight:800;font-size:15px;border:1px solid var(--line);background:#0a142e;color:var(--dim);transition:all .12s}
   .modetab:hover{filter:brightness(1.15)}
@@ -166,6 +171,18 @@
       <div class="sub" style="color:var(--green);text-transform:uppercase;letter-spacing:.6px;font-weight:700">💰 Expected gain if it wins (stays in range · no stop)</div>
       <div style="font-size:34px;font-weight:900;color:var(--green);text-shadow:0 0 12px rgba(61,255,166,.4)" id="b-winamt">—</div>
       <div class="sub" id="b-winprob2" style="margin-top:2px">—</div>
+    </div>
+    <div id="b-gauges" style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin:6px 0 10px">
+      <div class="kpi" style="text-align:left">
+        <div class="k">⚡ IV ENGINE (DVOL) — only fires when vol is rich</div>
+        <div class="ledbar" id="iv-led"></div>
+        <div class="row" style="justify-content:space-between;margin-top:7px"><span class="sub" id="iv-info">connect + Security mode</span><span class="pill skip" id="iv-state">—</span></div>
+      </div>
+      <div class="kpi" style="text-align:left">
+        <div class="k">🛡️ TAIL INSURANCE</div>
+        <div class="v" id="ins-state" style="font-size:17px">—</div>
+        <div class="sub" id="ins-info">—</div>
+      </div>
     </div>
     <div class="grid" style="margin-top:10px">
       <div class="kpi"><div class="k">Status</div><div class="v" id="b-action" style="font-size:13px">—</div></div>
@@ -316,7 +333,7 @@ function setMode(m){
   $('tab-plain').classList.toggle('on',!sec);
   $('tab-sec').classList.toggle('on',sec);
   $('mode-desc').innerHTML = sec
-    ? '🛡️ <b style="color:var(--green)">Security</b>: only opens when IV (DVOL) is rich — the real edge. Fewer, better trades (~1/mo). <span style="opacity:.7">Monthly tail-hedge insurance: coming next.</span>'
+    ? '🛡️ <b style="color:var(--green)">Security</b>: only opens when IV (DVOL) is rich (~1/mo) <b>and</b> keeps a monthly long-OTM tail-hedge (insurance) to cap crash/spike losses.'
     : 'Base condor — opens whenever a valid structure exists (no IV filter).';
 }
 $('tab-plain').addEventListener('click',()=>setMode('condor'));
@@ -353,7 +370,7 @@ function applyLocalCfg(){ try{const c=JSON.parse(localStorage.getItem('axp_derib
 applyLocalCfg();
 $('c-save').addEventListener('click',async()=>{
   if(!WALLET){$('c-msg').textContent='connect wallet';return;}
-  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value),expirySafetyPct:Number($('c-safety').value),minDaysToExpiry:Number($('c-mindays').value),commitPct:Number($('c-pct').value),autoReopen:$('c-autoreopen').checked,ivFilter:$('c-ivfilter').checked,ivMinPercentile:0.55,mode:($('c-ivfilter').checked?'security':'condor')};
+  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value),expirySafetyPct:Number($('c-safety').value),minDaysToExpiry:Number($('c-mindays').value),commitPct:Number($('c-pct').value),autoReopen:$('c-autoreopen').checked,ivFilter:$('c-ivfilter').checked,ivMinPercentile:0.55,insurance:$('c-ivfilter').checked,mode:($('c-ivfilter').checked?'security':'condor')};
   try{localStorage.setItem('axp_deribit_cfg',JSON.stringify(config));}catch(e){}
   $('c-msg').textContent='sign to save…';
   try{const r=await fetch('/deribit/bot/config',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody({config})}).then(x=>x.json());$('c-msg').innerHTML=r.ok?'<span class="ok">✓ saved</span>':'<span class="err">'+(r.error||'failed')+'</span>';}catch(e){$('c-msg').textContent='error';}
@@ -426,7 +443,29 @@ async function pollBot(){
     const tr=r.trades||[];
     $('b-trades').innerHTML=tr.length?tr.map(t=>`<tr><td class="sub">${new Date(t.at).toLocaleTimeString()}</td><td>${t.type}</td><td class="sub">${t.reason||''}${t.pnl_usd!=null?' · $'+t.pnl_usd:''}${t.credit_usd!=null?' · credit $'+t.credit_usd:''}</td></tr>`).join(''):'<tr><td class="sub" colspan="3">no trades yet</td></tr>';
     renderPnlChart(tr);
+    renderGauges(s);
   }catch(e){}
+}
+// Video-game gauges: IV LED bar (DVOL vs trigger) + tail-insurance shield.
+let lastGaugeFetch=0, lastIv=null;
+async function renderGauges(s){
+  // insurance shield from bot status
+  const ins=s&&s.insurance;
+  if(ins){
+    $('ins-state').innerHTML = ins.enabled ? (ins.active?'<span style="color:var(--green)">🛡️ ACTIVE</span>':'<span style="color:var(--gold)">arming…</span>') : '<span class="sub">off · enable Security</span>';
+    $('ins-info').textContent = ins.active?('hedge exp '+(ins.expiry||'?')+' · cost ~'+usd(ins.cost_usd)) : (ins.last_error?('⚠ '+ins.last_error):'—');
+  }
+  // IV gauge — fetch DVOL at most every 45s
+  if(WALLET && Date.now()-lastGaugeFetch>45000){
+    lastGaugeFetch=Date.now();
+    try{ const g=await fetch('/deribit/bot/gauges?owner='+WALLET+'&asset='+($('c-asset')?$('c-asset').value:'BTC'),{cache:'no-store'}).then(x=>x.json()); lastIv=g.iv; }catch(e){}
+  }
+  const led=$('iv-led'); if(!led)return;
+  if(!lastIv){ led.innerHTML=Array.from({length:20},()=>'<span class="led"></span>').join(''); return; }
+  const N=20, pct=Math.max(0,Math.min(1,lastIv.percentile)), lit=Math.round(pct*N), thrSeg=Math.round(lastIv.threshold*N);
+  led.innerHTML=Array.from({length:N},(_,i)=>`<span class="led ${i<lit?(lastIv.rich?'on-g':'on-a'):''} ${i===thrSeg?'thr':''}"></span>`).join('');
+  $('iv-info').textContent=`DVOL ${lastIv.current} · ${(pct*100).toFixed(0)}th pct (fires ≥${(lastIv.threshold*100).toFixed(0)}%)`;
+  const st=$('iv-state'); if(lastIv.rich){st.textContent='⚡ ARMED';st.className='pill open';}else{st.textContent='scanning…';st.className='pill skip';}
 }
 // Build the cumulative realized-P&L series from closed trades (oldest→newest) and draw it.
 let pnlChart=null;

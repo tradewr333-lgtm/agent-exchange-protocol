@@ -149,6 +149,32 @@ export async function liveCondor(creds, asset = 'BTC', { putDelta = -0.12, callD
   return buildIronCondor(chain, { spot, putDelta, callDelta, wingStrikes, asset, expiry: exp.code });
 }
 
+// Build a LONG far-OTM tail hedge (protection only — buying, so max loss = premium paid).
+// Nearest expiry >= minDays, call ~+otm%, put ~-otm%. Returns instruments + asks.
+export async function tailHedgePlan(creds, asset = 'BTC', { otmPct = 0.25, minDays = 25 } = {}) {
+  const spot = await getSpot(creds, asset);
+  if (!Number.isFinite(spot)) return { ok: false, error: 'spot_unavailable' };
+  const exp = await nearestExpiry(creds, asset, minDays);
+  if (!exp) return { ok: false, error: 'no_expiry' };
+  const insts = await pub(creds, `/public/get_instruments?currency=${asset}&kind=option&expired=false`);
+  const wanted = (insts.result || []).filter((i) => i.instrument_name.split('-')[1] === exp.code);
+  const calls = wanted.filter((i) => i.option_type === 'call');
+  const puts = wanted.filter((i) => i.option_type === 'put');
+  const cT = spot * (1 + otmPct), pT = spot * (1 - otmPct);
+  const nearest = (arr, t) => arr.reduce((b, i) => (b == null || Math.abs(i.strike - t) < Math.abs(b.strike - t) ? i : b), null);
+  const callLeg = nearest(calls, cT), putLeg = nearest(puts, pT);
+  if (!callLeg || !putLeg) return { ok: false, error: 'no_wings' };
+  const [ct, pt] = await Promise.all([
+    pub(creds, `/public/ticker?instrument_name=${callLeg.instrument_name}`),
+    pub(creds, `/public/ticker?instrument_name=${putLeg.instrument_name}`),
+  ]);
+  return {
+    ok: true, expiry: exp.code, spot,
+    call: { instrument: callLeg.instrument_name, strike: callLeg.strike, ask: Number(ct.result?.best_ask_price) || 0 },
+    put: { instrument: putLeg.instrument_name, strike: putLeg.strike, ask: Number(pt.result?.best_ask_price) || 0 },
+  };
+}
+
 // Public ticker (mark price + greeks) for an instrument — used to price legs / value the position.
 export async function instrumentTicker(creds, instrument) {
   const r = await getJson(`${base(creds.testnet)}/public/ticker?instrument_name=${encodeURIComponent(instrument)}`);

@@ -8,7 +8,7 @@
 // closes a trade that is still within its exit parameters.
 //
 // Honest + safe: only TRADE-only keys, small configurable size, no return promises.
-import { liveCondor, placeOrder, getPositions, cancelAll, getIndexPrice, ivRichness } from './deribit-trade.js';
+import { liveCondor, placeOrder, getPositions, cancelAll, getIndexPrice, ivRichness, tailHedgePlan } from './deribit-trade.js';
 
 const activeBots = new Map(); // owner -> { interval, state }
 
@@ -43,6 +43,12 @@ function defaults(cfg = {}) {
     // minPct 0.55 ≈ "medium" (~1 trade/month); raise for stricter, lower for more trades.
     ivFilter: cfg.ivFilter === true ? true : false,
     ivMinPercentile: Number.isFinite(Number(cfg.ivMinPercentile)) ? Number(cfg.ivMinPercentile) : 0.55,
+    // Monthly tail-hedge insurance (LONG far-OTM strangle — max loss = premium). Security mode.
+    insurance: cfg.insurance === true ? true : false,
+    insuranceOtmPct: Number(cfg.insuranceOtmPct) > 0 ? Number(cfg.insuranceOtmPct) : 0.25,
+    insuranceMinDays: Number(cfg.insuranceMinDays) > 0 ? Number(cfg.insuranceMinDays) : 25,
+    insuranceRollDays: Number(cfg.insuranceRollDays) > 0 ? Number(cfg.insuranceRollDays) : 3,
+    insuranceContracts: Math.max(step, Math.round((Number(cfg.insuranceContracts) || step) / step) * step),
   };
 }
 
@@ -66,13 +72,45 @@ function createState(owner, cfg, restore = null, testnet = false) {
     st.openFeesUsd = restore.openFeesUsd ?? null;
     st.lastAction = 'resumed open condor ' + (st.expiry || '');
   }
+  // Restore insurance hedge state (independent of the condor).
+  if (restore && restore.insOpen && Array.isArray(restore.insLegs)) {
+    st.insOpen = true; st.insLegs = restore.insLegs; st.insExpiry = restore.insExpiry || null; st.insCostUsd = restore.insCostUsd ?? null;
+  }
   return st;
 }
 
 function snapshot(st) {
-  return st.open
-    ? { open: true, legs: st.legs, creditUsd: st.creditUsd, openedAt: st.openedAt, expiry: st.expiry, lastExpiryTraded: st.lastExpiryTraded, expectedNetUsd: st.expectedNetUsd ?? null, winProb: st.winProb ?? null, openFeesUsd: st.openFeesUsd ?? null }
-    : null;
+  if (!st.open && !st.insOpen) return null;
+  const ins = st.insOpen ? { insOpen: true, insLegs: st.insLegs, insExpiry: st.insExpiry, insCostUsd: st.insCostUsd ?? null } : {};
+  return { open: st.open, legs: st.legs, creditUsd: st.creditUsd, openedAt: st.openedAt, expiry: st.expiry, lastExpiryTraded: st.lastExpiryTraded, expectedNetUsd: st.expectedNetUsd ?? null, winProb: st.winProb ?? null, openFeesUsd: st.openFeesUsd ?? null, ...ins };
+}
+
+// Monthly tail-hedge insurance: maintain a LONG far-OTM strangle (buying — max loss = premium).
+// Robust to restarts: verifies tracked legs against the live account; rolls near expiry; never double-buys.
+async function manageInsurance(st, creds) {
+  const cfg = st.config; const save = st._save, saveState = st._saveState;
+  let pos; try { pos = await getPositions(creds, { currency: cfg.asset, kind: 'option' }); } catch { return; }
+  const held = new Set((pos.positions || []).filter((p) => Math.abs(Number(p.size)) > 0).map((p) => p.instrument));
+  const tracked = Array.isArray(st.insLegs) ? st.insLegs : [];
+  const stillHeld = tracked.filter((l) => held.has(l.instrument));
+  const hoursLeft = st.insExpiry ? hoursUntilExpiry(st.insExpiry) : -1;
+  st.insOpen = stillHeld.length >= 2 && hoursLeft > 0;
+  if (st.insOpen && hoursLeft > cfg.insuranceRollDays * 24) return; // healthy hedge, nothing to do
+  const plan = await tailHedgePlan(creds, cfg.asset, { otmPct: cfg.insuranceOtmPct, minDays: cfg.insuranceMinDays });
+  if (!plan.ok) { st.insLastError = 'hedge ' + plan.error; return; }
+  const TICK = 0.0005; const newLegs = [];
+  for (const leg of [plan.put, plan.call]) {
+    if (held.has(leg.instrument)) { newLegs.push({ instrument: leg.instrument, strike: leg.strike }); continue; }
+    const px = leg.ask > 0 ? Number((Math.ceil(leg.ask / TICK) * TICK).toFixed(4)) : 0;
+    const r = await placeOrder(creds, { instrument: leg.instrument, direction: 'buy', amount: cfg.insuranceContracts, type: px > 0 ? 'limit' : 'market', price: px > 0 ? px : undefined, timeInForce: 'immediate_or_cancel', label: 'axp_ins' });
+    if (r.ok && Number(r.filled) > 0) newLegs.push({ instrument: leg.instrument, strike: leg.strike });
+  }
+  if (newLegs.length >= 2) {
+    st.insOpen = true; st.insLegs = newLegs; st.insExpiry = plan.expiry;
+    st.insCostUsd = Number(((plan.call.ask + plan.put.ask) * plan.spot * cfg.insuranceContracts).toFixed(2));
+    if (saveState) await saveState(snapshot(st)).catch(() => {});
+    save && save({ type: 'insurance_roll', reason: `Tail hedge ${plan.expiry}: long ${plan.put.strike}P / ${plan.call.strike}C ×${cfg.insuranceContracts} · cost ~$${st.insCostUsd}` });
+  } else { st.insLastError = `hedge fill ${newLegs.length}/2`; }
 }
 
 async function botTick(st) {
@@ -102,7 +140,7 @@ async function botTick(st) {
           } catch { /* best effort */ }
         }
         save && save({ type: 'subscription_lapsed', reason: 'Subscription inactive — condor closed and bot stopped (renew to resume)' });
-        resetOpen(st); if (saveState) await saveState(null).catch(() => {});
+        resetOpen(st); if (saveState) await saveState(snapshot(st)).catch(() => {});
         if (st._onLapse) await st._onLapse(st.owner).catch(() => {});
         st.status = 'stopped'; st.lastError = 'subscription_lapsed'; st.lastAction = 'stopped — subscription inactive';
         stopBot(st.owner);
@@ -110,8 +148,13 @@ async function botTick(st) {
       }
     }
 
+    // Maintain the monthly tail-hedge insurance (Security mode) — independent of the condor.
+    if (cfg.insurance) { await manageInsurance(st, creds).catch((e) => { st.insLastError = String(e?.message || e); }); }
+
     const pos = await getPositions(creds, { currency: cfg.asset, kind: 'option' });
-    const ours = st.open ? (pos.positions || []).filter((p) => st.legs.some((l) => l.instrument === p.instrument)) : [];
+    // Condor legs only (exclude the insurance legs so they're never treated as the condor).
+    const insSet = new Set((st.insLegs || []).map((l) => l.instrument));
+    const ours = st.open ? (pos.positions || []).filter((p) => st.legs.some((l) => l.instrument === p.instrument) && !insSet.has(p.instrument)) : [];
 
     // ── No open condor: maybe OPEN one ──
     if (!st.open) {
@@ -119,9 +162,10 @@ async function botTick(st) {
       // clean condor. Only SHORT residuals carry risk → flatten those. Long-only leftovers
       // (e.g. an unsellable deep-OTM wing with no bid) are harmless: ignore them and proceed,
       // so the bot is never stuck trying to close a position that has no buyer.
-      const shorts = (pos.positions || []).filter((p) => Number(p.size) < 0);
+      const shorts = (pos.positions || []).filter((p) => Number(p.size) < 0 && !insSet.has(p.instrument));
       if (pos.ok && shorts.length > 0) {
         for (const p of (pos.positions || [])) {
+          if (insSet.has(p.instrument)) continue; // never touch the insurance hedge
           await placeOrder(creds, { instrument: p.instrument, direction: p.direction === 'buy' ? 'sell' : 'buy', amount: Math.abs(Number(p.size) || cfg.contracts), type: 'market', reduceOnly: true, label: 'axp_ic_clean' });
         }
         st.lastAction = `flattened ${shorts.length} short residual(s)`;
@@ -249,7 +293,7 @@ async function botTick(st) {
     if (ours.length === 0) {
       st.lastAction = 'positions closed externally (expired/closed)';
       save && save({ type: 'closed_external', reason: 'Condor expired or closed on the exchange', pnl_usd: st.currentPnlUsd });
-      resetOpen(st); if (saveState) await saveState(null).catch(() => {});
+      resetOpen(st); if (saveState) await saveState(snapshot(st)).catch(() => {});
       if (!cfg.autoReopen) { st.haltOpen = true; st.haltReason = 'auto-reopen off — press START for another'; }
       return;
     }
@@ -308,7 +352,7 @@ async function botTick(st) {
       }
       st.lastAction = `CLOSED (${exit}) pnl $${st.currentPnlUsd.toFixed(0)}`;
       save && save({ type: exit, reason: `Closed (${exit})`, size: cfg.contracts, pnl_usd: st.currentPnlUsd });
-      resetOpen(st); if (saveState) await saveState(null).catch(() => {});
+      resetOpen(st); if (saveState) await saveState(snapshot(st)).catch(() => {});
       if (!cfg.autoReopen) { st.haltOpen = true; st.haltReason = 'auto-reopen off — press START for another'; }
     } else {
       st.lastAction = `holding · pnl $${st.currentPnlUsd.toFixed(0)} · ${hoursToExpiry.toFixed(0)}h to expiry`;
@@ -392,5 +436,7 @@ export function getBotStatus(owner) {
       be_lo: Math.round(sp.strike - creditPer), be_hi: Math.round(sc.strike + creditPer),
     };
   }
-  return { running: s.status === 'running', open: s.open, asset: s.config.asset, testnet: s.testnet, expiry: s.expiry, credit_usd: Number(s.creditUsd.toFixed(2)), pnl_usd: s.currentPnlUsd, expected_net_usd: s.expectedNetUsd ?? null, expected_net_target_usd: s.expectedNetTargetUsd ?? null, win_prob: s.winProb ?? null, zone, auto_reopen: s.config.autoReopen, legs: s.legs, last_action: s.lastAction, last_error: s.lastError, ticks: s.tickCount, config: s.config };
+  return { running: s.status === 'running', open: s.open, asset: s.config.asset, testnet: s.testnet, expiry: s.expiry, credit_usd: Number(s.creditUsd.toFixed(2)), pnl_usd: s.currentPnlUsd, expected_net_usd: s.expectedNetUsd ?? null, expected_net_target_usd: s.expectedNetTargetUsd ?? null, win_prob: s.winProb ?? null, zone, auto_reopen: s.config.autoReopen,
+    insurance: { enabled: !!s.config.insurance, active: !!s.insOpen, expiry: s.insExpiry || null, cost_usd: s.insCostUsd ?? null, last_error: s.insLastError || null },
+    legs: s.legs, last_action: s.lastAction, last_error: s.lastError, ticks: s.tickCount, config: s.config };
 }
