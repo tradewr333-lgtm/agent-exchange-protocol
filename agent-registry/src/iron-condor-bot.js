@@ -183,8 +183,12 @@ async function botTick(st) {
     else if (hoursToExpiry <= cfg.closeBeforeExpiryHours) {
       // Hybrid expiry: LET it expire (no exit fees) if spot is comfortably inside BOTH short
       // strikes; close early only if spot is near a short (pin/gamma risk).
-      const shortPut = st.legs.find((l) => l.action === 'SELL' && l.type === 'P');
-      const shortCall = st.legs.find((l) => l.action === 'SELL' && l.type === 'C');
+      // Identify the short put/call by type, falling back to the instrument suffix
+      // (…-P / …-C) so this also works for positions saved before `type` was stored.
+      const isPut = (l) => l.type === 'P' || /-P$/i.test(l.instrument || '');
+      const isCall = (l) => l.type === 'C' || /-C$/i.test(l.instrument || '');
+      const shortPut = st.legs.find((l) => l.action === 'SELL' && isPut(l));
+      const shortCall = st.legs.find((l) => l.action === 'SELL' && isCall(l));
       const spot = await getIndexPrice(creds, cfg.asset);
       if (Number.isFinite(spot) && shortPut && shortCall) {
         const buf = (cfg.expirySafetyPct || 0) / 100;
