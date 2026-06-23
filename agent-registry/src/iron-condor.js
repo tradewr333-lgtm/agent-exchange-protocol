@@ -27,6 +27,19 @@ function furtherOTM(sortedAsc, shortStrike, side, n) {
   return sortedAsc[target] || null;
 }
 
+// Like furtherOTM, but starting `n` strikes out keep walking outward until we hit a
+// strike with a usable ask (the wing is a BUY). Falls back to the n-th strike.
+function furtherOTMPriceable(sortedAsc, shortStrike, side, n) {
+  const idx = sortedAsc.findIndex((o) => o.strike === shortStrike);
+  if (idx < 0) return null;
+  const step = side === 'put' ? -1 : 1;
+  for (let j = n; j < sortedAsc.length; j++) {
+    const o = sortedAsc[idx + step * j];
+    if (o && Number(o.ask) > 0) return o;
+  }
+  return sortedAsc[idx + step * n] || null;
+}
+
 /**
  * Build an Iron Condor from an option chain.
  * @param chain array of { strike, type:'C'|'P', delta, bid, ask } — premiums in BTC.
@@ -36,15 +49,21 @@ function furtherOTM(sortedAsc, shortStrike, side, n) {
 export function buildIronCondor(chain = [], opts = {}) {
   const { spot, putDelta = -0.12, callDelta = 0.12, wingStrikes = 1, expiry = null, asset = 'BTC' } = opts;
   if (!Number.isFinite(spot) || spot <= 0) return { ok: false, error: 'spot_required' };
-  const puts = chain.filter((o) => o.type === 'P' && Number.isFinite(o.delta) && Number.isFinite(o.bid)).sort((a, b) => a.strike - b.strike);
-  const calls = chain.filter((o) => o.type === 'C' && Number.isFinite(o.delta) && Number.isFinite(o.bid)).sort((a, b) => a.strike - b.strike);
+  // Keep the FULL strike ladder (only require a delta) so protective wings — which sit
+  // deep OTM and often have no bid, only an ask — are still available to buy.
+  const puts = chain.filter((o) => o.type === 'P' && Number.isFinite(o.delta)).sort((a, b) => a.strike - b.strike);
+  const calls = chain.filter((o) => o.type === 'C' && Number.isFinite(o.delta)).sort((a, b) => a.strike - b.strike);
   if (puts.length < wingStrikes + 1 || calls.length < wingStrikes + 1) return { ok: false, error: 'insufficient_chain' };
 
-  const shortPut = nearestByDelta(puts, putDelta);
-  const shortCall = nearestByDelta(calls, callDelta);
+  // Shorts (we SELL) must have a real bid; restrict the delta search to those.
+  const sellablePuts = puts.filter((o) => Number(o.bid) > 0);
+  const sellableCalls = calls.filter((o) => Number(o.bid) > 0);
+  const shortPut = nearestByDelta(sellablePuts.length ? sellablePuts : puts, putDelta);
+  const shortCall = nearestByDelta(sellableCalls.length ? sellableCalls : calls, callDelta);
   if (!shortPut || !shortCall) return { ok: false, error: 'no_short_legs' };
-  const longPut = furtherOTM(puts, shortPut.strike, 'put', wingStrikes);
-  const longCall = furtherOTM(calls, shortCall.strike, 'call', wingStrikes);
+  // Wings (we BUY) need an ask. Walk further OTM until we find a priceable strike.
+  const longPut = furtherOTMPriceable(puts, shortPut.strike, 'put', wingStrikes);
+  const longCall = furtherOTMPriceable(calls, shortCall.strike, 'call', wingStrikes);
   if (!longPut || !longCall) return { ok: false, error: 'no_protective_wings' };
 
   // Credit (BTC): receive bids on shorts, pay asks on longs. Convert to USD via spot.
