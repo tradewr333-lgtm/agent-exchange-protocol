@@ -33,6 +33,7 @@ import {
 import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, buildCoverage, DECISION_VERSION } from './src/decision.js';
 import { ironCondorSignal, testConnection } from './src/deribit.js';
 import { startBot as icStartBot, stopBot as icStopBot, getBotStatus as icBotStatus, closeAllAndStop as icCloseAllAndStop } from './src/iron-condor-bot.js';
+import { liveCondor as dtLiveCondor, getIndexPrice as dtIndexPrice } from './src/deribit-trade.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { startDecisionMiner, runDecisionMineOnce, decisionMineEnabled } from './src/decision-miner.js';
@@ -205,6 +206,47 @@ const server = http.createServer(async (request, response) => {
     const cfgRow = await loadBotConfig(owner);
     await saveBotConfig(owner, cfgRow?.config || {}, false);
     return sendJson(response, 200, { ok: true, stopped: true }, { 'Cache-Control': 'no-store' });
+  }
+
+  // Suggested sizing: read cross-collateral, size the condor to a % of it, warn if short.
+  if (request.method === 'GET' && url.pathname === '/deribit/bot/suggest') {
+    const owner = (url.searchParams.get('owner') || '').trim();
+    const asset = (url.searchParams.get('asset') || 'BTC').toUpperCase();
+    const pct = Math.max(1, Math.min(100, Number(url.searchParams.get('pct')) || 25));
+    if (!/^0x[a-fA-F0-9]{40}$/.test(owner)) return sendJson(response, 400, { error: 'valid_owner_required' });
+    if (!['BTC', 'ETH'].includes(asset)) return sendJson(response, 400, { error: 'asset_must_be_BTC_or_ETH' });
+    const creds = await loadDeribitCreds(owner);
+    if (!creds) return sendJson(response, 409, { error: 'deribit_not_connected' });
+    const [test, btcSpot, sig] = await Promise.all([testConnection(creds), dtIndexPrice(creds, 'BTC'), dtLiveCondor(creds, asset, {})]);
+    if (!sig || sig.ok === false) return sendJson(response, 502, { error: 'signal_unavailable', detail: sig?.error });
+    // Cross-collateral available, in USD (available margin × BTC index — best-effort estimate).
+    const collateralUsd = (Number(test.available_funds) || 0) * (Number(btcSpot) || 0);
+    const step = asset === 'ETH' ? 1 : 0.1;
+    const SAFETY = 1.2; // headroom over the condor's defined max loss (≈ margin)
+    const marginPer1 = Math.max(1, Number(sig.max_loss_usd) || 0) * SAFETY; // per 1.0 contract
+    const committedUsd = (pct / 100) * collateralUsd;
+    let contracts = Math.floor(committedUsd / marginPer1 / step) * step;
+    contracts = Number(contracts.toFixed(4));
+    const minLotMarginUsd = marginPer1 * step;
+    const sufficient = contracts >= step;
+    // Fees + expected net (held-to-expiry) for the suggested size.
+    const FEE_CAP = 0.0003, FEE_RATE = 0.125;
+    const sz = sufficient ? contracts : 0;
+    const openFeesBtc = (sig.legs || []).reduce((s, l) => s + Math.min(FEE_CAP, FEE_RATE * Math.max(0, Number(l.action === 'SELL' ? l.bid : l.ask) || 0)) * sz, 0);
+    const openFeesUsd = openFeesBtc * (Number(sig.spot) || 0);
+    const creditUsd = (Number(sig.credit_usd) || 0) * sz;
+    const expectedNetUsd = Number((creditUsd - openFeesUsd).toFixed(2));
+    const round = (n) => Number((Number(n) || 0).toFixed(2));
+    return sendJson(response, 200, {
+      ok: true, asset, pct, step,
+      collateral_usd: round(collateralUsd), committed_usd: round(committedUsd),
+      suggested_contracts: sz, sufficient,
+      est_margin_usd: round(sz * (marginPer1 / SAFETY)),
+      min_lot_margin_usd: round(minLotMarginUsd),
+      credit_usd: round(creditUsd), expected_net_usd: expectedNetUsd,
+      win_prob: Number(sig.approx_prob_in_range) || null,
+      max_loss_usd: round(sz * (Number(sig.max_loss_usd) || 0)),
+    }, { 'Cache-Control': 'no-store' });
   }
 
   // Close ALL option positions AND stop the bot (no auto-reopen). Signature-gated.

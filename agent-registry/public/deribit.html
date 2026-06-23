@@ -93,7 +93,7 @@
     <b>2 · Bot config</b>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);margin-top:10px">
       <div><div class="sub">Asset</div><select id="c-asset" class="cf"><option>BTC</option><option>ETH</option></select></div>
-      <div><div class="sub">Contracts (BTC/leg)</div><input type="text" id="c-contracts" class="cf" value="0.1"/></div>
+      <div><div class="sub" id="c-contracts-label">Contracts (BTC/leg)</div><input type="text" id="c-contracts" class="cf" value="0.1"/></div>
       <div><div class="sub">Profit target (% of credit)</div><input type="text" id="c-tp" class="cf" value="50"/></div>
       <div><div class="sub">Stop (× credit)</div><input type="text" id="c-stop" class="cf" value="2"/></div>
       <div><div class="sub">Min net after fees ($)</div><input type="text" id="c-minnet" class="cf" value="3"/></div>
@@ -101,6 +101,13 @@
       <div><div class="sub">Auto-reopen</div><label class="sub" style="display:flex;align-items:center;gap:6px;margin-top:8px"><input type="checkbox" id="c-autoreopen" checked/> keep running same asset</label></div>
     </div>
     <div class="sub" style="margin-top:8px;opacity:.8">Fee filter: the bot skips a condor if its profit-at-target minus estimated Deribit fees is below this. Raises it for thin/low-credit structures (e.g. BTC min size).</div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+      <div class="row" style="gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <div style="min-width:200px"><div class="sub">Cross-collateral to commit (%)</div><input type="text" id="c-pct" class="cf" value="25"/></div>
+        <a class="btn sm" id="c-suggest" style="background:var(--gold);color:#0a142e">✨ Suggested config</a>
+      </div>
+      <div class="sub" id="c-suggest-msg" style="margin-top:8px">Reads your cross-collateral and sizes the condor to the % you pick — and tells you if it won't fit.</div>
+    </div>
     <a class="btn sm" id="c-save" style="margin-top:10px">Save config</a>
     <span class="sub" id="c-msg"></span>
   </div>
@@ -240,6 +247,27 @@ $('d-disconnect').addEventListener('click',async()=>{
     else $('d-msg').innerHTML='<span class="err">'+(r.error||'failed')+'</span>';
   }catch(e){$('d-msg').textContent='error';}
 });
+// Dynamic label: Contracts (BTC/leg) ↔ (ETH/leg) based on asset.
+function syncAssetLabel(){ $('c-contracts-label').textContent = `Contracts (${$('c-asset').value}/leg)`; }
+$('c-asset').addEventListener('change', syncAssetLabel);
+syncAssetLabel();
+
+$('c-suggest').addEventListener('click',async()=>{
+  if(!WALLET){$('c-suggest-msg').textContent='connect wallet first';return;}
+  const asset=$('c-asset').value, pct=Number($('c-pct').value)||25;
+  $('c-suggest-msg').textContent='reading your cross-collateral…';
+  try{
+    const r=await fetch(`/deribit/bot/suggest?owner=${WALLET}&asset=${asset}&pct=${pct}`,{cache:'no-store'}).then(x=>x.json());
+    if(!r.ok){$('c-suggest-msg').innerHTML='<span class="err">'+(r.error||'failed')+(r.detail?': '+r.detail:'')+'</span>';return;}
+    if(r.sufficient){
+      $('c-contracts').value=r.suggested_contracts;
+      $('c-suggest-msg').innerHTML=`<span class="ok">✓ Suggested ${r.suggested_contracts} ${asset}/leg</span> · commits ${usd(r.committed_usd)} of ${usd(r.collateral_usd)} collateral · est margin ${usd(r.est_margin_usd)} · <b style="color:var(--gold)">expected net ~${usd(r.expected_net_usd)}</b>${r.win_prob!=null?' ('+Math.round(r.win_prob*100)+'% in range)':''} · max loss ${usd(r.max_loss_usd)}. Click Save config.`;
+    } else {
+      $('c-suggest-msg').innerHTML=`<span class="err">Not enough collateral for ${pct}%.</span> You have ~${usd(r.collateral_usd)}; the minimum 1 lot (${r.step} ${asset}) needs ~${usd(r.min_lot_margin_usd)} margin. Raise the % , add collateral, or switch asset.`;
+    }
+  }catch(e){$('c-suggest-msg').textContent='error';}
+});
+
 async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;}catch(e){} }
 $('c-save').addEventListener('click',async()=>{
   if(!WALLET){$('c-msg').textContent='connect wallet';return;}
