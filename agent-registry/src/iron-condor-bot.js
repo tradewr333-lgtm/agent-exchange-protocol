@@ -13,9 +13,15 @@ import { liveCondor, placeOrder, getPositions, cancelAll } from './deribit-trade
 const activeBots = new Map(); // owner -> { interval, state }
 
 function defaults(cfg = {}) {
+  const asset = (cfg.asset || 'BTC').toUpperCase();
+  // Deribit minimum order size / step: BTC options = 0.1, ETH options = 1.
+  const step = asset === 'ETH' ? 1 : 0.1;
+  let contracts = Number(cfg.contracts) > 0 ? Number(cfg.contracts) : step;
+  contracts = Math.max(step, Math.round(contracts / step) * step); // snap to a valid multiple
+  contracts = Number(contracts.toFixed(4));
   return {
-    asset: (cfg.asset || 'BTC').toUpperCase(),
-    contracts: Number(cfg.contracts) > 0 ? Number(cfg.contracts) : 0.1, // BTC per leg
+    asset,
+    contracts, // valid multiple of the exchange minimum (per leg)
     putDelta: Number(cfg.putDelta) || -0.12,
     callDelta: Number(cfg.callDelta) || 0.12,
     wingStrikes: Number(cfg.wingStrikes) || 1,
