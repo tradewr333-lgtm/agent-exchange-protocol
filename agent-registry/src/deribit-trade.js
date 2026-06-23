@@ -92,12 +92,21 @@ async function getSpot(creds, asset) {
 }
 // Exported for the bot's expiry logic (decide let-expire vs close-early).
 export async function getIndexPrice(creds, asset) { return getSpot(creds, asset); }
-async function nearestExpiry(creds, asset) {
+// Nearest expiry at least minDaysToExpiry away — so we sell real premium (a 1-day
+// expiry has almost none, and fees swamp the credit). Falls back to the very nearest
+// if nothing satisfies the floor.
+async function nearestExpiry(creds, asset, minDaysToExpiry = 0) {
   const r = await pub(creds, `/public/get_instruments?currency=${asset}&kind=option&expired=false`);
   if (!r.ok || !Array.isArray(r.result)) return null;
-  const now = Date.now(); let best = null;
-  for (const i of r.result) { const ts = Number(i.expiration_timestamp); if (ts > now && (!best || ts < best.ts)) best = { ts, code: i.instrument_name.split('-')[1] }; }
-  return best;
+  const now = Date.now(); const floor = now + Math.max(0, minDaysToExpiry) * 86_400_000;
+  let best = null, fallback = null;
+  for (const i of r.result) {
+    const ts = Number(i.expiration_timestamp); if (ts <= now) continue;
+    const code = i.instrument_name.split('-')[1];
+    if (!fallback || ts < fallback.ts) fallback = { ts, code };
+    if (ts >= floor && (!best || ts < best.ts)) best = { ts, code };
+  }
+  return best || fallback;
 }
 async function mapConc(items, limit, fn) {
   const out = []; let i = 0;
@@ -108,10 +117,10 @@ async function mapConc(items, limit, fn) {
 }
 
 // Build the condor structure from the user's environment (so instrument names are valid there).
-export async function liveCondor(creds, asset = 'BTC', { putDelta = -0.12, callDelta = 0.12, wingStrikes = 1 } = {}) {
+export async function liveCondor(creds, asset = 'BTC', { putDelta = -0.12, callDelta = 0.12, wingStrikes = 1, minDaysToExpiry = 0 } = {}) {
   const spot = await getSpot(creds, asset);
   if (!Number.isFinite(spot)) return { ok: false, error: 'spot_unavailable' };
-  const exp = await nearestExpiry(creds, asset);
+  const exp = await nearestExpiry(creds, asset, minDaysToExpiry);
   if (!exp) return { ok: false, error: 'no_expiry' };
   const insts = await pub(creds, `/public/get_instruments?currency=${asset}&kind=option&expired=false`);
   const lo = spot * 0.6, hi = spot * 1.4;

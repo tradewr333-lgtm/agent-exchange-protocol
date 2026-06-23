@@ -217,7 +217,8 @@ const server = http.createServer(async (request, response) => {
     if (!['BTC', 'ETH'].includes(asset)) return sendJson(response, 400, { error: 'asset_must_be_BTC_or_ETH' });
     const creds = await loadDeribitCreds(owner);
     if (!creds) return sendJson(response, 409, { error: 'deribit_not_connected' });
-    const [test, btcSpot, sig] = await Promise.all([testConnection(creds), dtIndexPrice(creds, 'BTC'), dtLiveCondor(creds, asset, {})]);
+    const minDays = Number.isFinite(Number(url.searchParams.get('minDays'))) ? Number(url.searchParams.get('minDays')) : 7;
+    const [test, btcSpot, sig] = await Promise.all([testConnection(creds), dtIndexPrice(creds, 'BTC'), dtLiveCondor(creds, asset, { minDaysToExpiry: minDays })]);
     if (!sig || sig.ok === false) return sendJson(response, 502, { error: 'signal_unavailable', detail: sig?.error });
     // Cross-collateral available, in USD (available margin × BTC index — best-effort estimate).
     const collateralUsd = (Number(test.available_funds) || 0) * (Number(btcSpot) || 0);

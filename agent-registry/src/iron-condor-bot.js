@@ -36,6 +36,9 @@ function defaults(cfg = {}) {
     minNetUsd: Number.isFinite(Number(cfg.minNetUsd)) ? Number(cfg.minNetUsd) : 3,
     // Continuous mode: after a condor closes, automatically open the next one (same asset).
     autoReopen: cfg.autoReopen === false ? false : true,
+    // Target an expiry at least this many days out — short-dated condors have ~no premium
+    // (fees swamp the credit). 7d is a sane theta-positive default.
+    minDaysToExpiry: Number.isFinite(Number(cfg.minDaysToExpiry)) && Number(cfg.minDaysToExpiry) >= 0 ? Number(cfg.minDaysToExpiry) : 7,
   };
 }
 
@@ -92,7 +95,7 @@ async function botTick(st) {
       // attempt costs real fees on the filled+unwound legs). Requires a manual re-START
       // (e.g. after adding margin) to clear.
       if (st.haltOpen) { st.lastAction = `paused: ${st.haltReason || 'add margin and press START again'}`; return; }
-      const sig = await liveCondor(creds, cfg.asset, { putDelta: cfg.putDelta, callDelta: cfg.callDelta, wingStrikes: cfg.wingStrikes });
+      const sig = await liveCondor(creds, cfg.asset, { putDelta: cfg.putDelta, callDelta: cfg.callDelta, wingStrikes: cfg.wingStrikes, minDaysToExpiry: cfg.minDaysToExpiry });
       if (!sig.ok || sig.decision.action !== 'OPEN') { st.lastAction = 'no entry (' + (sig.error || sig.decision?.action) + ')'; return; }
       if (st.lastExpiryTraded === sig.expiry) { st.lastAction = 'already traded ' + sig.expiry; return; }
 

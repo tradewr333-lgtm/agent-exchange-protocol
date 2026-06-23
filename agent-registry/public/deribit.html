@@ -98,6 +98,7 @@
       <div><div class="sub">Stop (× credit)</div><input type="text" id="c-stop" class="cf" value="2"/></div>
       <div><div class="sub">Min net after fees ($)</div><input type="text" id="c-minnet" class="cf" value="3"/></div>
       <div><div class="sub">Expiry safety (%)</div><input type="text" id="c-safety" class="cf" value="1"/></div>
+      <div><div class="sub">Min days to expiry</div><input type="text" id="c-mindays" class="cf" value="7"/></div>
       <div><div class="sub">Auto-reopen</div><label class="sub" style="display:flex;align-items:center;gap:6px;margin-top:8px"><input type="checkbox" id="c-autoreopen" checked/> keep running same asset</label></div>
     </div>
     <div class="sub" style="margin-top:8px;opacity:.8">Fee filter: the bot skips a condor if its profit-at-target minus estimated Deribit fees is below this. Raises it for thin/low-credit structures (e.g. BTC min size).</div>
@@ -257,7 +258,8 @@ $('c-suggest').addEventListener('click',async()=>{
   const asset=$('c-asset').value, pct=Number($('c-pct').value)||25;
   $('c-suggest-msg').textContent='reading your cross-collateral…';
   try{
-    const r=await fetch(`/deribit/bot/suggest?owner=${WALLET}&asset=${asset}&pct=${pct}`,{cache:'no-store'}).then(x=>x.json());
+    const minDays=Number($('c-mindays').value)||7;
+    const r=await fetch(`/deribit/bot/suggest?owner=${WALLET}&asset=${asset}&pct=${pct}&minDays=${minDays}`,{cache:'no-store'}).then(x=>x.json());
     if(!r.ok){$('c-suggest-msg').innerHTML='<span class="err">'+(r.error||'failed')+(r.detail?': '+r.detail:'')+'</span>';return;}
     if(r.sufficient){
       $('c-contracts').value=r.suggested_contracts;
@@ -268,10 +270,10 @@ $('c-suggest').addEventListener('click',async()=>{
   }catch(e){$('c-suggest-msg').textContent='error';}
 });
 
-async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;}catch(e){} }
+async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.minDaysToExpiry!=null)$('c-mindays').value=c.minDaysToExpiry;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;}catch(e){} }
 $('c-save').addEventListener('click',async()=>{
   if(!WALLET){$('c-msg').textContent='connect wallet';return;}
-  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value),expirySafetyPct:Number($('c-safety').value),autoReopen:$('c-autoreopen').checked};
+  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value),expirySafetyPct:Number($('c-safety').value),minDaysToExpiry:Number($('c-mindays').value),autoReopen:$('c-autoreopen').checked};
   $('c-msg').textContent='sign to save…';
   try{const r=await fetch('/deribit/bot/config',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody({config})}).then(x=>x.json());$('c-msg').innerHTML=r.ok?'<span class="ok">✓ saved</span>':'<span class="err">'+(r.error||'failed')+'</span>';}catch(e){$('c-msg').textContent='error';}
 });
