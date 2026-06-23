@@ -225,11 +225,15 @@ function drawPayoff(s){
   $('payoff').innerHTML=svg;
 }
 
+let loadSeq=0;
 async function load(){
+  const my=++loadSeq;            // only the latest request renders (kills BTC/ETH races)
+  const reqAsset=ASSET;
   $('status').textContent='loading live chain…';
   try{
     const md=(document.getElementById('c-mindays')&&Number(document.getElementById('c-mindays').value))||7;
-    const s=await fetch('/strategy/iron-condor?asset='+ASSET+'&minDays='+md,{cache:'no-store'}).then(r=>r.json());
+    const s=await fetch('/strategy/iron-condor?asset='+reqAsset+'&minDays='+md,{cache:'no-store'}).then(r=>r.json());
+    if(my!==loadSeq || reqAsset!==ASSET) return; // a newer load (or asset switch) supersedes this one
     if(s.ok===false){ $('status').textContent='Deribit data unavailable: '+(s.error||'')+(s.detail?' ('+s.detail+')':''); $('action').textContent='—'; return; }
     $('status').textContent='live · '+new Date(s.generated_at).toLocaleTimeString();
     $('exp').textContent=s.expiry?('· exp '+s.expiry):'';
