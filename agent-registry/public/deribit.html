@@ -300,10 +300,15 @@ $('c-suggest').addEventListener('click',async()=>{
   }catch(e){$('c-suggest-msg').textContent='error';}
 });
 
-async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.minDaysToExpiry!=null)$('c-mindays').value=c.minDaysToExpiry;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;syncAssetLabel();}catch(e){} }
+async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.minDaysToExpiry!=null)$('c-mindays').value=c.minDaysToExpiry;if(c.commitPct!=null)$('c-pct').value=c.commitPct;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;syncAssetLabel();}catch(e){} }
+// Instant restore from the browser cache so the form shows your last config immediately
+// (no flash back to defaults) before the server round-trip refreshes it.
+function applyLocalCfg(){ try{const c=JSON.parse(localStorage.getItem('axp_deribit_cfg')||'null');if(!c)return;if(c.asset)$('c-asset').value=c.asset;if(c.contracts!=null)$('c-contracts').value=c.contracts;if(c.profitTargetPct!=null)$('c-tp').value=c.profitTargetPct;if(c.stopMult!=null)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.minDaysToExpiry!=null)$('c-mindays').value=c.minDaysToExpiry;if(c.commitPct!=null)$('c-pct').value=c.commitPct;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;syncAssetLabel();}catch(e){} }
+applyLocalCfg();
 $('c-save').addEventListener('click',async()=>{
   if(!WALLET){$('c-msg').textContent='connect wallet';return;}
-  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value),expirySafetyPct:Number($('c-safety').value),minDaysToExpiry:Number($('c-mindays').value),autoReopen:$('c-autoreopen').checked};
+  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value),expirySafetyPct:Number($('c-safety').value),minDaysToExpiry:Number($('c-mindays').value),commitPct:Number($('c-pct').value),autoReopen:$('c-autoreopen').checked};
+  try{localStorage.setItem('axp_deribit_cfg',JSON.stringify(config));}catch(e){}
   $('c-msg').textContent='sign to save…';
   try{const r=await fetch('/deribit/bot/config',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody({config})}).then(x=>x.json());$('c-msg').innerHTML=r.ok?'<span class="ok">✓ saved</span>':'<span class="err">'+(r.error||'failed')+'</span>';}catch(e){$('c-msg').textContent='error';}
 });
