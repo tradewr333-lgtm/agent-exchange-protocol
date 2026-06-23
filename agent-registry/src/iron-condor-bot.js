@@ -106,12 +106,14 @@ async function botTick(st) {
       const FEE_CAP_BTC = 0.0003, FEE_RATE = 0.125;
       const legFeeBtc = (premium) => Math.min(FEE_CAP_BTC, FEE_RATE * Math.max(0, Number(premium) || 0)) * cfg.contracts;
       const openFeesBtc = sig.legs.reduce((s, l) => s + legFeeBtc(l.action === 'SELL' ? l.bid : l.ask), 0);
-      const roundTripFeesUsd = openFeesBtc * spot * 2; // open + (~similar) close, conservative
-      const targetProfitUsd = (cfg.profitTargetPct / 100) * Number(sig.credit_usd || 0);
-      const netAtTargetUsd = targetProfitUsd - roundTripFeesUsd;
+      const openFeesUsd = openFeesBtc * spot;
+      // Realistic expected net = FULL credit (held to OTM expiry via hybrid mode) for the
+      // ACTUAL size, minus open fees. (Must scale credit by contracts to match fees.)
+      const creditTotalUsd = Number(sig.credit_usd || 0) * cfg.contracts;
+      const netAtTargetUsd = creditTotalUsd - openFeesUsd;
       if (netAtTargetUsd < cfg.minNetUsd) {
-        st.lastAction = `skip (fees): target $${targetProfitUsd.toFixed(2)} − fees ~$${roundTripFeesUsd.toFixed(2)} = $${netAtTargetUsd.toFixed(2)} < min $${cfg.minNetUsd}`;
-        save && save({ type: 'skip', reason: `Skipped ${sig.expiry}: net after fees ~$${netAtTargetUsd.toFixed(2)} (credit $${Number(sig.credit_usd).toFixed(2)}, est fees $${roundTripFeesUsd.toFixed(2)}) below min $${cfg.minNetUsd}` });
+        st.lastAction = `skip (fees): credit $${creditTotalUsd.toFixed(2)} − fees ~$${openFeesUsd.toFixed(2)} = $${netAtTargetUsd.toFixed(2)} < min $${cfg.minNetUsd}`;
+        save && save({ type: 'skip', reason: `Skipped ${sig.expiry}: net after fees ~$${netAtTargetUsd.toFixed(2)} (credit $${creditTotalUsd.toFixed(2)} for ${cfg.contracts}, est fees $${openFeesUsd.toFixed(2)}) below min $${cfg.minNetUsd}` });
         return;
       }
 
