@@ -269,6 +269,7 @@ async function refreshDeribit(pulse){
     if(s.connected){$('dstatus').innerHTML='<span class="ok">✓ connected'+(s.testnet?' (testnet)':' (MAINNET)')+' · balance <b id="dbal">'+(s.balance??'?')+'</b> BTC</span>';$('d-disconnect').style.display='';$('d-refresh').style.display='';$('dform').style.display='none';
       if(pulse){const b=$('dbal');if(b){b.classList.add('pulsing');setTimeout(()=>b.classList.remove('pulsing'),700);}}}
     else {$('dstatus').textContent='not connected — paste your Deribit key below';$('d-disconnect').style.display='none';$('d-refresh').style.display='none';$('dform').style.display='';}
+    checkEntitlement();
   }catch(e){}
 }
 $('d-connect').addEventListener('click',async()=>{
@@ -333,8 +334,21 @@ $('c-save').addEventListener('click',async()=>{
   try{const r=await fetch('/deribit/bot/config',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody({config})}).then(x=>x.json());$('c-msg').innerHTML=r.ok?'<span class="ok">✓ saved</span>':'<span class="err">'+(r.error||'failed')+'</span>';}catch(e){$('c-msg').textContent='error';}
 });
 
+// Gate the START button by entitlement (owner bypass or active subscription).
+let ENTITLED=true;
+async function checkEntitlement(){
+  if(!WALLET)return;
+  try{const r=await fetch('/deribit/bot/entitlement?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());
+    ENTITLED=!!r.entitled;
+    const b=$('b-start');
+    if(ENTITLED){ b.style.opacity='';b.style.pointerEvents='';b.title=''; }
+    else { b.style.opacity='.45';b.style.pointerEvents='none';b.title='Subscribe to run on mainnet';
+      $('b-err').innerHTML='<span style="color:var(--gold)">🔒 This wallet has no active subscription — click <b>Subscribe $35/mo</b> to unlock START.</span>'; }
+  }catch(e){}
+}
 $('b-start').addEventListener('click',async()=>{
   if(!WALLET){$('b-err').textContent='connect wallet';return;}
+  if(!ENTITLED){$('b-err').innerHTML='<span style="color:var(--gold)">🔒 Subscribe $35/mo to run the bot on mainnet.</span>';return;}
   $('b-err').textContent='sign to start…';
   try{const r=await fetch('/deribit/bot/start',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody()}).then(x=>x.json());
     if(r.ok){$('b-err').innerHTML='<span class="ok">✓ started '+(r.testnet?'(testnet)':'(MAINNET)')+'</span>';pollBot();}

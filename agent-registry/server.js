@@ -242,6 +242,17 @@ const server = http.createServer(async (request, response) => {
     }, { 'Cache-Control': 'no-store' });
   }
 
+  // Is this wallet entitled to RUN the bot (owner bypass or active subscription)?
+  // Read-only — lets the UI gate the START button before asking for a signature.
+  if (request.method === 'GET' && url.pathname === '/deribit/bot/entitlement') {
+    const owner = (url.searchParams.get('owner') || '').trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(owner)) return sendJson(response, 400, { error: 'valid_owner_required' });
+    const creds = await loadDeribitCreds(owner);
+    const testnet = creds ? Boolean(creds.testnet) : false;
+    const entitled = await isBotEntitled(owner, testnet);
+    return sendJson(response, 200, { ok: true, entitled, testnet, connected: Boolean(creds) }, { 'Cache-Control': 'no-store' });
+  }
+
   // Close ALL option positions AND stop the bot (no auto-reopen). Signature-gated.
   if (request.method === 'POST' && url.pathname === '/deribit/bot/close-all') {
     const body = await readJsonBody(request);
