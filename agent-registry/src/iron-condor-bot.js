@@ -79,6 +79,33 @@ async function botTick(st) {
     const creds = await getCreds(st.owner);
     if (!creds) { st.status = 'stopped'; st.lastError = 'no_credentials'; return; }
 
+    // ── Subscription gate (recurring) ── Re-verify entitlement every ~30 min while running.
+    // A lapsed/cancelled subscriber must be CUT OFF even without a deploy: close the open
+    // condor and stop the bot. Fail-OPEN on transient errors (never cut a paying user by mistake).
+    const ENTITLE_EVERY = 90; // ~30 min at 20s ticks
+    if (st._isEntitled && (st.tickCount === 1 || st.tickCount % ENTITLE_EVERY === 0)) {
+      let entitled = true;
+      try { entitled = await st._isEntitled(st.owner); } catch { entitled = true; }
+      if (!entitled) {
+        if (st.open) {
+          try {
+            const p2 = await getPositions(creds, { currency: cfg.asset, kind: 'option' });
+            for (const l of st.legs) {
+              const pos2 = (p2.positions || []).find((p) => p.instrument === l.instrument && Math.abs(Number(p.size)) > 0);
+              if (pos2) await placeOrder(creds, { instrument: l.instrument, direction: l.action === 'SELL' ? 'buy' : 'sell', amount: Math.abs(Number(pos2.size)), type: 'market', reduceOnly: true, label: 'axp_ic_lapsed' });
+            }
+            await cancelAll(creds, { currency: cfg.asset, kind: 'option' });
+          } catch { /* best effort */ }
+        }
+        save && save({ type: 'subscription_lapsed', reason: 'Subscription inactive — condor closed and bot stopped (renew to resume)' });
+        resetOpen(st); if (saveState) await saveState(null).catch(() => {});
+        if (st._onLapse) await st._onLapse(st.owner).catch(() => {});
+        st.status = 'stopped'; st.lastError = 'subscription_lapsed'; st.lastAction = 'stopped — subscription inactive';
+        stopBot(st.owner);
+        return;
+      }
+    }
+
     const pos = await getPositions(creds, { currency: cfg.asset, kind: 'option' });
     const ours = st.open ? (pos.positions || []).filter((p) => st.legs.some((l) => l.instrument === p.instrument)) : [];
 
@@ -293,6 +320,7 @@ export function startBot(owner, cfg, getCreds, save, opts = {}) {
   stopBot(owner);
   const state = createState(owner, cfg, opts.restoreState || null, opts.testnet);
   state._getCreds = getCreds; state._save = save; state._saveState = opts.saveState || null;
+  state._isEntitled = opts.isEntitled || null; state._onLapse = opts.onLapse || null;
   const intervalMs = Number(opts.intervalMs) || 20_000;
   const loop = setInterval(() => { if (state.status === 'running') botTick(state).catch((e) => { state.lastError = String(e?.message || e); }); }, Math.max(10_000, intervalMs));
   if (loop.unref) loop.unref();

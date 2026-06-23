@@ -185,7 +185,9 @@ const server = http.createServer(async (request, response) => {
     const cfgRow = await loadBotConfig(owner);
     const restoreState = await loadBotState(owner);
     icStartBot(owner, cfgRow?.config || {}, loadDeribitCreds, (trade) => appendBotTrade(owner, trade),
-      { saveState: (snap) => saveBotState(owner, snap), restoreState, testnet: creds.testnet });
+      { saveState: (snap) => saveBotState(owner, snap), restoreState, testnet: creds.testnet,
+        isEntitled: (o) => isBotEntitled(o, creds.testnet),
+        onLapse: async (o) => { const cr = await loadBotConfig(o); await saveBotConfig(o, cr?.config || {}, false); } });
     await saveBotConfig(owner, cfgRow?.config || {}, true);
     return sendJson(response, 200, { ok: true, started: true, testnet: creds.testnet, status: icBotStatus(owner) }, { 'Cache-Control': 'no-store' });
   }
@@ -1902,7 +1904,9 @@ async function resumeDeribitBots() {
         continue;
       }
       icStartBot(b.owner, b.config || {}, loadDeribitCreds, (trade) => appendBotTrade(b.owner, trade),
-        { saveState: (snap) => saveBotState(b.owner, snap), restoreState: b.openState || null, testnet: creds.testnet });
+        { saveState: (snap) => saveBotState(b.owner, snap), restoreState: b.openState || null, testnet: creds.testnet,
+          isEntitled: (o) => isBotEntitled(o, creds.testnet),
+          onLapse: async (o) => { const cr = await loadBotConfig(o); await saveBotConfig(o, cr?.config || {}, false); } });
       n++;
     }
     if (n) console.log(`[deribit-bot] resumed ${n} bot(s) after restart`);
