@@ -96,7 +96,9 @@
       <div><div class="sub">Contracts (BTC/leg)</div><input type="text" id="c-contracts" class="cf" value="0.1"/></div>
       <div><div class="sub">Profit target (% of credit)</div><input type="text" id="c-tp" class="cf" value="50"/></div>
       <div><div class="sub">Stop (× credit)</div><input type="text" id="c-stop" class="cf" value="2"/></div>
+      <div><div class="sub">Min net after fees ($)</div><input type="text" id="c-minnet" class="cf" value="3"/></div>
     </div>
+    <div class="sub" style="margin-top:8px;opacity:.8">Fee filter: the bot skips a condor if its profit-at-target minus estimated Deribit fees is below this. Raises it for thin/low-credit structures (e.g. BTC min size).</div>
     <a class="btn sm" id="c-save" style="margin-top:10px">Save config</a>
     <span class="sub" id="c-msg"></span>
   </div>
@@ -233,10 +235,10 @@ $('d-disconnect').addEventListener('click',async()=>{
     else $('d-msg').innerHTML='<span class="err">'+(r.error||'failed')+'</span>';
   }catch(e){$('d-msg').textContent='error';}
 });
-async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;}catch(e){} }
+async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;}catch(e){} }
 $('c-save').addEventListener('click',async()=>{
   if(!WALLET){$('c-msg').textContent='connect wallet';return;}
-  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value)};
+  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value)};
   $('c-msg').textContent='sign to save…';
   try{const r=await fetch('/deribit/bot/config',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody({config})}).then(x=>x.json());$('c-msg').innerHTML=r.ok?'<span class="ok">✓ saved</span>':'<span class="err">'+(r.error||'failed')+'</span>';}catch(e){$('c-msg').textContent='error';}
 });

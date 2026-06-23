@@ -28,6 +28,9 @@ function defaults(cfg = {}) {
     profitTargetPct: Number(cfg.profitTargetPct) > 0 ? Number(cfg.profitTargetPct) : 50, // close at 50% of credit captured
     stopMult: Number(cfg.stopMult) > 0 ? Number(cfg.stopMult) : 2, // stop at -2x credit
     closeBeforeExpiryHours: Number(cfg.closeBeforeExpiryHours) > 0 ? Number(cfg.closeBeforeExpiryHours) : 6,
+    // Fee-aware filter: only open if the expected profit at target, MINUS estimated
+    // round-trip fees, clears this many USD. Skips thin condors that fees would eat.
+    minNetUsd: Number.isFinite(Number(cfg.minNetUsd)) ? Number(cfg.minNetUsd) : 3,
   };
 }
 
@@ -87,6 +90,22 @@ async function botTick(st) {
       const sig = await liveCondor(creds, cfg.asset, { putDelta: cfg.putDelta, callDelta: cfg.callDelta, wingStrikes: cfg.wingStrikes });
       if (!sig.ok || sig.decision.action !== 'OPEN') { st.lastAction = 'no entry (' + (sig.error || sig.decision?.action) + ')'; return; }
       if (st.lastExpiryTraded === sig.expiry) { st.lastAction = 'already traded ' + sig.expiry; return; }
+
+      // ── Fee-aware filter ── Deribit charges min(0.0003 BTC, 12.5% of premium) PER leg.
+      // A 4-leg condor pays fees on all 4 gross premiums but only nets the thin credit, so
+      // we estimate round-trip fees and skip if the profit at target wouldn't clear them.
+      const spot = Number(sig.spot) || 0;
+      const FEE_CAP_BTC = 0.0003, FEE_RATE = 0.125;
+      const legFeeBtc = (premium) => Math.min(FEE_CAP_BTC, FEE_RATE * Math.max(0, Number(premium) || 0)) * cfg.contracts;
+      const openFeesBtc = sig.legs.reduce((s, l) => s + legFeeBtc(l.action === 'SELL' ? l.bid : l.ask), 0);
+      const roundTripFeesUsd = openFeesBtc * spot * 2; // open + (~similar) close, conservative
+      const targetProfitUsd = (cfg.profitTargetPct / 100) * Number(sig.credit_usd || 0);
+      const netAtTargetUsd = targetProfitUsd - roundTripFeesUsd;
+      if (netAtTargetUsd < cfg.minNetUsd) {
+        st.lastAction = `skip (fees): target $${targetProfitUsd.toFixed(2)} − fees ~$${roundTripFeesUsd.toFixed(2)} = $${netAtTargetUsd.toFixed(2)} < min $${cfg.minNetUsd}`;
+        save && save({ type: 'skip', reason: `Skipped ${sig.expiry}: net after fees ~$${netAtTargetUsd.toFixed(2)} (credit $${Number(sig.credit_usd).toFixed(2)}, est fees $${roundTripFeesUsd.toFixed(2)}) below min $${cfg.minNetUsd}` });
+        return;
+      }
 
       const placed = [];
       // Place the protective LONG wings (BUY) FIRST, then the SHORT legs (SELL). With the
