@@ -40,6 +40,22 @@
   .pulsing{display:inline-block;animation:axppulse .65s ease}
   @keyframes heartbeat{0%,100%{transform:scale(1)}15%{transform:scale(1.18)}30%{transform:scale(1)}45%{transform:scale(1.12)}60%{transform:scale(1)}}
   .heartbeat{display:inline-block;color:var(--red)!important;animation:heartbeat 1s ease-in-out infinite;text-shadow:0 0 8px rgba(255,93,126,.7)}
+  /* Big 3D shiny pulsing Subscribe CTA */
+  @keyframes bigpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+  @keyframes bigglow{0%,100%{box-shadow:0 10px 0 #0c7a45,0 16px 30px rgba(16,200,110,.45),0 0 0 rgba(61,255,166,.0)}50%{box-shadow:0 10px 0 #0c7a45,0 18px 40px rgba(16,200,110,.75),0 0 38px rgba(61,255,166,.65)}}
+  @keyframes bigsheen{0%{left:-60%}100%{left:160%}}
+  .bigsub{position:relative;overflow:hidden;cursor:pointer;border:none;border-radius:18px;padding:20px 54px;color:#04240f;font-weight:900;letter-spacing:.3px;
+    background:linear-gradient(180deg,#7dffba 0%,#28e07e 45%,#12c46e 100%);
+    box-shadow:0 10px 0 #0c7a45,0 16px 30px rgba(16,200,110,.45);
+    transform:translateZ(0);transition:transform .08s ease;
+    animation:bigpulse 1s ease-in-out 4, bigglow 1.4s ease-in-out 3;}
+  .bigsub:hover{filter:brightness(1.06)}
+  .bigsub:active{transform:translateY(8px);box-shadow:0 2px 0 #0c7a45,0 6px 14px rgba(16,200,110,.4)}
+  .bigsub-txt{display:block;font-size:24px;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+  .bigsub-sub{display:block;font-size:12px;font-weight:700;opacity:.75;margin-top:3px;text-transform:uppercase}
+  .bigsub-sheen{position:absolute;top:0;left:-60%;width:45%;height:100%;transform:skewX(-22deg);
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent);
+    animation:bigsheen 2.6s ease-in-out infinite;}
   code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px;font-size:12px;font-family:ui-monospace,monospace}
 </style>
 </head>
@@ -76,7 +92,15 @@
 
   <!-- ── RUN THE BOT (your Deribit account) ── -->
   <h1 style="margin-top:26px">⚙ Run this strategy on your account</h1>
-  <p class="sub">Connect a <b>trade-only</b> Deribit key (no withdrawal) from your <b>real</b> Deribit account. You sign with your wallet to bind the key to you — keys are encrypted, we never withdraw. Subscription $35/mo.</p>
+  <p class="sub">Connect a <b>trade-only</b> Deribit key (no withdrawal) from your <b>real</b> Deribit account. You sign with your wallet to bind the key to you — keys are encrypted, we never withdraw.</p>
+
+  <div style="text-align:center;margin:18px 0 24px">
+    <button id="big-sub" class="bigsub">
+      <span class="bigsub-sheen"></span>
+      <span class="bigsub-txt">⚡ Subscribe — $35/mo</span>
+      <span class="bigsub-sub">unlock the bot on your live account</span>
+    </button>
+  </div>
 
   <div class="card">
     <div class="row"><b>1 · Connect Deribit</b> <button class="btn sm" id="wconnect">Connect wallet</button></div>
@@ -306,6 +330,11 @@ $('b-closeall').addEventListener('click',async()=>{
     else $('b-err').innerHTML='<span class="err">'+(r.error||'failed')+'</span>';
   }catch(e){$('b-err').textContent='error';}
 });
+async function startSubscribe(){
+  if(!WALLET){ if(typeof window.ethereum!=='undefined'){try{const a=await window.ethereum.request({method:'eth_requestAccounts'});if(a&&a[0]){WALLET=a[0];$('wconnect').textContent=short(WALLET);}}catch(e){}} if(!WALLET){$('b-err').textContent='connect wallet first';return;} }
+  try{const r=await fetch('/deribit/bot/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({owner:WALLET})}).then(x=>x.json());if(r.ok&&r.url)location.href=r.url;else $('b-err').innerHTML='<span class="err">'+(r.error||'failed')+(r.hint?' · '+r.hint:'')+'</span>';}catch(e){$('b-err').textContent='error';}
+}
+$('big-sub').addEventListener('click',startSubscribe);
 $('b-sub').addEventListener('click',async()=>{
   if(!WALLET){$('b-err').textContent='connect wallet';return;}
   try{const r=await fetch('/deribit/bot/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({owner:WALLET})}).then(x=>x.json());if(r.ok&&r.url)location.href=r.url;else $('b-err').innerHTML='<span class="err">'+(r.error||'failed')+(r.hint?' · '+r.hint:'')+'</span>';}catch(e){}
