@@ -34,6 +34,8 @@ function defaults(cfg = {}) {
     // Fee-aware filter: only open if the expected profit at target, MINUS estimated
     // round-trip fees, clears this many USD. Skips thin condors that fees would eat.
     minNetUsd: Number.isFinite(Number(cfg.minNetUsd)) ? Number(cfg.minNetUsd) : 3,
+    // Continuous mode: after a condor closes, automatically open the next one (same asset).
+    autoReopen: cfg.autoReopen === false ? false : true,
   };
 }
 
@@ -138,9 +140,14 @@ async function botTick(st) {
         st.open = true; st.openedAt = Date.now(); st.expiry = sig.expiry; st.lastExpiryTraded = sig.expiry;
         st.legs = sig.legs.map((l) => ({ instrument: l.instrument, action: l.action, strike: l.strike, type: l.type }));
         st.creditUsd = sig.credit_usd * cfg.contracts;
-        st.lastAction = `OPENED condor ${sig.expiry} credit $${st.creditUsd.toFixed(0)}`;
+        // Expected outcomes AFTER fees (honest, within probability):
+        st.openFeesUsd = Number((openFeesBtc * spot).toFixed(2));
+        st.winProb = Number.isFinite(Number(sig.approx_prob_in_range)) ? Number(sig.approx_prob_in_range) : null;
+        st.expectedNetUsd = Number((st.creditUsd - st.openFeesUsd).toFixed(2)); // held to OTM expiry (no exit fee)
+        st.expectedNetTargetUsd = Number(netAtTargetUsd.toFixed(2)); // closed at profit target (incl. exit fees)
+        st.lastAction = `OPENED condor ${sig.expiry} credit $${st.creditUsd.toFixed(0)} · exp net ~$${st.expectedNetUsd.toFixed(2)} (${st.winProb != null ? Math.round(st.winProb * 100) + '% in range' : ''})`;
         if (saveState) await saveState(snapshot(st)).catch(() => {});
-        save && save({ type: 'open', expiry: sig.expiry, price: sig.spot ?? null, size: cfg.contracts, credit_usd: Number(st.creditUsd.toFixed(2)), legs: st.legs, reason: 'Iron Condor opened' });
+        save && save({ type: 'open', expiry: sig.expiry, price: sig.spot ?? null, size: cfg.contracts, credit_usd: Number(st.creditUsd.toFixed(2)), expected_net_usd: st.expectedNetUsd, win_prob: st.winProb, legs: st.legs, reason: `Iron Condor opened · expected net ~$${st.expectedNetUsd.toFixed(2)} after fees (${st.winProb != null ? Math.round(st.winProb * 100) + '% in range' : 'n/a'})` });
       } else {
         const errs = [...new Set(placed.filter((p) => !p.ok).map((p) => (p.error || '?') + (p.detail ? ` [${p.detail}]` : '')))].join('; ');
         st.lastError = `${okLegs.length}/4 filled — ${errs || 'no fills'}`;
@@ -168,6 +175,7 @@ async function botTick(st) {
       st.lastAction = 'positions closed externally (expired/closed)';
       save && save({ type: 'closed_external', reason: 'Condor expired or closed on the exchange', pnl_usd: st.currentPnlUsd });
       resetOpen(st); if (saveState) await saveState(null).catch(() => {});
+      if (!cfg.autoReopen) { st.haltOpen = true; st.haltReason = 'auto-reopen off — press START for another'; }
       return;
     }
     const floatingBtc = ours.reduce((s, p) => s + (Number(p.floating_pl) || 0), 0);
@@ -210,6 +218,7 @@ async function botTick(st) {
       st.lastAction = `CLOSED (${exit}) pnl $${st.currentPnlUsd.toFixed(0)}`;
       save && save({ type: exit, reason: `Closed (${exit})`, size: cfg.contracts, pnl_usd: st.currentPnlUsd });
       resetOpen(st); if (saveState) await saveState(null).catch(() => {});
+      if (!cfg.autoReopen) { st.haltOpen = true; st.haltReason = 'auto-reopen off — press START for another'; }
     } else {
       st.lastAction = `holding · pnl $${st.currentPnlUsd.toFixed(0)} · ${hoursToExpiry.toFixed(0)}h to expiry`;
     }
@@ -253,5 +262,5 @@ export function isBotRunning(owner) { return activeBots.has(owner); }
 export function getBotStatus(owner) {
   const e = activeBots.get(owner); if (!e) return null;
   const s = e.state;
-  return { running: s.status === 'running', open: s.open, asset: s.config.asset, testnet: s.testnet, expiry: s.expiry, credit_usd: Number(s.creditUsd.toFixed(2)), pnl_usd: s.currentPnlUsd, legs: s.legs, last_action: s.lastAction, last_error: s.lastError, ticks: s.tickCount, config: s.config };
+  return { running: s.status === 'running', open: s.open, asset: s.config.asset, testnet: s.testnet, expiry: s.expiry, credit_usd: Number(s.creditUsd.toFixed(2)), pnl_usd: s.currentPnlUsd, expected_net_usd: s.expectedNetUsd ?? null, expected_net_target_usd: s.expectedNetTargetUsd ?? null, win_prob: s.winProb ?? null, auto_reopen: s.config.autoReopen, legs: s.legs, last_action: s.lastAction, last_error: s.lastError, ticks: s.tickCount, config: s.config };
 }

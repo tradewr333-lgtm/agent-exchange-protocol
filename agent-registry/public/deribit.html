@@ -97,6 +97,8 @@
       <div><div class="sub">Profit target (% of credit)</div><input type="text" id="c-tp" class="cf" value="50"/></div>
       <div><div class="sub">Stop (× credit)</div><input type="text" id="c-stop" class="cf" value="2"/></div>
       <div><div class="sub">Min net after fees ($)</div><input type="text" id="c-minnet" class="cf" value="3"/></div>
+      <div><div class="sub">Expiry safety (%)</div><input type="text" id="c-safety" class="cf" value="1"/></div>
+      <div><div class="sub">Auto-reopen</div><label class="sub" style="display:flex;align-items:center;gap:6px;margin-top:8px"><input type="checkbox" id="c-autoreopen" checked/> keep running same asset</label></div>
     </div>
     <div class="sub" style="margin-top:8px;opacity:.8">Fee filter: the bot skips a condor if its profit-at-target minus estimated Deribit fees is below this. Raises it for thin/low-credit structures (e.g. BTC min size).</div>
     <a class="btn sm" id="c-save" style="margin-top:10px">Save config</a>
@@ -113,6 +115,8 @@
       <div class="kpi"><div class="k">Expiry</div><div class="v" id="b-exp" style="font-size:14px">—</div></div>
       <div class="kpi"><div class="k">Closed cycles</div><div class="v" id="b-cycles">0</div></div>
       <div class="kpi"><div class="k">Realized P&amp;L (total)</div><div class="v" id="b-total" style="color:var(--green)">$0</div></div>
+      <div class="kpi"><div class="k">Expected net (after fees)</div><div class="v" id="b-expnet" style="color:var(--gold)">—</div></div>
+      <div class="kpi"><div class="k">Win prob (in range)</div><div class="v" id="b-prob">—</div></div>
     </div>
     <div style="margin-top:14px"><div class="sub" style="margin-bottom:6px">📈 Cumulative realized P&amp;L (persisted in cloud · survives deploys)</div><div style="height:220px;background:#070f24;border:1px solid var(--line);border-radius:10px;padding:8px"><canvas id="b-chart"></canvas></div></div>
     <div class="row" style="gap:10px;margin-top:12px">
@@ -235,10 +239,10 @@ $('d-disconnect').addEventListener('click',async()=>{
     else $('d-msg').innerHTML='<span class="err">'+(r.error||'failed')+'</span>';
   }catch(e){$('d-msg').textContent='error';}
 });
-async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;}catch(e){} }
+async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;}catch(e){} }
 $('c-save').addEventListener('click',async()=>{
   if(!WALLET){$('c-msg').textContent='connect wallet';return;}
-  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value)};
+  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value),expirySafetyPct:Number($('c-safety').value),autoReopen:$('c-autoreopen').checked};
   $('c-msg').textContent='sign to save…';
   try{const r=await fetch('/deribit/bot/config',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody({config})}).then(x=>x.json());$('c-msg').innerHTML=r.ok?'<span class="ok">✓ saved</span>':'<span class="err">'+(r.error||'failed')+'</span>';}catch(e){$('c-msg').textContent='error';}
 });
@@ -269,6 +273,8 @@ async function pollBot(){
     $('b-credit').textContent=s?usd(s.credit_usd):'—';
     $('b-pnl').textContent=s?usd(s.pnl_usd):'—';
     $('b-exp').textContent=s&&s.expiry?s.expiry:'—';
+    $('b-expnet').textContent=s&&s.expected_net_usd!=null?usd(s.expected_net_usd):'—';
+    $('b-prob').textContent=s&&s.win_prob!=null?Math.round(s.win_prob*100)+'%':'—';
     $('b-err').textContent=s&&s.last_error?('⚠ '+s.last_error):$('b-err').textContent;
     const tr=r.trades||[];
     $('b-trades').innerHTML=tr.length?tr.map(t=>`<tr><td class="sub">${new Date(t.at).toLocaleTimeString()}</td><td>${t.type}</td><td class="sub">${t.reason||''}${t.pnl_usd!=null?' · $'+t.pnl_usd:''}${t.credit_usd!=null?' · credit $'+t.credit_usd:''}</td></tr>`).join(''):'<tr><td class="sub" colspan="3">no trades yet</td></tr>';
