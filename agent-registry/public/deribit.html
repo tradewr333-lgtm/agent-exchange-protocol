@@ -122,6 +122,7 @@
     <div class="row" style="gap:10px;margin-top:12px">
       <a class="btn" id="b-start">▶ START</a>
       <a class="btn" id="b-stop" style="background:transparent;border:1px solid var(--red);color:var(--red);box-shadow:none">■ STOP</a>
+      <a class="btn" id="b-closeall" style="background:var(--red);color:#fff;box-shadow:none">⏏ Close All &amp; STOP</a>
       <a class="btn sm" id="b-sub" style="background:transparent;border:1px solid var(--gold);color:var(--gold);box-shadow:none">Subscribe $35/mo (mainnet)</a>
     </div>
     <div class="sub" id="b-err" style="margin-top:8px"></div>
@@ -259,6 +260,15 @@ $('b-start').addEventListener('click',async()=>{
 $('b-stop').addEventListener('click',async()=>{
   if(!WALLET)return; $('b-err').textContent='sign to stop…';
   try{const r=await fetch('/deribit/bot/stop',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody()}).then(x=>x.json());$('b-err').textContent=r.ok?'stopped':'';pollBot();}catch(e){}
+});
+$('b-closeall').addEventListener('click',async()=>{
+  if(!WALLET){$('b-err').textContent='connect wallet';return;}
+  if(!confirm('Close ALL option positions and STOP the bot (no auto-reopen)?'))return;
+  $('b-err').textContent='sign to close all & stop…';
+  try{const r=await fetch('/deribit/bot/close-all',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody()}).then(x=>x.json());
+    if(r.ok){const n=(r.closed||[]).length;$('b-err').innerHTML='<span class="ok">✓ closed '+n+' leg(s) & stopped</span>';pollBot();refreshDeribit(true);}
+    else $('b-err').innerHTML='<span class="err">'+(r.error||'failed')+'</span>';
+  }catch(e){$('b-err').textContent='error';}
 });
 $('b-sub').addEventListener('click',async()=>{
   if(!WALLET){$('b-err').textContent='connect wallet';return;}

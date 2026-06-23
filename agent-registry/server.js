@@ -32,7 +32,7 @@ import {
 } from './src/store.js';
 import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, buildCoverage, DECISION_VERSION } from './src/decision.js';
 import { ironCondorSignal, testConnection } from './src/deribit.js';
-import { startBot as icStartBot, stopBot as icStopBot, getBotStatus as icBotStatus } from './src/iron-condor-bot.js';
+import { startBot as icStartBot, stopBot as icStopBot, getBotStatus as icBotStatus, closeAllAndStop as icCloseAllAndStop } from './src/iron-condor-bot.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
 import { startDecisionMiner, runDecisionMineOnce, decisionMineEnabled } from './src/decision-miner.js';
@@ -205,6 +205,20 @@ const server = http.createServer(async (request, response) => {
     const cfgRow = await loadBotConfig(owner);
     await saveBotConfig(owner, cfgRow?.config || {}, false);
     return sendJson(response, 200, { ok: true, stopped: true }, { 'Cache-Control': 'no-store' });
+  }
+
+  // Close ALL option positions AND stop the bot (no auto-reopen). Signature-gated.
+  if (request.method === 'POST' && url.pathname === '/deribit/bot/close-all') {
+    const body = await readJsonBody(request);
+    const owner = typeof body?.owner === 'string' && /^0x[a-fA-F0-9]{40}$/.test(body.owner) ? body.owner : null;
+    if (!owner || !(await verifyOwnerSig(owner, body?.message, body?.signature))) return sendJson(response, 401, { error: 'signature_required_or_mismatch' });
+    const result = await icCloseAllAndStop(owner, loadDeribitCreds);
+    // Mark disabled + clear saved open state so a future deploy won't resume it.
+    const cfgRow = await loadBotConfig(owner);
+    await saveBotConfig(owner, cfgRow?.config || {}, false);
+    await saveBotState(owner, null);
+    if (result.ok) { try { await appendBotTrade(owner, { type: 'close_all', reason: `Closed all positions & stopped (${(result.closed || []).length} leg(s))` }); } catch {} }
+    return sendJson(response, result.ok ? 200 : 409, result, { 'Cache-Control': 'no-store' });
   }
 
   if (request.method === 'GET' && url.pathname === '/deribit/bot/status') {
@@ -848,6 +862,11 @@ const server = http.createServer(async (request, response) => {
     }
     const plan = best ? planBySku(best.plan_sku) : null;
     const active = best ? ['active', 'trialing'].includes(best.status) : false;
+    // slots_used = the owner's LAUNCHED agents currently hosted (only origin==='launch'
+    // counts against hosting slots; miners do not).
+    const ag = await listAgents({});
+    const mineLaunched = (ag.agents || []).filter((a) => a.origin === 'launch' && String(a.owner || '').toLowerCase() === owner);
+    const slotsUsed = mineLaunched.filter((a) => a.hosted).length || mineLaunched.length;
     return sendJson(response, 200, {
       ok: true,
       owner,
@@ -857,6 +876,8 @@ const server = http.createServer(async (request, response) => {
       plan_sku: best?.plan_sku || null,
       plan_name: plan?.name || null,
       slots: plan?.slots || 0,
+      slots_used: Math.min(slotsUsed, plan?.slots || 0),
+      launched_agents: mineLaunched.length,
     });
   }
 
@@ -952,7 +973,7 @@ const server = http.createServer(async (request, response) => {
     const cards = agentsR.agents.map((a) => toAgentCard(a, scoreById.get(a.agent_id)));
     return sendJson(response, 200, {
       protocol: 'AXP', schema: 'axp.store_agents.v0', count: cards.length,
-      agents: cards.sort((x, y) => y.revenue_usd - x.revenue_usd),
+      agents: cards.sort((x, y) => (y.real_earnings_usd || 0) - (x.real_earnings_usd || 0)),
     }, { 'Cache-Control': 'no-store' });
   }
 

@@ -259,6 +259,28 @@ export function stopBot(owner) {
   return false;
 }
 export function isBotRunning(owner) { return activeBots.has(owner); }
+
+// Hard kill: STOP the bot (so it can't auto-reopen) THEN flatten all option positions
+// (reduce-only market) across BTC+ETH. Used by the "Close All & STOP" button.
+export async function closeAllAndStop(owner, getCreds) {
+  stopBot(owner); // stop first — guarantees no re-open while we flatten
+  const creds = await getCreds(owner);
+  if (!creds) return { ok: false, error: 'no_credentials' };
+  const closed = [];
+  for (const currency of ['BTC', 'ETH']) {
+    try {
+      await cancelAll(creds, { currency, kind: 'option' });
+      const pos = await getPositions(creds, { currency, kind: 'option' });
+      for (const p of (pos.positions || [])) {
+        const amt = Math.abs(Number(p.size) || 0);
+        if (amt <= 0) continue;
+        const r = await placeOrder(creds, { instrument: p.instrument, direction: p.direction === 'buy' ? 'sell' : 'buy', amount: amt, type: 'market', reduceOnly: true, label: 'axp_ic_closeall' });
+        closed.push({ instrument: p.instrument, ok: r.ok, error: r.error || null });
+      }
+    } catch (e) { closed.push({ currency, ok: false, error: String(e?.message || e) }); }
+  }
+  return { ok: true, closed };
+}
 export function getBotStatus(owner) {
   const e = activeBots.get(owner); if (!e) return null;
   const s = e.state;
