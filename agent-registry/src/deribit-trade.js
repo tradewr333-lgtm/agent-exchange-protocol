@@ -90,6 +90,8 @@ async function getSpot(creds, asset) {
   const r = await pub(creds, `/public/get_index_price?index_name=${asset.toLowerCase()}_usd`);
   return r.ok ? Number(r.result?.index_price) : null;
 }
+// Exported for the bot's expiry logic (decide let-expire vs close-early).
+export async function getIndexPrice(creds, asset) { return getSpot(creds, asset); }
 async function nearestExpiry(creds, asset) {
   const r = await pub(creds, `/public/get_instruments?currency=${asset}&kind=option&expired=false`);
   if (!r.ok || !Array.isArray(r.result)) return null;

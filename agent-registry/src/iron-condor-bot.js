@@ -8,7 +8,7 @@
 // closes a trade that is still within its exit parameters.
 //
 // Honest + safe: only TRADE-only keys, small configurable size, no return promises.
-import { liveCondor, placeOrder, getPositions, cancelAll } from './deribit-trade.js';
+import { liveCondor, placeOrder, getPositions, cancelAll, getIndexPrice } from './deribit-trade.js';
 
 const activeBots = new Map(); // owner -> { interval, state }
 
@@ -28,6 +28,9 @@ function defaults(cfg = {}) {
     profitTargetPct: Number(cfg.profitTargetPct) > 0 ? Number(cfg.profitTargetPct) : 50, // close at 50% of credit captured
     stopMult: Number(cfg.stopMult) > 0 ? Number(cfg.stopMult) : 2, // stop at -2x credit
     closeBeforeExpiryHours: Number(cfg.closeBeforeExpiryHours) > 0 ? Number(cfg.closeBeforeExpiryHours) : 6,
+    // Hybrid expiry: near expiry, LET the condor expire (no exit fees) if spot is at least
+    // this % inside BOTH short strikes; otherwise close early to dodge pin/gamma risk.
+    expirySafetyPct: Number.isFinite(Number(cfg.expirySafetyPct)) ? Number(cfg.expirySafetyPct) : 1,
     // Fee-aware filter: only open if the expected profit at target, MINUS estimated
     // round-trip fees, clears this many USD. Skips thin condors that fees would eat.
     minNetUsd: Number.isFinite(Number(cfg.minNetUsd)) ? Number(cfg.minNetUsd) : 3,
@@ -133,7 +136,7 @@ async function botTick(st) {
       const okLegs = placed.filter((p) => p.ok);
       if (okLegs.length === 4) {
         st.open = true; st.openedAt = Date.now(); st.expiry = sig.expiry; st.lastExpiryTraded = sig.expiry;
-        st.legs = sig.legs.map((l) => ({ instrument: l.instrument, action: l.action, strike: l.strike }));
+        st.legs = sig.legs.map((l) => ({ instrument: l.instrument, action: l.action, strike: l.strike, type: l.type }));
         st.creditUsd = sig.credit_usd * cfg.contracts;
         st.lastAction = `OPENED condor ${sig.expiry} credit $${st.creditUsd.toFixed(0)}`;
         if (saveState) await saveState(snapshot(st)).catch(() => {});
@@ -159,14 +162,16 @@ async function botTick(st) {
     }
 
     // ── Open condor: monitor P&L and exit ──
-    const floatingBtc = ours.reduce((s, p) => s + (Number(p.floating_pl) || 0), 0);
-    st.currentPnlUsd = Number((floatingBtc).toFixed(2));
+    // Positions gone = expired or closed externally. Record the LAST measured floating P&L
+    // as the realized estimate (e.g. a fully-OTM expiry leaves ~+credit before settlement).
     if (ours.length === 0) {
-      st.lastAction = 'positions closed externally';
-      save && save({ type: 'closed_external', reason: 'Condor positions no longer open (expired or closed)' });
+      st.lastAction = 'positions closed externally (expired/closed)';
+      save && save({ type: 'closed_external', reason: 'Condor expired or closed on the exchange', pnl_usd: st.currentPnlUsd });
       resetOpen(st); if (saveState) await saveState(null).catch(() => {});
       return;
     }
+    const floatingBtc = ours.reduce((s, p) => s + (Number(p.floating_pl) || 0), 0);
+    st.currentPnlUsd = Number((floatingBtc).toFixed(2));
 
     const profitTargetUsd = st.creditUsd * (cfg.profitTargetPct / 100);
     const stopUsd = -(st.creditUsd * cfg.stopMult);
@@ -175,7 +180,24 @@ async function botTick(st) {
     let exit = null;
     if (st.currentPnlUsd >= profitTargetUsd) exit = 'tp';
     else if (st.currentPnlUsd <= stopUsd) exit = 'sl';
-    else if (hoursToExpiry <= cfg.closeBeforeExpiryHours) exit = 'expiry';
+    else if (hoursToExpiry <= cfg.closeBeforeExpiryHours) {
+      // Hybrid expiry: LET it expire (no exit fees) if spot is comfortably inside BOTH short
+      // strikes; close early only if spot is near a short (pin/gamma risk).
+      const shortPut = st.legs.find((l) => l.action === 'SELL' && l.type === 'P');
+      const shortCall = st.legs.find((l) => l.action === 'SELL' && l.type === 'C');
+      const spot = await getIndexPrice(creds, cfg.asset);
+      if (Number.isFinite(spot) && shortPut && shortCall) {
+        const buf = (cfg.expirySafetyPct || 0) / 100;
+        const safelyInside = spot >= shortPut.strike * (1 + buf) && spot <= shortCall.strike * (1 - buf);
+        if (safelyInside) {
+          st.lastAction = `let-expire — spot ${spot.toFixed(0)} safely inside ${shortPut.strike}–${shortCall.strike} (${hoursToExpiry.toFixed(1)}h, saves fees)`;
+        } else {
+          exit = 'expiry'; // near a short strike → close to lock the result
+        }
+      } else {
+        exit = 'expiry'; // can't read spot → safe default: close before expiry
+      }
+    }
 
     if (exit) {
       for (const l of st.legs) {
