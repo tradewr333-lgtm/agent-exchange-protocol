@@ -73,10 +73,13 @@ async function botTick(st) {
       for (const leg of sig.legs) {
         const inst = leg.instrument;
         const isSell = leg.action === 'SELL';
-        // Marketable LIMIT: sell at the bid / buy at the ask (real ticks from the quote)
-        // so the leg actually crosses and fills. Fall back to market if no quote.
-        const px = isSell ? Number(leg.bid) : Number(leg.ask);
-        const order = px > 0
+        // Marketable LIMIT: sell at the bid / buy at the ask, rounded to the Deribit
+        // option tick (0.0005 BTC) so params are valid. Sell rounds DOWN, buy rounds UP
+        // (stays marketable → crosses → fills). Fall back to market if no quote.
+        const TICK = 0.0005;
+        const raw = isSell ? Number(leg.bid) : Number(leg.ask);
+        const px = raw > 0 ? Number((Math[isSell ? 'floor' : 'ceil'](raw / TICK) * TICK).toFixed(4)) : 0;
+        const order = px >= TICK
           ? { instrument: inst, direction: isSell ? 'sell' : 'buy', amount: cfg.contracts, type: 'limit', price: px, timeInForce: 'immediate_or_cancel', label: 'axp_ic' }
           : { instrument: inst, direction: isSell ? 'sell' : 'buy', amount: cfg.contracts, type: 'market', label: 'axp_ic' };
         const r = await placeOrder(creds, order);
@@ -94,7 +97,7 @@ async function botTick(st) {
         if (saveState) await saveState(snapshot(st)).catch(() => {});
         save && save({ type: 'open', expiry: sig.expiry, price: sig.spot ?? null, size: cfg.contracts, credit_usd: Number(st.creditUsd.toFixed(2)), legs: st.legs, reason: 'Iron Condor opened' });
       } else {
-        const errs = [...new Set(placed.filter((p) => !p.ok).map((p) => p.error || '?'))].join('; ');
+        const errs = [...new Set(placed.filter((p) => !p.ok).map((p) => (p.error || '?') + (p.detail ? ` [${p.detail}]` : '')))].join('; ');
         st.lastError = `${okLegs.length}/4 filled — ${errs || 'no fills'}`;
         await cancelAll(creds, { currency: cfg.asset, kind: 'option' });
         save && save({ type: 'error', reason: `Open failed (${okLegs.length}/4): ${errs || 'no fills (liquidity/margin?)'}`, legs: placed });

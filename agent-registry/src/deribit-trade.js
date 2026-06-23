@@ -17,7 +17,11 @@ async function getJson(url, headers = {}, ms = 9000) {
   try {
     const res = await fetch(url, { headers: { accept: 'application/json', ...headers }, signal: ctrl.signal });
     const j = await res.json().catch(() => ({}));
-    if (j.error) return { ok: false, error: j.error.message || j.error.code || 'deribit_error', raw: j.error };
+    if (j.error) {
+      const d = j.error.data;
+      const detail = d ? (typeof d === 'object' ? (d.reason || d.param ? `${d.param ? d.param + ': ' : ''}${d.reason || ''}`.trim() : JSON.stringify(d)) : String(d)) : undefined;
+      return { ok: false, error: j.error.message || j.error.code || 'deribit_error', detail, raw: j.error };
+    }
     return { ok: true, result: j.result };
   } catch (err) {
     return { ok: false, error: 'unreachable', detail: String(err?.message || err) };
