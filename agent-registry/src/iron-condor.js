@@ -55,11 +55,16 @@ export function buildIronCondor(chain = [], opts = {}) {
   const calls = chain.filter((o) => o.type === 'C' && Number.isFinite(o.delta)).sort((a, b) => a.strike - b.strike);
   if (puts.length < wingStrikes + 1 || calls.length < wingStrikes + 1) return { ok: false, error: 'insufficient_chain' };
 
-  // Shorts (we SELL) must have a real bid; restrict the delta search to those.
+  // Shorts (we SELL) must have a real bid AND leave room for a wing `wingStrikes` further
+  // OTM (else the short sits at the edge of the ladder and there's no protective wing).
+  const putIdx = (o) => puts.findIndex((p) => p.strike === o.strike);
+  const callIdx = (o) => calls.findIndex((c) => c.strike === o.strike);
   const sellablePuts = puts.filter((o) => Number(o.bid) > 0);
   const sellableCalls = calls.filter((o) => Number(o.bid) > 0);
-  const shortPut = nearestByDelta(sellablePuts.length ? sellablePuts : puts, putDelta);
-  const shortCall = nearestByDelta(sellableCalls.length ? sellableCalls : calls, callDelta);
+  const putPool = sellablePuts.filter((o) => putIdx(o) - wingStrikes >= 0);
+  const callPool = sellableCalls.filter((o) => callIdx(o) + wingStrikes <= calls.length - 1);
+  const shortPut = nearestByDelta(putPool.length ? putPool : (sellablePuts.length ? sellablePuts : puts), putDelta);
+  const shortCall = nearestByDelta(callPool.length ? callPool : (sellableCalls.length ? sellableCalls : calls), callDelta);
   if (!shortPut || !shortCall) return { ok: false, error: 'no_short_legs' };
   // Wings (we BUY) need an ask. Walk further OTM until we find a priceable strike.
   const longPut = furtherOTMPriceable(puts, shortPut.strike, 'put', wingStrikes);
