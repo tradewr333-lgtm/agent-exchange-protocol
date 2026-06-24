@@ -48,8 +48,26 @@ function defaults(cfg = {}) {
     insuranceOtmPct: Number(cfg.insuranceOtmPct) > 0 ? Number(cfg.insuranceOtmPct) : 0.25,
     insuranceMinDays: Number(cfg.insuranceMinDays) > 0 ? Number(cfg.insuranceMinDays) : 25,
     insuranceRollDays: Number(cfg.insuranceRollDays) > 0 ? Number(cfg.insuranceRollDays) : 3,
+    // Auto-scale: size the hedge to a fraction of the condor automatically (default 50%).
+    insuranceAutoScale: cfg.insuranceAutoScale === true ? true : false,
+    insuranceAutoScalePct: Number(cfg.insuranceAutoScalePct) > 0 && Number(cfg.insuranceAutoScalePct) <= 0.5 ? Number(cfg.insuranceAutoScalePct) : 0.5,
+    // Manual hedge size (used when auto-scale is OFF). Snapped to step; HARD-capped at
+    // half the condor contracts by insuranceLots() — the hedge is never bigger than half the hand.
     insuranceContracts: Math.max(step, Math.round((Number(cfg.insuranceContracts) || step) / step) * step),
   };
+}
+
+// Effective tail-hedge size. Auto-scale → a fraction (≤50%) of the condor; manual → the
+// configured number. EITHER way it is hard-capped at half the condor contracts (the "hand"),
+// and floored at one exchange lot so the hedge can still be placed at tiny condor sizes.
+function insuranceLots(cfg) {
+  const step = (cfg.asset || 'BTC').toUpperCase() === 'ETH' ? 1 : 0.1;
+  const cap = Math.max(step, Math.floor((cfg.contracts / 2) / step) * step); // never more than half the hand
+  let n = cfg.insuranceAutoScale
+    ? Math.round((cfg.contracts * cfg.insuranceAutoScalePct) / step) * step
+    : cfg.insuranceContracts;
+  n = Math.max(step, Math.min(n, cap));
+  return Number(n.toFixed(4));
 }
 
 function createState(owner, cfg, restore = null, testnet = false) {
@@ -74,14 +92,14 @@ function createState(owner, cfg, restore = null, testnet = false) {
   }
   // Restore insurance hedge state (independent of the condor).
   if (restore && restore.insOpen && Array.isArray(restore.insLegs)) {
-    st.insOpen = true; st.insLegs = restore.insLegs; st.insExpiry = restore.insExpiry || null; st.insCostUsd = restore.insCostUsd ?? null;
+    st.insOpen = true; st.insLegs = restore.insLegs; st.insExpiry = restore.insExpiry || null; st.insCostUsd = restore.insCostUsd ?? null; st.insLots = restore.insLots ?? null;
   }
   return st;
 }
 
 function snapshot(st) {
   if (!st.open && !st.insOpen) return null;
-  const ins = st.insOpen ? { insOpen: true, insLegs: st.insLegs, insExpiry: st.insExpiry, insCostUsd: st.insCostUsd ?? null } : {};
+  const ins = st.insOpen ? { insOpen: true, insLegs: st.insLegs, insExpiry: st.insExpiry, insCostUsd: st.insCostUsd ?? null, insLots: st.insLots ?? null } : {};
   return { open: st.open, legs: st.legs, creditUsd: st.creditUsd, openedAt: st.openedAt, expiry: st.expiry, lastExpiryTraded: st.lastExpiryTraded, expectedNetUsd: st.expectedNetUsd ?? null, winProb: st.winProb ?? null, openFeesUsd: st.openFeesUsd ?? null, ...ins };
 }
 
@@ -98,18 +116,19 @@ async function manageInsurance(st, creds) {
   if (st.insOpen && hoursLeft > cfg.insuranceRollDays * 24) return; // healthy hedge, nothing to do
   const plan = await tailHedgePlan(creds, cfg.asset, { otmPct: cfg.insuranceOtmPct, minDays: cfg.insuranceMinDays });
   if (!plan.ok) { st.insLastError = 'hedge ' + plan.error; return; }
+  const lots = insuranceLots(cfg); // auto-scaled / manual, hard-capped at half the condor
   const TICK = 0.0005; const newLegs = [];
   for (const leg of [plan.put, plan.call]) {
     if (held.has(leg.instrument)) { newLegs.push({ instrument: leg.instrument, strike: leg.strike }); continue; }
     const px = leg.ask > 0 ? Number((Math.ceil(leg.ask / TICK) * TICK).toFixed(4)) : 0;
-    const r = await placeOrder(creds, { instrument: leg.instrument, direction: 'buy', amount: cfg.insuranceContracts, type: px > 0 ? 'limit' : 'market', price: px > 0 ? px : undefined, timeInForce: 'immediate_or_cancel', label: 'axp_ins' });
+    const r = await placeOrder(creds, { instrument: leg.instrument, direction: 'buy', amount: lots, type: px > 0 ? 'limit' : 'market', price: px > 0 ? px : undefined, timeInForce: 'immediate_or_cancel', label: 'axp_ins' });
     if (r.ok && Number(r.filled) > 0) newLegs.push({ instrument: leg.instrument, strike: leg.strike });
   }
   if (newLegs.length >= 2) {
-    st.insOpen = true; st.insLegs = newLegs; st.insExpiry = plan.expiry;
-    st.insCostUsd = Number(((plan.call.ask + plan.put.ask) * plan.spot * cfg.insuranceContracts).toFixed(2));
+    st.insOpen = true; st.insLegs = newLegs; st.insExpiry = plan.expiry; st.insLots = lots;
+    st.insCostUsd = Number(((plan.call.ask + plan.put.ask) * plan.spot * lots).toFixed(2));
     if (saveState) await saveState(snapshot(st)).catch(() => {});
-    save && save({ type: 'insurance_roll', reason: `Tail hedge ${plan.expiry}: long ${plan.put.strike}P / ${plan.call.strike}C ×${cfg.insuranceContracts} · cost ~$${st.insCostUsd}` });
+    save && save({ type: 'insurance_roll', reason: `Tail hedge ${plan.expiry}: long ${plan.put.strike}P / ${plan.call.strike}C ×${lots}${cfg.insuranceAutoScale ? ' (auto)' : ''} · cost ~$${st.insCostUsd}` });
   } else { st.insLastError = `hedge fill ${newLegs.length}/2`; }
 }
 
@@ -437,6 +456,7 @@ export function getBotStatus(owner) {
     };
   }
   return { running: s.status === 'running', open: s.open, asset: s.config.asset, testnet: s.testnet, expiry: s.expiry, credit_usd: Number(s.creditUsd.toFixed(2)), pnl_usd: s.currentPnlUsd, expected_net_usd: s.expectedNetUsd ?? null, expected_net_target_usd: s.expectedNetTargetUsd ?? null, win_prob: s.winProb ?? null, zone, auto_reopen: s.config.autoReopen,
-    insurance: { enabled: !!s.config.insurance, active: !!s.insOpen, expiry: s.insExpiry || null, cost_usd: s.insCostUsd ?? null, last_error: s.insLastError || null },
+    insurance: { enabled: !!s.config.insurance, active: !!s.insOpen, expiry: s.insExpiry || null, cost_usd: s.insCostUsd ?? null, lots: s.insLots ?? (s.insOpen ? insuranceLots(s.config) : null), planned_lots: insuranceLots(s.config), auto_scale: !!s.config.insuranceAutoScale, auto_scale_pct: s.config.insuranceAutoScalePct, max_lots: Math.max((s.config.asset === 'ETH' ? 1 : 0.1), Math.floor((s.config.contracts / 2) / (s.config.asset === 'ETH' ? 1 : 0.1)) * (s.config.asset === 'ETH' ? 1 : 0.1)), last_error: s.insLastError || null },
     legs: s.legs, last_action: s.lastAction, last_error: s.lastError, ticks: s.tickCount, config: s.config };
 }
+// (insurance auto-scale: see insuranceLots — hard-capped at half the condor contracts)

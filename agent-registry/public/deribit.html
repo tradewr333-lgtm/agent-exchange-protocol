@@ -154,6 +154,15 @@
       <div><div class="sub">IV filter (DVOL)</div><label class="sub" style="display:flex;align-items:center;gap:6px;margin-top:8px"><input type="checkbox" id="c-ivfilter"/> sell only when vol is rich</label></div>
     </div>
     <div class="sub" style="margin-top:8px;opacity:.8">Fee filter: the bot skips a condor if its profit-at-target minus estimated Deribit fees is below this. Raises it for thin/low-credit structures (e.g. BTC min size).</div>
+    <div id="ins-cfg" style="display:none;margin-top:12px;padding:12px 14px;border-radius:12px;border:1px solid var(--green);background:rgba(61,255,166,.05)">
+      <div class="row" style="justify-content:space-between;align-items:center"><b style="color:var(--green)">🛡️ Tail-hedge sizing</b><span class="pill" id="ins-cap-pill">—</span></div>
+      <label class="sub" style="display:flex;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" id="c-ins-autoscale" checked/> <b>Auto-scale</b> — size the hedge to 50% of the condor automatically</label>
+      <div id="ins-manual" style="display:none;margin-top:10px">
+        <div class="sub">Tail-hedge contracts (manual)</div>
+        <input type="text" id="c-ins-contracts" class="cf" value="1" style="max-width:160px"/>
+        <div class="sub" id="ins-manual-msg" style="margin-top:6px;opacity:.85">The hedge never exceeds <b>half</b> the condor contracts (the size of your hand). Larger values are capped automatically.</div>
+      </div>
+    </div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
       <div class="row" style="gap:12px;align-items:flex-end;flex-wrap:wrap">
         <div style="min-width:200px"><div class="sub">Cross-collateral to commit (%)</div><input type="text" id="c-pct" class="cf" value="25"/></div>
@@ -335,10 +344,35 @@ function setMode(m){
   $('mode-desc').innerHTML = sec
     ? '🛡️ <b style="color:var(--green)">Security</b>: only opens when IV (DVOL) is rich (~1/mo) <b>and</b> keeps a monthly long-OTM tail-hedge (insurance) to cap crash/spike losses.'
     : 'Base condor — opens whenever a valid structure exists (no IV filter).';
+  syncInsUI();
+}
+// Tail-hedge sizing UI: show in Security mode; auto-scale switch vs manual field; the
+// manual size is HARD-capped at half the condor contracts (the size of the hand).
+function insStep(){ return ($('c-asset').value||'BTC').toUpperCase()==='ETH'?1:0.1; }
+function insCap(){ const step=insStep(); const k=Number($('c-contracts').value)||step; return Math.max(step, Math.floor((k/2)/step)*step); }
+function syncInsUI(){
+  const sec=$('c-ivfilter').checked;
+  $('ins-cfg').style.display = sec?'block':'none';
+  const auto=$('c-ins-autoscale').checked;
+  $('ins-manual').style.display = auto?'none':'block';
+  const step=insStep(), cap=insCap();
+  // Clamp the manual field to [step, cap].
+  if(!auto){
+    let v=Number($('c-ins-contracts').value)||step;
+    v=Math.max(step, Math.min(v, cap));
+    v=Math.round(v/step)*step;
+    $('c-ins-contracts').value=Number(v.toFixed(4));
+  }
+  const lots = auto ? Math.max(step, Math.min(Math.round(((Number($('c-contracts').value)||step)*0.5)/step)*step, cap)) : Number($('c-ins-contracts').value)||step;
+  $('ins-cap-pill').textContent = `hedge ${Number(lots.toFixed(4))} · max ${Number(cap.toFixed(4))} (½ of ${Number($('c-contracts').value)||step})`;
+  $('ins-manual-msg').innerHTML = `The hedge never exceeds <b>half</b> the condor contracts (currently <b>${Number(cap.toFixed(4))}</b>). Larger values are capped automatically.`;
 }
 $('tab-plain').addEventListener('click',()=>setMode('condor'));
 $('tab-sec').addEventListener('click',()=>setMode('security'));
 $('c-ivfilter').addEventListener('change',()=>setMode($('c-ivfilter').checked?'security':'condor'));
+$('c-ins-autoscale').addEventListener('change',syncInsUI);
+$('c-ins-contracts').addEventListener('input',syncInsUI);
+$('c-contracts').addEventListener('input',syncInsUI);
 
 // Dynamic label + link the top Options Desk diagram to the chosen asset.
 function deskTo(a){ if(typeof ASSET!=='undefined' && ASSET!==a){ ASSET=a; $('asset').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.a===a)); load(); } }
@@ -363,14 +397,15 @@ $('c-suggest').addEventListener('click',async()=>{
   }catch(e){$('c-suggest-msg').textContent='error';}
 });
 
-async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.minDaysToExpiry!=null)$('c-mindays').value=c.minDaysToExpiry;if(c.commitPct!=null)$('c-pct').value=c.commitPct;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;if(c.ivFilter!=null)$('c-ivfilter').checked=!!c.ivFilter;setMode(c.ivFilter?'security':'condor');syncAssetLabel();}catch(e){} }
+async function loadCfg(){ if(!WALLET)return; try{const r=await fetch('/deribit/bot/config?owner='+WALLET,{cache:'no-store'}).then(x=>x.json());const c=r.config||{};if(c.asset)$('c-asset').value=c.asset;if(c.contracts)$('c-contracts').value=c.contracts;if(c.profitTargetPct)$('c-tp').value=c.profitTargetPct;if(c.stopMult)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.minDaysToExpiry!=null)$('c-mindays').value=c.minDaysToExpiry;if(c.commitPct!=null)$('c-pct').value=c.commitPct;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;if(c.ivFilter!=null)$('c-ivfilter').checked=!!c.ivFilter;if(c.insuranceAutoScale!=null)$('c-ins-autoscale').checked=!!c.insuranceAutoScale;if(c.insuranceContracts!=null)$('c-ins-contracts').value=c.insuranceContracts;setMode(c.ivFilter?'security':'condor');syncAssetLabel();}catch(e){} }
 // Instant restore from the browser cache so the form shows your last config immediately
 // (no flash back to defaults) before the server round-trip refreshes it.
-function applyLocalCfg(){ try{const c=JSON.parse(localStorage.getItem('axp_deribit_cfg')||'null');if(!c)return;if(c.asset)$('c-asset').value=c.asset;if(c.contracts!=null)$('c-contracts').value=c.contracts;if(c.profitTargetPct!=null)$('c-tp').value=c.profitTargetPct;if(c.stopMult!=null)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.minDaysToExpiry!=null)$('c-mindays').value=c.minDaysToExpiry;if(c.commitPct!=null)$('c-pct').value=c.commitPct;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;if(c.ivFilter!=null)$('c-ivfilter').checked=!!c.ivFilter;setMode(c.ivFilter?'security':'condor');syncAssetLabel();}catch(e){} }
+function applyLocalCfg(){ try{const c=JSON.parse(localStorage.getItem('axp_deribit_cfg')||'null');if(!c)return;if(c.asset)$('c-asset').value=c.asset;if(c.contracts!=null)$('c-contracts').value=c.contracts;if(c.profitTargetPct!=null)$('c-tp').value=c.profitTargetPct;if(c.stopMult!=null)$('c-stop').value=c.stopMult;if(c.minNetUsd!=null)$('c-minnet').value=c.minNetUsd;if(c.expirySafetyPct!=null)$('c-safety').value=c.expirySafetyPct;if(c.minDaysToExpiry!=null)$('c-mindays').value=c.minDaysToExpiry;if(c.commitPct!=null)$('c-pct').value=c.commitPct;if(c.autoReopen!=null)$('c-autoreopen').checked=!!c.autoReopen;if(c.ivFilter!=null)$('c-ivfilter').checked=!!c.ivFilter;if(c.insuranceAutoScale!=null)$('c-ins-autoscale').checked=!!c.insuranceAutoScale;if(c.insuranceContracts!=null)$('c-ins-contracts').value=c.insuranceContracts;setMode(c.ivFilter?'security':'condor');syncAssetLabel();}catch(e){} }
 applyLocalCfg();
 $('c-save').addEventListener('click',async()=>{
   if(!WALLET){$('c-msg').textContent='connect wallet';return;}
-  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value),expirySafetyPct:Number($('c-safety').value),minDaysToExpiry:Number($('c-mindays').value),commitPct:Number($('c-pct').value),autoReopen:$('c-autoreopen').checked,ivFilter:$('c-ivfilter').checked,ivMinPercentile:0.55,insurance:$('c-ivfilter').checked,mode:($('c-ivfilter').checked?'security':'condor')};
+  syncInsUI();
+  const config={asset:$('c-asset').value,contracts:Number($('c-contracts').value),profitTargetPct:Number($('c-tp').value),stopMult:Number($('c-stop').value),minNetUsd:Number($('c-minnet').value),expirySafetyPct:Number($('c-safety').value),minDaysToExpiry:Number($('c-mindays').value),commitPct:Number($('c-pct').value),autoReopen:$('c-autoreopen').checked,ivFilter:$('c-ivfilter').checked,ivMinPercentile:0.55,insurance:$('c-ivfilter').checked,insuranceAutoScale:$('c-ins-autoscale').checked,insuranceAutoScalePct:0.5,insuranceContracts:Number($('c-ins-contracts').value)||insStep(),mode:($('c-ivfilter').checked?'security':'condor')};
   try{localStorage.setItem('axp_deribit_cfg',JSON.stringify(config));}catch(e){}
   $('c-msg').textContent='sign to save…';
   try{const r=await fetch('/deribit/bot/config',{method:'POST',headers:{'content-type':'application/json'},body:await signedBody({config})}).then(x=>x.json());$('c-msg').innerHTML=r.ok?'<span class="ok">✓ saved</span>':'<span class="err">'+(r.error||'failed')+'</span>';}catch(e){$('c-msg').textContent='error';}
@@ -452,55 +487,11 @@ async function renderGauges(s){
   // insurance shield from bot status
   const ins=s&&s.insurance;
   if(ins){
+    const lotTxt = ins.auto_scale ? ('auto ×'+(ins.planned_lots??'?')+' (50% of condor)') : ('manual ×'+(ins.planned_lots??'?')+' · max '+(ins.max_lots??'?'));
     $('ins-state').innerHTML = ins.enabled ? (ins.active?'<span style="color:var(--green)">🛡️ ACTIVE</span>':'<span style="color:var(--gold)">arming…</span>') : '<span class="sub">off · enable Security</span>';
-    $('ins-info').textContent = ins.active?('hedge exp '+(ins.expiry||'?')+' · cost ~'+usd(ins.cost_usd)) : (ins.last_error?('⚠ '+ins.last_error):'—');
+    $('ins-info').textContent = ins.active?('hedge ×'+(ins.lots??ins.planned_lots??'?')+' · exp '+(ins.expiry||'?')+' · cost ~'+usd(ins.cost_usd)) : (ins.enabled?(lotTxt+(ins.last_error?(' · ⚠ '+ins.last_error):'')):(ins.last_error?('⚠ '+ins.last_error):'—'));
   }
   // IV gauge — fetch DVOL at most every 45s
   if(WALLET && Date.now()-lastGaugeFetch>45000){
     lastGaugeFetch=Date.now();
-    try{ const g=await fetch('/deribit/bot/gauges?owner='+WALLET+'&asset='+($('c-asset')?$('c-asset').value:'BTC'),{cache:'no-store'}).then(x=>x.json()); lastIv=g.iv; }catch(e){}
-  }
-  const led=$('iv-led'); if(!led)return;
-  if(!lastIv){ led.innerHTML=Array.from({length:20},()=>'<span class="led"></span>').join(''); return; }
-  const N=20, pct=Math.max(0,Math.min(1,lastIv.percentile)), lit=Math.round(pct*N), thrSeg=Math.round(lastIv.threshold*N);
-  led.innerHTML=Array.from({length:N},(_,i)=>`<span class="led ${i<lit?(lastIv.rich?'on-g':'on-a'):''} ${i===thrSeg?'thr':''}"></span>`).join('');
-  $('iv-info').textContent=`DVOL ${lastIv.current} · ${(pct*100).toFixed(0)}th pct (fires ≥${(lastIv.threshold*100).toFixed(0)}%)`;
-  const st=$('iv-state'); if(lastIv.rich){st.textContent='⚡ ARMED';st.className='pill open';}else{st.textContent='scanning…';st.className='pill skip';}
-}
-// Build the cumulative realized-P&L series from closed trades (oldest→newest) and draw it.
-let pnlChart=null;
-function renderPnlChart(trades){
-  const closed=(trades||[]).filter(t=>t.pnl_usd!=null).slice().reverse(); // oldest first
-  let cum=0; const labels=[], data=[];
-  closed.forEach((t,i)=>{ cum+=Number(t.pnl_usd)||0; labels.push('#'+(i+1)); data.push(Number(cum.toFixed(2))); });
-  $('b-cycles').textContent=closed.length;
-  $('b-total').textContent=usd(cum); $('b-total').style.color=cum>=0?'var(--green)':'var(--red)';
-  if(typeof Chart==='undefined')return;
-  const ctx=$('b-chart'); if(!ctx)return;
-  if(!pnlChart){
-    pnlChart=new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:'#3dffa6',backgroundColor:'rgba(61,255,166,.12)',fill:true,tension:.25,pointRadius:closed.length>40?0:3,pointBackgroundColor:'#3dffa6',borderWidth:2}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>'$'+c.parsed.y}}},
-        scales:{x:{ticks:{color:'#7488b8',maxTicksLimit:10},grid:{color:'rgba(27,44,87,.4)'}},y:{ticks:{color:'#7488b8',callback:(v)=>'$'+v},grid:{color:'rgba(27,44,87,.4)'}}}}});
-  } else { pnlChart.data.labels=labels; pnlChart.data.datasets[0].data=data; pnlChart.data.datasets[0].pointRadius=closed.length>40?0:3; pnlChart.update('none'); }
-}
-// Time-to-expiry countdown (Deribit code "31JUL26" → 08:00 UTC that day). Heartbeat <8h.
-let BOT_EXPIRY_MS=null;
-const MONTHS={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
-function expiryToMs(code){const m=String(code).match(/^(\d{1,2})([A-Z]{3})(\d{2})$/);if(!m)return null;return Date.UTC(2000+(+m[3]),MONTHS[m[2]]??0,+m[1],8,0,0);}
-function renderTTX(){
-  const el=$('b-ttx'); if(!el)return;
-  if(!BOT_EXPIRY_MS){el.textContent='—';el.classList.remove('heartbeat');return;}
-  let ms=BOT_EXPIRY_MS-Date.now();
-  if(ms<=0){el.textContent='expiring…';el.classList.add('heartbeat');return;}
-  const d=Math.floor(ms/86400000); ms-=d*86400000;
-  const h=Math.floor(ms/3600000); ms-=h*3600000;
-  const mi=Math.floor(ms/60000);
-  el.textContent=(d>0?d+'d ':'')+h+'h '+mi+'m';
-  el.classList.toggle('heartbeat', (BOT_EXPIRY_MS-Date.now())<=8*3600000);
-}
-setInterval(renderTTX,1000);
-setInterval(()=>{if(WALLET)pollBot();},15000);
-if(typeof window.ethereum!=='undefined'&&window.ethereum.selectedAddress){WALLET=window.ethereum.selectedAddress;$('wconnect').textContent=short(WALLET);$('dform').style.display='';refreshDeribit();loadCfg();pollBot();}
-</script>
-</body>
-</html>
+    try{ const g=await fetch('/deribit/bot/gauges?owner='+WALLET+'&asset='+($('c-asset')?$('c-asset').value:

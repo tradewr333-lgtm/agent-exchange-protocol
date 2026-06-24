@@ -35,6 +35,14 @@ Thumbs.db
 # Local runtime
 *.local
 
+# Local reference scratch (private DegenScan files, never commit)
+_reference/
+
+# mcp-publisher binary (don't commit the 19MB exe)
+**/mcp-publisher
+**/mcp-publisher.exe
+**/mcp-publisher*.tar
+
 # MCP registry login tokens (NEVER commit)
 .mcpregistry_github_token
 **/.mcpregistry_github_token

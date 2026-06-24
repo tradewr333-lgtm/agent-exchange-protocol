@@ -69,7 +69,7 @@
     if (d.active) {
       el.className = 'plan-badge ok';
       const name = (d.plan_name || 'Hosting').replace(' Hosting', '').replace(' + Scale', '');
-      txt.textContent = `${name} · ${d.slots} slot${d.slots === 1 ? '' : 's'} active`;
+      txt.textContent = `${name} · ${d.slots_used ?? 0} of ${d.slots} slot${d.slots === 1 ? '' : 's'} used`;
       el.title = 'Hosting subscription active';
     } else {
       el.className = 'plan-badge bad';
@@ -237,29 +237,34 @@
     const full = Math.round(r);
     return '★'.repeat(full) + '☆'.repeat(5 - full) + ` ${r.toFixed(1)}`;
   }
-  function badges(a) {
+  // Only REAL money counts: real_earnings_usd (on-chain hires) + paid bounty count.
+  // We never show simulated/sample-task volume.
+  function realEarnings(a, bounty) {
+    const fromHires = bounty && bounty.total ? Number(bounty.total) : 0;
+    return Math.max(Number(a.real_earnings_usd || 0), fromHires);
+  }
+  function badges(a, bounty) {
     const b = [];
     if (a.status === 'active') b.push('<span class="chip green">active</span>');
     if (a.hosting && a.hosting.active) b.push('<span class="chip cyan">hosted</span>');
-    if ((a.trust_score || 0) >= 50) b.push('<span class="chip amber">verified</span>');
+    if (realEarnings(a, bounty) > 0) b.push('<span class="chip amber">earning</span>');
     if (a.launched) b.push('<span class="chip">launched</span>');
     return b.join(' ');
   }
   function agentCardHtml(a, bounty) {
-    const b = bounty || { total: 0, count: 0 };
-    const bountyChip = b.total > 0
-      ? `<span class="chip" style="border-color:rgba(246,207,134,.6);color:var(--amber);font-weight:700">💰 ${usd(b.total)} · ${b.count} paid ${b.count === 1 ? 'bounty' : 'bounties'}</span>`
-      : '';
+    const b = (bounty && typeof bounty === 'object') ? bounty : { total: 0, count: 0 };
+    const earned = realEarnings(a, b);
+    const moneyRow = earned > 0
+      ? `<div class="tstats">
+           <span class="chip" style="border-color:rgba(246,207,134,.6);color:var(--amber);font-weight:700">💰 ${usd(earned)} real earnings</span>
+           ${b.count > 0 ? `<span class="chip">${b.count} paid ${b.count === 1 ? 'job' : 'jobs'}</span>` : ''}
+         </div>`
+      : `<div class="tstats"><span class="chip" style="opacity:.7">no paid work yet</span></div>`;
     return `<a class="card" href="/agent/${esc(a.agent_id)}" style="text-decoration:none">
       <div class="tname">${esc(a.name)}</div>
-      <div class="tstats">${badges(a)}</div>
-      ${bountyChip ? `<div class="tstats">${bountyChip}</div>` : ''}
-      <div class="tstats">
-        <span class="chip green">${usd(a.revenue_usd)} settled</span>
-        <span class="chip">${a.contracts} interactions</span>
-        <span class="chip amber">trust ${Math.round(a.trust_score)}</span>
-      </div>
-      <div class="note">${(a.services || []).join(', ')} · ${ratingStars(a)} · success ${(a.success_rate * 100).toFixed(0)}%</div>
+      <div class="tstats">${badges(a, b)}</div>
+      ${moneyRow}
+      <div class="note">${(a.services || []).join(', ')}</div>
       ${a.last_work && a.last_work.preview ? `<div class="note" style="opacity:.75">“${esc(a.last_work.preview.slice(0, 90))}…”</div>` : ''}
     </a>`;
   }
@@ -271,9 +276,7 @@
         <input id="dir-search" placeholder="Search agents…" autocomplete="off">
         <select id="dir-cat"><option value="">All categories</option>${cats.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}</select>
         <select id="dir-sort">
-          <option value="settled">Top earning</option>
-          <option value="trust">Highest trust</option>
-          <option value="contracts">Most active</option>
+          <option value="settled">Top earning (real)</option>
           <option value="name">Name</option>
         </select>
       </div>
@@ -292,10 +295,9 @@
       if (q && !(`${a.name || ''} ${(a.services || []).join(' ')} ${a.template || ''}`).toLowerCase().includes(q)) return false;
       return true;
     });
+    const re = (a) => Number(a.real_earnings_usd || 0);
     const by = {
-      settled: (x, y) => y.revenue_usd - x.revenue_usd,
-      trust: (x, y) => y.trust_score - x.trust_score,
-      contracts: (x, y) => y.contracts - x.contracts,
+      settled: (x, y) => re(y) - re(x),
       name: (x, y) => (x.name || '').localeCompare(y.name || ''),
     };
     items.sort(by[sort] || by.settled);
@@ -364,11 +366,9 @@
     const kpi = (label, val) => `<div class="kpi"><div class="k-value">${val}</div><div class="k-label">${label}</div></div>`;
     $('agent-kpis').innerHTML =
       kpi('Real earnings', usd(a.real_earnings_usd)) +
-      kpi('Settled volume', usd(a.revenue_usd)) +
-      kpi('Contracts', a.contracts) +
-      kpi('Success rate', (a.success_rate * 100).toFixed(0) + '%') +
-      kpi('Trust score', Math.round(a.trust_score)) +
-      kpi('Capacity', usd(a.capacity_usd));
+      kpi('Paid jobs', a.paid_calls ?? 0) +
+      kpi('Capacity', usd(a.capacity_usd)) +
+      kpi('Hosting', a.hosting && a.hosting.active ? 'active' : 'inactive');
     $('agent-detail').innerHTML = `
       <div class="note">
         Agent ID: <strong>${esc(a.agent_id)}</strong><br>
