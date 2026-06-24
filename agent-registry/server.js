@@ -32,7 +32,7 @@ import {
 } from './src/store.js';
 import { computeDecision, teaser, decisionPriceUsd, minerRewardShare, normalizeSymbol, trackRecordStats, buildCoverage, DECISION_VERSION } from './src/decision.js';
 import { ironCondorSignal, testConnection } from './src/deribit.js';
-import { startBot as icStartBot, stopBot as icStopBot, getBotStatus as icBotStatus, closeAllAndStop as icCloseAllAndStop } from './src/iron-condor-bot.js';
+import { startBot as icStartBot, stopBot as icStopBot, getBotStatus as icBotStatus, closeAllAndStop as icCloseAllAndStop, isBotRunning as icIsBotRunning } from './src/iron-condor-bot.js';
 import { liveCondor as dtLiveCondor, getIndexPrice as dtIndexPrice, ivRichness as dtIvRichness } from './src/deribit-trade.js';
 import { reconcileHosting } from './src/hosting.js';
 import { startSwarmScheduler, runWorkerOnce } from './src/swarm-scheduler.js';
@@ -1890,6 +1890,7 @@ server.listen(port, () => {
   startSwarmScheduler();
   startDecisionMiner();
   resumeDeribitBots();
+  startDeribitBotWatchdog();
 });
 
 // On startup, resume every enabled Deribit bot and restore any open condor so a
@@ -1905,11 +1906,14 @@ async function isBotEntitled(owner, testnet) {
   return subs.length > 0;
 }
 
-async function resumeDeribitBots() {
+async function resumeDeribitBots({ watchdog = false } = {}) {
   try {
     const bots = await loadEnabledBots();
     let n = 0;
     for (const b of bots) {
+      // Idempotent: never double-start a bot that's already alive in memory. This lets the
+      // watchdog call this repeatedly and only revive the ones that actually fell out.
+      if (icIsBotRunning(b.owner)) continue;
       const creds = await loadDeribitCreds(b.owner);
       if (!creds) continue;
       // Re-verify entitlement on every restart — a lapsed/cancelled subscriber must NOT
@@ -1925,8 +1929,18 @@ async function resumeDeribitBots() {
           onLapse: async (o) => { const cr = await loadBotConfig(o); await saveBotConfig(o, cr?.config || {}, false); } });
       n++;
     }
-    if (n) console.log(`[deribit-bot] resumed ${n} bot(s) after restart`);
-  } catch (e) { console.error('[deribit-bot] resume failed:', e?.message || e); }
+    if (n) console.log(`[deribit-bot] ${watchdog ? 'watchdog revived' : 'resumed'} ${n} bot(s)${watchdog ? ' that had fallen out of memory' : ' after restart'}`);
+  } catch (e) { console.error(`[deribit-bot] ${watchdog ? 'watchdog' : 'resume'} failed:`, e?.message || e); }
+}
+
+// Self-healing watchdog: every few minutes, re-check enabled bots and revive any that
+// dropped out of memory (process restart, crash, OOM). A paying subscriber's bot must
+// never stay silently dead — this closes the single-point-of-failure gap of an in-memory
+// loop. resumeDeribitBots() is idempotent (skips bots already running), so this is safe.
+const BOT_WATCHDOG_MS = Number(process.env.AXP_BOT_WATCHDOG_MS) > 0 ? Number(process.env.AXP_BOT_WATCHDOG_MS) : 180_000; // 3 min
+function startDeribitBotWatchdog() {
+  setInterval(() => { resumeDeribitBots({ watchdog: true }).catch(() => {}); }, BOT_WATCHDOG_MS).unref?.();
+  console.log(`[deribit-bot] self-healing watchdog enabled: every ${Math.round(BOT_WATCHDOG_MS / 1000)}s`);
 }
 
 function sendJson(response, status, body, extraHeaders = {}) {
